@@ -153,6 +153,9 @@ def custom_db_config(db_name, additional_overrides={}):
         yield
 
 
+_session_db_templates = []
+
+
 @dataclass
 class DbConfiguration:
     base_name: str
@@ -200,30 +203,92 @@ class DbConfiguration:
 
             sess.commit()
 
-    def executive(self, req):
+    @classmethod
+    def executive(cls, req):
+        cls._run([req])
+
+    @staticmethod
+    def _run(reqs):
         admin_engine = create_engine(
             f"postgresql+pg8000://{get_db_user()}@localhost/postgres",
             isolation_level="AUTOCOMMIT",
         )
         with admin_engine.connect() as conn:
-            conn.execute(text(req))
+            for req in reqs:
+                conn.execute(text(req))
         admin_engine.dispose()
 
-    def __call__(self, request):
-        db_name = f"test-db-{self.base_name}-{uuid4().hex}"
-        with custom_db_config(db_name):
-            self.executive(f'CREATE DATABASE "{db_name}"')
+    def _admin_query(self, req):
+        admin_engine = create_engine(
+            f"postgresql+pg8000://{get_db_user()}@localhost/postgres",
+            isolation_level="AUTOCOMMIT",
+        )
+        with admin_engine.connect() as conn:
+            rows = conn.execute(text(req)).fetchall()
+        admin_engine.dispose()
+        return rows
+
+    def _build_template(self, request):
+        """Build a fully migrated/seeded database once per test process and
+        use it as a CREATE DATABASE TEMPLATE for subsequent clones.
+
+        Running alembic + init_insert + fill costs ~1.4s per database while
+        cloning from a template costs ~0.2s. The template name embeds the
+        xdist worker id so that parallel workers never clash, and it is
+        dropped at session end (crash leftovers are dropped on next build).
+        """
+        template_name = (
+            f"test-db-template-{self.base_name}-"
+            f"{os.environ.get('PYTEST_XDIST_WORKER', 'main')}"
+        )
+        with custom_db_config(template_name):
+            self.executive(f'DROP DATABASE IF EXISTS "{template_name}" WITH (FORCE)')
+            self.executive(f'CREATE DATABASE "{template_name}"')
             command.upgrade(Config(toml_file="pyproject.toml"), "head")
-            # Alembic reuses config.db.engine, leaving a pooled connection that
-            # predates the ALTER DATABASE SET timezone=UTC migration. Dispose so
-            # init_insert() gets a fresh connection that inherits UTC.
             config.db.engine.dispose()
             init_insert()
+            if not self.empty:
+                self._fill(config.db)
+            # Do not leave pooled connections behind: CREATE DATABASE ...
+            # TEMPLATE refuses to clone a database that has other sessions.
+            config.db.engine.dispose()
+        # ALTER DATABASE SET settings live in pg_db_role_setting and are NOT
+        # copied by CREATE DATABASE ... TEMPLATE, so record them (e.g. the
+        # timezone=UTC migration) to re-apply on every clone.
+        settings = [
+            row[0]
+            for row in self._admin_query(
+                "SELECT unnest(setconfig) FROM pg_db_role_setting "
+                "WHERE setdatabase = "
+                "(SELECT oid FROM pg_database WHERE datname = "
+                f"'{template_name}')"
+            )
+        ]
+        _session_db_templates.append(template_name)
+        return template_name, settings
+
+    def __call__(self, request):
+        if getattr(self, "_template", None) is None:
+            self._template = self._build_template(request)
+        template_name, settings = self._template
+        db_name = f"test-db-{self.base_name}-{uuid4().hex}"
+        with custom_db_config(db_name):
+            clone_statements = [
+                f'CREATE DATABASE "{db_name}" TEMPLATE "{template_name}"'
+            ]
+            for setting in settings:
+                key, _, value = setting.partition("=")
+                value = value.replace("'", "''")
+                clone_statements.append(
+                    f'ALTER DATABASE "{db_name}" SET "{key}" = \'{value}\''
+                )
+            self._run(clone_statements)
             try:
-                if not self.empty:
-                    self._fill(config.db)
                 yield db_name
             finally:
+                # Release pooled connections first, otherwise DROP DATABASE
+                # WITH (FORCE) burns hundreds of ms terminating them.
+                config.db.engine.dispose()
                 self.executive(f'DROP DATABASE "{db_name}" WITH (FORCE)')
 
     def fixture(self):
@@ -285,6 +350,13 @@ def read_only_db(read_only_db_config_object):
     with custom_db_config(read_only_db_config_object):
         with config.db.session() as session:
             yield session
+
+
+@pytest.fixture(scope="session", autouse=True)
+def cleanup_db_templates():
+    yield
+    for name in list(_session_db_templates):
+        DbConfiguration.executive(f'DROP DATABASE IF EXISTS "{name}" WITH (FORCE)')
 
 
 @pytest.fixture
