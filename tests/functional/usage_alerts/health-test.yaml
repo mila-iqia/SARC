@@ -363,6 +363,13 @@ sarc:
         active: true
         since: "2023-02-15T00:00+00:00"
 
+      # Same as above, but `since` is a naive date-only string, as one would
+      # write it in a config file. It must be read as UTC => FAILURE.
+      old_running_jobs_since_before_naive:
+        $class: "sarc.alerts.usage_alerts.old_running_jobs:OldRunningJobCheck"
+        active: true
+        since: "2023-02-15"
+
       # `since` after the RUNNING job's submit_time.
       # Should NOT find the old RUNNING job => OK.
       old_running_jobs_since_after:

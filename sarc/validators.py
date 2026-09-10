@@ -29,6 +29,17 @@ class DatetimeUTCValidator:
 datetime_utc = Annotated[datetime, DatetimeUTCValidator()]
 
 
+def as_utc(value: datetime) -> datetime:
+    """Return `value` in UTC, reading a naive datetime as already UTC.
+
+    Needed wherever a datetime comes from a serieux-deserialized dataclass
+    (config files): serieux ignores the `datetime_utc` Pydantic validator, so
+    a config value like "2026-01-01" arrives naive and any query binding it
+    against a TIMESTAMPTZ column is rejected by `UTCDateTime`.
+    """
+    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
+
+
 def _max_upper(a: datetime | None, b: datetime | None) -> datetime | None:
     """Max of two upper bounds where None represents +infinity."""
     return None if (a is None or b is None) else max(a, b)
