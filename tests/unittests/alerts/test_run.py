@@ -1,9 +1,38 @@
 import logging
 import re
+from collections.abc import Iterator
+from contextlib import contextmanager
 
+import gifnoc
 import pytest
+from sqlalchemy import event
 
+from sarc.config import config
 from sarc.db.healthcheck import HealthCheckStateDB
+
+
+@contextmanager
+def _frozen_time(moment: str) -> Iterator[None]:
+    with gifnoc.overlay(
+        {"time": {"$class": "FrozenTime", "time": moment, "sleep_beat": 0}}
+    ):
+        yield
+
+
+@contextmanager
+def _captured_statements() -> Iterator[list[str]]:
+    """Record every SQL statement the engine executes while in this block."""
+    statements: list[str] = []
+
+    def record(_conn, _cursor, statement, *_args):
+        statements.append(statement)
+
+    engine = config.db.engine
+    event.listen(engine, "before_cursor_execute", record)
+    try:
+        yield statements
+    finally:
+        event.remove(engine, "before_cursor_execute", record)
 
 
 @pytest.mark.usefixtures("empty_read_write_db")
@@ -106,6 +135,43 @@ def test_run_all_checks_dry_run(empty_read_write_db, beans_config, cli_main, cap
         )
         # Nothing should have been persisted to the database.
         assert not list(HealthCheckStateDB.get_states(empty_read_write_db))
+
+
+def test_dry_run_over_existing_states_writes_nothing(
+    empty_read_write_db, beans_config, cli_main
+):
+    """A dry run must not emit a single write, even with states already stored.
+
+    Mutating the loaded states (to apply the config) makes them dirty, and the
+    next check's query autoflushes them unless they are detached.
+    """
+    assert cli_main(["health", "run", "--all"]) == 0
+    stored = {
+        state.name: (state.last_result_dict, state.last_message)
+        for state in HealthCheckStateDB.get_states(empty_read_write_db)
+    }
+    assert stored
+
+    # Later than the frozen time of the first run, so the results really differ:
+    # an identical result would leave the states clean and flush nothing.
+    with _frozen_time("2024-01-01T16:00:00Z"):
+        with _captured_statements() as statements:
+            assert cli_main(["health", "run", "--all", "--dry-run"]) == 0
+
+    assert statements, "the dry run did not even query the database"
+
+    writes = [
+        statement
+        for statement in statements
+        if re.match(r"\s*(INSERT|UPDATE|DELETE)", statement, re.IGNORECASE)
+    ]
+    assert writes == []
+
+    empty_read_write_db.expire_all()
+    assert {
+        state.name: (state.last_result_dict, state.last_message)
+        for state in HealthCheckStateDB.get_states(empty_read_write_db)
+    } == stored
 
 
 def test_run_check_with_dep(empty_read_write_db, deps_config, cli_main, caplog):
