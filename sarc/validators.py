@@ -7,7 +7,7 @@ from pydantic import BaseModel, Field, GetCoreSchemaHandler
 from pydantic.functional_validators import model_validator
 from pydantic_core import CoreSchema, core_schema
 from serieux import Context, deserializer
-from serieux.instructions import strip
+from serieux.instructions import extract, strip
 from serieux.priority import HIGH
 
 UTCOFFSET = timedelta(0)
@@ -15,12 +15,16 @@ UTCOFFSET = timedelta(0)
 
 @dataclass(frozen=True)
 class DatetimeUTCValidator:
-    def validate_tz_utc(self, value: datetime, handler: Callable):
-        val = handler(value)
-        assert val.tzinfo is not None, "date is not tz-aware"
-        assert val.utcoffset() == UTCOFFSET, "date is not in UTC timezone"
+    def check_tz_utc(self, value: datetime) -> datetime:
+        """Return `value` unchanged, or raise if it is not a UTC datetime."""
+        if value.tzinfo is None:
+            raise ValueError(f"date is not tz-aware: {value!r}")
+        if value.utcoffset() != UTCOFFSET:
+            raise ValueError(f"date is not in UTC timezone: {value!r}")
+        return value
 
-        return val
+    def validate_tz_utc(self, value: datetime, handler: Callable):
+        return self.check_tz_utc(handler(value))
 
     def __get_pydantic_core_schema__(
         self, source_type: Any, handler: GetCoreSchemaHandler
@@ -33,11 +37,6 @@ class DatetimeUTCValidator:
 datetime_utc = Annotated[datetime, DatetimeUTCValidator()]
 
 
-def as_utc(value: datetime) -> datetime:
-    """Return `value` in UTC, reading a naive datetime as already UTC."""
-    return value.replace(tzinfo=UTC) if value.tzinfo is None else value.astimezone(UTC)
-
-
 @deserializer(priority=HIGH)
 def _deserialize_datetime_utc(
     self,  # noqa: ARG001  # serieux requires this exact signature
@@ -45,17 +44,19 @@ def _deserialize_datetime_utc(
     obj: str,
     ctx: Context,
 ) -> datetime:
-    """Keep `datetime_utc` in UTC when serieux deserializes it, e.g. from a config file.
+    """Apply the `datetime_utc` check when serieux deserializes it, e.g. from a config file.
 
     Serieux does not run Pydantic validators, so without this a `datetime_utc`
-    config field written as "2026-01-01" stays naive and is rejected by
-    `UTCDateTime` when bound against a TIMESTAMPTZ column.
+    config field written as "2026-01-01" stays naive and is only rejected later,
+    by `UTCDateTime` when bound against a TIMESTAMPTZ column. Serieux reports the
+    raised ValueError with the offending config path.
 
     Dispatching on `Any` and stripping the annotation before recursing mirrors
     serieux's own instruction features (e.g. `Secret`). A handler typed on
     `datetime` instead cycles against `Partial` in gifnoc's pipeline.
     """
-    return as_utc(recurse(strip(t, DatetimeUTCValidator), obj, ctx))
+    validator = extract(DatetimeUTCValidator, t)
+    return validator.check_tz_utc(recurse(strip(t, DatetimeUTCValidator), obj, ctx))
 
 
 def _max_upper(a: datetime | None, b: datetime | None) -> datetime | None:

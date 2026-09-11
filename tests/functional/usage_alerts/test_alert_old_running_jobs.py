@@ -45,16 +45,6 @@ PARAMETERS: dict[str, tuple[str, list[str]]] = {
             "[old_running_jobs_since_before] FAILURE: old_running_jobs_since_before",
         ],
     ),
-    # Naive `since` before submit_time, read as UTC => finds old RUNNING job
-    "since_before_naive": (
-        "old_running_jobs_since_before_naive",
-        [
-            "Found 1 RUNNING job entries, submitted since 2023-02-15 00:00:00+00:00, "
-            "which should have already finished, "
-            "from which 1 not re-submitted",
-            "[old_running_jobs_since_before_naive] FAILURE: old_running_jobs_since_before_naive",
-        ],
-    ),
     # `since` after submit_time => does NOT find old RUNNING job
     "since_after": ("old_running_jobs_since_after", []),
 }
@@ -100,16 +90,6 @@ PARAMETERS_WITH_A_JOB_RESUBMITTED: dict[str, tuple[str, list[str]]] = {
             "which should have already finished, "
             "from which 0 not re-submitted, 1 with a latest entry COMPLETED",
             "[old_running_jobs_since_before] FAILURE: old_running_jobs_since_before",
-        ],
-    ),
-    # Naive `since` before submit_time, read as UTC => finds old RUNNING job
-    "since_before_naive": (
-        "old_running_jobs_since_before_naive",
-        [
-            "Found 1 RUNNING job entries, submitted since 2023-02-15 00:00:00+00:00, "
-            "which should have already finished, "
-            "from which 0 not re-submitted, 1 with a latest entry COMPLETED",
-            "[old_running_jobs_since_before_naive] FAILURE: old_running_jobs_since_before_naive",
         ],
     ),
     # `since` after submit_time => does NOT find old RUNNING job
