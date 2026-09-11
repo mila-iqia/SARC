@@ -62,36 +62,6 @@ sarc:
         active: true
         cluster_names: ["fromage", "patate"]
 
-      # cluster_scraping_* checks correspond to test params in test_alert_cluster_scraping.py
-      cluster_scraping_0:
-        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
-        active: true
-        verbose: true
-      cluster_scraping_1:
-        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
-        active: true
-        time_interval: null
-        verbose: true
-      cluster_scraping_2:
-        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
-        active: true
-        time_interval: null
-        cluster_names:
-          - fromage
-          - mila
-          - patate
-          - raisin
-          - another_cluster
-        verbose: true
-      cluster_scraping_3:
-        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
-        active: true
-        time_interval: null
-        cluster_names:
-          - mila
-          - raisin
-          - another_cluster
-
       # node_gpu_usage_* checks correspond to test params in test_alert_gpu_usage.py
       node_gpu_usage_0:
         $class: "sarc.alerts.usage_alerts.gpu_usage:NodeGpuUsageCheck"
