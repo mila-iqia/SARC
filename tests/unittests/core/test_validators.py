@@ -1,9 +1,74 @@
+from dataclasses import dataclass
 from datetime import UTC, datetime
 
 import pytest
 from pydantic import ValidationError
+from serieux import Sources, deserialize
+from serieux.exc import ValidationError as SerieuxValidationError
 
-from sarc.validators import DateMatchError, DateOverlapError, ValidField
+from sarc.validators import (
+    DateMatchError,
+    DateOverlapError,
+    DateRange,
+    ValidField,
+    datetime_utc,
+)
+
+
+class TestDatetimeUtcValidation:
+    """`datetime_utc` is checked, never coerced: a non-UTC value is an error."""
+
+    @pytest.mark.parametrize(
+        "written", ["2026-01-01T00:00:00Z", "2026-01-01T00:00:00+00:00"]
+    )
+    def test_accepts_utc(self, written):
+        assert deserialize(datetime_utc, written) == datetime(2026, 1, 1, tzinfo=UTC)
+
+    @pytest.mark.parametrize(
+        "written,message",
+        [
+            # A date-only string, as one naturally writes it in a config file.
+            ("2026-01-01", "not tz-aware"),
+            ("2026-01-01T00:00:00", "not tz-aware"),
+            ("2026-01-01T00:00:00-05:00", "not in UTC"),
+        ],
+    )
+    def test_rejects_non_utc(self, written, message):
+        # Serieux re-raises as its own error inside a model, but not at top level.
+        with pytest.raises((ValueError, SerieuxValidationError), match=message):
+            deserialize(datetime_utc, written)
+
+    def test_layered_sources(self):
+        """Must hold through the pipeline gifnoc uses to read config files.
+
+        `Sources` wraps the type in `Partial`; a handler dispatching on
+        `Annotated[datetime, ...]` rather than `Annotated[Any, ...]` works on its
+        own but raises `CycleError` here.
+        """
+
+        @dataclass
+        class Holder:
+            since: datetime_utc | None = None
+
+        assert deserialize(
+            Holder,
+            Sources(
+                {"since": "2026-06-01T00:00:00Z"}, {"since": "2026-01-01T00:00:00Z"}
+            ),
+        ).since == datetime(2026, 1, 1, tzinfo=UTC)
+        assert deserialize(Holder, Sources({})).since is None
+        with pytest.raises(SerieuxValidationError, match="not tz-aware"):
+            deserialize(Holder, Sources({"since": "2026-01-01"}))
+
+    def test_pydantic_applies_the_same_check(self):
+        """The Pydantic side of the annotation enforces the same rule."""
+        assert DateRange(lower=datetime(2026, 1, 1, tzinfo=UTC), upper=None).lower
+        with pytest.raises(ValidationError, match="not tz-aware"):
+            DateRange(lower=datetime(2026, 1, 1), upper=None)
+
+    def test_plain_datetime_untouched(self):
+        """A plain `datetime` annotation keeps serieux's default behaviour."""
+        assert deserialize(datetime, "2026-01-01") == datetime(2026, 1, 1)
 
 
 class TestValidField:

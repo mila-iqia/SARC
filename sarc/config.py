@@ -16,6 +16,10 @@ from sqlmodel import Session
 
 from .alerts.common import HealthMonitorConfig
 
+# Imported for its side effect: registers the serieux deserializer that keeps
+# `datetime_utc` config fields in UTC. Must happen before any config is read.
+from .validators import datetime_utc as _datetime_utc  # noqa: F401
+
 type JSON = list[JSON] | dict[str, JSON] | int | str | float | bool | None
 
 if TYPE_CHECKING:
