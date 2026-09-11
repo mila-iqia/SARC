@@ -57,6 +57,10 @@ sarc:
         $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
         active: true
         time_interval: 279d
+      cluster_response_filtered_cluster_names:
+        $class: "sarc.alerts.usage_alerts.cluster_response:ClusterResponseCheck"
+        active: true
+        cluster_names: ["fromage", "patate"]
 
       # cluster_scraping_* checks correspond to test params in test_alert_cluster_scraping.py
       cluster_scraping_0:

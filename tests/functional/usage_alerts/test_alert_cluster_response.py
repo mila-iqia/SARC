@@ -11,6 +11,8 @@ PARAMETERS = {
         f"{days}-days": f"cluster_response_{days}_days"
         for days in [365, 283, 282, 281, 280, 279]
     },
+    # Only checks the clusters listed in `cluster_names`, ignoring the others.
+    "filtered-cluster-names": "cluster_response_filtered_cluster_names",
 }
 
 

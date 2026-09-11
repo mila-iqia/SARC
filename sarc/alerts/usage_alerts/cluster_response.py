@@ -7,7 +7,9 @@ from sarc.alerts.common import CheckResult, HealthCheck
 logger = logging.getLogger(__name__)
 
 
-def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> bool:
+def check_cluster_response(
+    time_interval: timedelta = timedelta(days=7), cluster_names: list[str] | None = None
+) -> bool:
     """
     Check if we scraped clusters recently.
     Log an alert for each cluster not scraped since `time_interval` from now.
@@ -33,7 +35,14 @@ def check_cluster_response(time_interval: timedelta = timedelta(days=7)) -> bool
     # Check each available cluster
     ok = True
     with config.db.session() as sess:
-        for cluster in get_available_clusters(sess):
+        # Get the list/sequence of clusters to check
+        if cluster_names:
+            clusters = [
+                c for c in get_available_clusters(sess) if c.name in cluster_names
+            ]
+        else:
+            clusters = get_available_clusters(sess)
+        for cluster in clusters:
             if cluster.end_time_sacct is None:
                 logger.error(
                     f"[{cluster.name}] no end_time_sacct available, cannot check last scraping"
@@ -54,9 +63,12 @@ class ClusterResponseCheck(HealthCheck):
     """Health check for cluster response"""
 
     time_interval: timedelta = timedelta(days=7)
+    cluster_names: list[str] | None = None
 
     def check(self) -> CheckResult:
-        if check_cluster_response(time_interval=self.time_interval):
+        if check_cluster_response(
+            time_interval=self.time_interval, cluster_names=self.cluster_names
+        ):
             return self.ok()
         else:
             return self.fail()
