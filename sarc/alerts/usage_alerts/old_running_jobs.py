@@ -51,65 +51,67 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
             if max_end_time < now:
                 jobs_over_limit.append(job)
 
-    if jobs_over_limit:
-        # We have old RUNNING jobs
-        # Check if this job was re-submitted with a more recent status
+        if jobs_over_limit:
+            # We have old RUNNING jobs
+            # Check if this job was re-submitted with a more recent status
 
-        # First, get job keys :cluster name + job ID
-        # NB: Database may contain many job entries with same cluster name,
-        # same job ID, AND same job state `RUNNING`
-        index_jobs: set[tuple[int, int]] = {
-            (job.cluster_id, job.job_id) for job in jobs_over_limit
-        }
-        job_story: dict[tuple[int, int], list[SlurmJobDB]] = {}
-        for cluster_id, job_id in tqdm(
-            index_jobs, total=len(index_jobs), desc="running job states"
-        ):
-            local_query = select(SlurmJobDB).where(
-                SlurmJobDB.cluster_id == cluster_id, SlurmJobDB.job_id == job_id
-            )
+            # First, get job keys :cluster name + job ID
+            # NB: Database may contain many job entries with same cluster name,
+            # same job ID, AND same job state `RUNNING`
+            index_jobs: set[tuple[int, int]] = {
+                (job.cluster_id, job.job_id) for job in jobs_over_limit
+            }
+            job_story: dict[tuple[int, int], list[SlurmJobDB]] = {}
+            for cluster_id, job_id in tqdm(
+                index_jobs, total=len(index_jobs), desc="running job states"
+            ):
+                local_query = select(SlurmJobDB).where(
+                    SlurmJobDB.cluster_id == cluster_id, SlurmJobDB.job_id == job_id
+                )
+                if since is not None:
+                    local_query = local_query.where(SlurmJobDB.submit_time >= since)
+                local_jobs = sorted(
+                    sess.exec(local_query).all(), key=lambda jdb: jdb.submit_time
+                )
+                assert local_jobs
+                job_story[(cluster_id, job_id)] = local_jobs
+
+            # Now we get some stats
+
+            # nb. initial entries
+            nb_entries = len(jobs_over_limit)
+
+            # nb. initial jobs
+            assert len(index_jobs) == len(job_story)
+            nb_jobs = len(index_jobs)
+
+            # nb. jobs not re-submitted
+            nb_uniques = 0
+
+            # nb. latest found states for re-submitted jobs
+            nb_latest_state: Counter[SlurmState] = Counter()
+
+            for jobs in job_story.values():
+                if len(jobs) == 1:
+                    nb_uniques += 1
+                else:
+                    # Jobs are already sorted by submit time
+                    # Get and count latest job state
+                    latest_job = jobs[-1]
+                    nb_latest_state.update([latest_job.job_state])
+            # Now log detailed error
+            message = f"Found {nb_entries} RUNNING job entries"
             if since is not None:
-                local_query = local_query.where(SlurmJobDB.submit_time >= since)
-            local_jobs = sorted(
-                sess.exec(local_query).all(), key=lambda jdb: jdb.submit_time
-            )
-            assert local_jobs
-            job_story[(cluster_id, job_id)] = local_jobs
-
-        # Now we get some stats
-
-        # nb. initial entries
-        nb_entries = len(jobs_over_limit)
-
-        # nb. initial jobs
-        assert len(index_jobs) == len(job_story)
-        nb_jobs = len(index_jobs)
-
-        # nb. jobs not re-submitted
-        nb_uniques = 0
-
-        # nb. latest found states for re-submitted jobs
-        nb_latest_state: Counter[SlurmState] = Counter()
-
-        for jobs in job_story.values():
-            if len(jobs) == 1:
-                nb_uniques += 1
-            else:
-                # Jobs are already sorted by submit time
-                # Get and count latest job state
-                latest_job = jobs[-1]
-                nb_latest_state.update([latest_job.job_state])
-        # Now log detailed error
-        message = f"Found {nb_entries} RUNNING job entries"
-        if since is not None:
-            message += f", submitted since {since},"
-        message += " which should have already finished"
-        if nb_entries != nb_jobs:
-            message += f", distributed in {nb_jobs} jobs (cluster name + job ID)"
-        message += f", from which {nb_uniques} not re-submitted"
-        for latest_state, latest_state_count in nb_latest_state.most_common():
-            message += f", {latest_state_count} with a latest entry {latest_state.name}"
-        logger.error(message)
+                message += f", submitted since {since},"
+            message += " which should have already finished"
+            if nb_entries != nb_jobs:
+                message += f", distributed in {nb_jobs} jobs (cluster name + job ID)"
+            message += f", from which {nb_uniques} not re-submitted"
+            for latest_state, latest_state_count in nb_latest_state.most_common():
+                message += (
+                    f", {latest_state_count} with a latest entry {latest_state.name}"
+                )
+            logger.error(message)
 
     return not jobs_over_limit
 

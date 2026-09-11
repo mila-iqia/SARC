@@ -139,6 +139,11 @@ def _get_state(
     """
     check = hcfg.checks.get(name, None)
     db_state = HealthCheckStateDB.get_state(sess, name)
+    if dry_run and db_state is not None:
+        # Detach it: the caller stores the run's results on the state, and a
+        # session-attached instance gets autoflushed by the next query, which
+        # would write to the database despite the dry run.
+        sess.expunge(db_state)
     if check:
         if db_state:
             # Check parameters from config file have priority
