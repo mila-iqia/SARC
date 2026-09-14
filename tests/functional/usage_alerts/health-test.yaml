@@ -383,3 +383,12 @@ sarc:
       users_collection:
         $class: "sarc.alerts.usage_alerts.users_collection:UsersCollectionCheck"
         active: true
+
+      # job_series_coherence_* checks correspond to tests in test_job_series_coherence.py
+      job_series_coherence_default:
+        $class: "sarc.alerts.usage_alerts.job_series_coherence:JobSeriesCoherenceCheck"
+        active: true
+      job_series_coherence_365_days:
+        $class: "sarc.alerts.usage_alerts.job_series_coherence:JobSeriesCoherenceCheck"
+        active: true
+        time_interval: 365d

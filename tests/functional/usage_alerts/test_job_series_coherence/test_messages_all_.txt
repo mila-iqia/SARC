@@ -1,0 +1,5 @@
+[job_series] 1 jobs have no job_series row (21 rows for 22 jobs), e.g. job_db_id 1
+[job_series] 1 GPU jobs but 0 rows have RGU columns
+[job_series] 1 gpu_sm_occupancy statistics but 0 rows carry one
+[job_series] 2 of the jobs submitted since 2022-11-22 00:00:00+00:00 disagree with their source tables, e.g. job_db_id 2, 21
+[job_series_coherence_365_days] FAILURE: job_series_coherence_365_days
