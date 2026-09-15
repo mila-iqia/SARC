@@ -1,7 +1,7 @@
 """Add the reservation field to slurm jobs
 
 Revision ID: ba029bf00184
-Revises: 41ab28d1a677
+Revises: 3ec1f2451f71
 Create Date: 2026-09-15 15:48:10.082871+00:00
 
 Adds slurm_jobs.reservation (the reservation name a job ran within, from
@@ -24,7 +24,7 @@ from alembic import op
 
 # revision identifiers, used by Alembic.
 revision: str = "ba029bf00184"
-down_revision: Union[str, Sequence[str], None] = "41ab28d1a677"
+down_revision: Union[str, Sequence[str], None] = "3ec1f2451f71"
 branch_labels: Union[str, Sequence[str], None] = None
 depends_on: Union[str, Sequence[str], None] = None
 
