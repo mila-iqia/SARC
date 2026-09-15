@@ -353,3 +353,13 @@ sarc:
       users_collection:
         $class: "sarc.alerts.usage_alerts.users_collection:UsersCollectionCheck"
         active: true
+
+      # job_series_* checks correspond to tests in test_job_series_coherence.py.
+      # The window is widened to cover the whole fixture.
+      job_series_whole:
+        $class: "sarc.alerts.usage_alerts.job_series_coherence:JobSeriesWholeCheck"
+        active: true
+      job_series_recent_365_days:
+        $class: "sarc.alerts.usage_alerts.job_series_coherence:JobSeriesRecentCheck"
+        active: true
+        time_interval: 365d
