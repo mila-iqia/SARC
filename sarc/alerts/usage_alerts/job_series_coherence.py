@@ -134,27 +134,19 @@ def _examples(ids: Sequence[int] | None) -> str:
     return f", e.g. job_db_id {', '.join(str(i) for i in ids)}" if ids else ""
 
 
-def check_job_series_coherence(
-    time_interval: timedelta | None = timedelta(days=1), report_limit: int = 20
-) -> bool:
+def check_job_series_whole(report_limit: int = 20) -> bool:
     """
-    Check that the job_series table agrees with the tables it is built from.
+    Check what the whole of job_series can be compared for, in one statement.
 
     - every job has a job_series row;
     - every GPU job has its RGU value, and no other job has one;
-    - every recorded `gpu_sm_occupancy` reached its job_series column;
-    - over `time_interval`, every column job_series adds on its own -- what the
-      triggers copy, and the RGU/cost/waste arithmetic -- still holds.
+    - every recorded `gpu_sm_occupancy` reached its job_series column.
 
-    The first three compare whole tables; the last reads each row, hence the
-    window.
+    Scans both tables end to end. The column values need a window, and are
+    `check_job_series_recent`'s half.
 
     Parameters
     ----------
-    time_interval: timedelta
-        Width of the window, ending now and taken on `submit_time`, over which
-        rows are compared column by column. Default is 1 day. None skips that
-        comparison.
     report_limit: int
         How many job ids to name per alert. Default is 20.
 
@@ -165,11 +157,6 @@ def check_job_series_coherence(
     """
     from sarc.config import config
 
-    if time_interval is not None and time_interval <= timedelta(0):
-        logger.error(
-            f"Invalid time_interval (must be > 0) for job_series coherence: {time_interval}"
-        )
-        return False
     if report_limit < 1:
         logger.error(
             f"Invalid report_limit (must be > 0) for job_series coherence: {report_limit}"
@@ -203,31 +190,84 @@ def check_job_series_coherence(
             )
             ok = False
 
-        if time_interval is not None:
-            start = datetime.now(tz=UTC) - time_interval
-            stale = sess.exec(  # ty: ignore[no-matching-overload]
-                text(STALE_ROWS), params={"start": start}
-            ).all()
-            if stale:
-                logger.error(
-                    f"[job_series] {len(stale)} of the jobs submitted since {start} "
-                    f"disagree with expected values recomputed from source tables"
-                    f"{_examples([row.job_db_id for row in stale][:report_limit])}"
-                )
-                ok = False
-
     return ok
 
 
-@dataclass
-class JobSeriesCoherenceCheck(HealthCheck):
-    """Health check for the job_series table"""
+def check_job_series_recent(
+    time_interval: timedelta = timedelta(days=1), report_limit: int = 20
+) -> bool:
+    """
+    Check the columns job_series adds on its own, over recently submitted jobs.
 
-    time_interval: timedelta | None = timedelta(days=1)
+    What the triggers copy, and the RGU/cost/waste arithmetic, recomputed from
+    the source tables and compared to the stored row. Reads every row in the
+    window, hence the window; what a whole-table pass can do instead is
+    `check_job_series_whole`'s half.
+
+    Parameters
+    ----------
+    time_interval: timedelta
+        Width of the window, ending now and taken on `submit_time`. Default is
+        1 day.
+    report_limit: int
+        How many job ids to name per alert. Default is 20.
+
+    Returns
+    -------
+    bool
+        True if check succeeds, False otherwise.
+    """
+    from sarc.config import config
+
+    if time_interval <= timedelta(0):
+        logger.error(
+            f"Invalid time_interval (must be > 0) for job_series coherence: {time_interval}"
+        )
+        return False
+    if report_limit < 1:
+        logger.error(
+            f"Invalid report_limit (must be > 0) for job_series coherence: {report_limit}"
+        )
+        return False
+
+    with config.db.session() as sess:
+        start = datetime.now(tz=UTC) - time_interval
+        stale = sess.exec(  # ty: ignore[no-matching-overload]
+            text(STALE_ROWS), params={"start": start}
+        ).all()
+        if stale:
+            logger.error(
+                f"[job_series] {len(stale)} of the jobs submitted since {start} "
+                f"disagree with expected values recomputed from source tables"
+                f"{_examples([row.job_db_id for row in stale][:report_limit])}"
+            )
+            return False
+
+    return True
+
+
+@dataclass
+class JobSeriesWholeCheck(HealthCheck):
+    """Health check comparing job_series to its sources, table-wide."""
+
     report_limit: int = 20
 
     def check(self) -> CheckResult:
-        if check_job_series_coherence(
+        if check_job_series_whole(report_limit=self.report_limit):
+            return self.ok()
+        else:
+            return self.fail()
+
+
+@dataclass
+class JobSeriesRecentCheck(HealthCheck):
+    """Health check recomputing job_series columns for recently submitted jobs."""
+
+    time_interval: timedelta = timedelta(days=1)
+    report_limit: int = 20
+
+    def check(self) -> CheckResult:
+        if check_job_series_recent(
             time_interval=self.time_interval, report_limit=self.report_limit
         ):
             return self.ok()
