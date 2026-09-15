@@ -7,11 +7,13 @@ from sqlalchemy import text
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.db.job_series import (
+    COPIED_JOB_COLUMNS,
     CPU_MEAN_COLUMN,
     CPU_STAT,
     DASH_STATS,
     ELIGIBILITY,
     _derived_exprs,
+    _q,
     _stat_pivot_expr,
 )
 
@@ -122,18 +124,6 @@ def check_job_series_whole(report_limit: int = 20) -> bool:
 # from the sources its trigger reads and compares it to the stored row, over
 # `time_interval`. One per family of columns, grouped by where they come from.
 
-# From slurm_jobs: the inputs the arithmetic below reads. The other mirrored
-# columns are out of scope -- what is checked here is what job_series computes,
-# not what it copies verbatim.
-COPIED = [
-    "elapsed_time",
-    "requested_cpu",
-    "allocated_cpu",
-    "requested_gres_gpu",
-    "allocated_gres_gpu",
-    "harmonized_gpu_type",
-]
-
 # From users and clusters, each by its own trigger.
 DISPLAY = {
     "display_name": "u.display_name",
@@ -163,7 +153,10 @@ DERIVED = _derived_exprs("t.", "w.", "t.")
 # a recorded NaN is a measurement, not drift.
 DIFFERS = "\n        OR ".join(
     [
-        *(f"t.{column} IS DISTINCT FROM j.{column}" for column in COPIED),
+        # Every column mirrored from slurm_jobs, off the list the triggers
+        # themselves are generated from. With the three families below,
+        # this covers every job_series column.
+        *(f"t.{_q(c)} IS DISTINCT FROM j.{_q(c)}" for c in COPIED_JOB_COLUMNS),
         *(f"t.{column} IS DISTINCT FROM {expr}" for column, expr in DISPLAY.items()),
         *(f"t.{column} IS DISTINCT FROM s.{column}" for _, _, column in STATS),
         *(f"t.{column} IS DISTINCT FROM {expr}" for column, expr in DERIVED.items()),
@@ -192,11 +185,11 @@ def check_job_series_recent(
     time_interval: timedelta = timedelta(days=1), report_limit: int = 20
 ) -> bool:
     """
-    Check the columns job_series adds on its own, over recently submitted jobs.
+    Check every job_series column, over recently submitted jobs.
 
-    The display columns, the statistics pivot, the RGU/cost/waste arithmetic and
-    the job columns it reads, recomputed from the source tables and compared to
-    the stored row. Reads every row in the window.
+    The columns mirrored from slurm_jobs, the display columns, the statistics
+    pivot and the RGU/cost/waste arithmetic, recomputed from the source tables
+    and compared to the stored row. Reads every row in the window.
 
     Parameters
     ----------

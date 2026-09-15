@@ -166,6 +166,26 @@ def test_stale_value_detected_only_by_column_comparison(read_write_db, caplog):
     assert f"job_db_id {job_db_id}" in caplog.text
 
 
+def test_stale_mirrored_column_detected(read_write_db, caplog):
+    """A column copied verbatim drifts too, and /dash reads job_series, not slurm_jobs."""
+    job_db_id = _first_job(read_write_db)
+    other_user = _scalar(
+        read_write_db,
+        "SELECT max(id) FROM users WHERE id <> (SELECT sarc_user_id FROM job_series"
+        f" WHERE job_db_id = {job_db_id})",
+    )
+    _corrupt(
+        read_write_db,
+        f"UPDATE job_series SET sarc_user_id = {other_user} WHERE job_db_id = {job_db_id}",
+    )
+
+    # The whole-table comparison reads none of the mirrored columns.
+    assert check_job_series_whole()
+
+    assert not check_job_series_recent(time_interval=WHOLE_HISTORY)
+    assert f"job_db_id {job_db_id}" in caplog.text
+
+
 @pytest.mark.parametrize("column", [*DERIVED, *(column for _, _, column in STATS)])
 def test_wrong_value_detected(db_with_statistics, caplog, column):
     _corrupt(
