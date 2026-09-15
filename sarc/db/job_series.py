@@ -164,7 +164,7 @@ def _pivot_select(job_id_expr: str) -> str:
     )
 
 
-def _derived_exprs(j: str, w: str, s: str) -> dict[str, str]:
+def derived_exprs(j: str, w: str, s: str) -> dict[str, str]:
     """The weight/cost/waste columns as SQL expressions over the job (``j``),
     the gpurgudb row (``w``) and the stat pivot (``s``) -- each a table alias
     or a plpgsql record prefix. Same expressions the view computed inline.
@@ -207,7 +207,7 @@ def _derived_exprs(j: str, w: str, s: str) -> dict[str, str]:
 
 _SYNC_JOB_BODY = ", ".join(f"new.{_q(c)}" for c in COPIED_JOB_COLUMNS)
 _SYNC_JOB_DERIVED = ", ".join(
-    _derived_exprs("new.", "w.", "s.")[c]
+    derived_exprs("new.", "w.", "s.")[c]
     for c in [*WEIGHT_COLUMNS, *RGU_COLUMNS, *COST_COLUMNS]
 )
 _SYNC_JOB_PIVOTS = ", ".join(f"s.{c}" for c in PIVOT_COLUMNS)
@@ -311,7 +311,7 @@ end;
 $$"""
 
 _WEIGHT_DERIVED = ",\n".join(
-    f"    {c} = {_derived_exprs('job_series.', 'g.', 'job_series.')[c]}"
+    f"    {c} = {derived_exprs('job_series.', 'g.', 'job_series.')[c]}"
     for c in [*WEIGHT_COLUMNS, *RGU_COLUMNS, *COST_COLUMNS]
     if c not in ("requested_cpu_waste", "allocated_cpu_waste")
 )
@@ -414,7 +414,7 @@ def job_series_backfill_sql(where: str = "") -> str:
     ``where`` is appended to the outer WHERE (e.g. an id range, for chunked
     backfills that keep transactions short).
     """
-    derived = _derived_exprs("j.", "w.", "s.")
+    derived = derived_exprs("j.", "w.", "s.")
     return f"""
 INSERT INTO job_series (job_db_id, {", ".join(_q(c) for c in ALL_VALUE_COLUMNS)})
 SELECT j.id, {", ".join(f"j.{_q(c)}" for c in COPIED_JOB_COLUMNS)},

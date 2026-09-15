@@ -1,47 +1,56 @@
 import logging
+from collections.abc import Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlalchemy import text
 
 from sarc.alerts.common import CheckResult, HealthCheck
-from sarc.db.job_series import CPU_MEAN_COLUMN, CPU_STAT, DASH_STATS, ELIGIBILITY
+from sarc.db.job_series import (
+    CPU_MEAN_COLUMN,
+    CPU_STAT,
+    DASH_STATS,
+    ELIGIBILITY,
+    derived_exprs,
+)
 
 logger = logging.getLogger(__name__)
 
-# A GPU job as `slurm_jobs` sees it -- the same population as job_series'
-# ELIGIBILITY: harmonized_gpu_type is a foreign key on gpurgudb.name, whose rgu
-# columns are NOT NULL, so a non-NULL type always yields a non-NULL rgu.
-GPU_JOBS = "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
-
-# All counts in one statement, so they share one snapshot. The triggers run in
-# the transaction that writes the job, so a snapshot never sees a job without
-# its job_series row; taken separately, a concurrent scrape would read as a
-# missing row.
-COUNTS = f"""
-SELECT j.jobs, j.gpu_jobs,
-       s.series, s.with_rgu, s.with_sm_occupancy,
-       t.sm_occupancy_stats
-  FROM (SELECT count(id) AS jobs,
-               count(id) FILTER (WHERE {GPU_JOBS}) AS gpu_jobs
-          FROM slurm_jobs) j,
-       (SELECT count(job_db_id) AS series,
-               count(job_db_id) FILTER (WHERE {ELIGIBILITY}) AS with_rgu,
-               count(job_db_id) FILTER (WHERE gpu_sm_occupancy_mean IS NOT NULL)
-                   AS with_sm_occupancy
-          FROM job_series) s,
-       (SELECT count(id) AS sm_occupancy_stats
-          FROM jobstatisticdb
-         WHERE name = 'gpu_sm_occupancy' AND mean IS NOT NULL) t
-"""
-
-MISSING_JOBS = """
-SELECT j.id
-  FROM slurm_jobs j
-  LEFT JOIN job_series s ON s.job_db_id = j.id
- WHERE s.job_db_id IS NULL
- ORDER BY j.id
- LIMIT :limit
+# Every way job_series can disagree with its sources, in one statement: an exact
+# count and a sample of job ids for each. One statement, one snapshot -- the
+# triggers write the row in the transaction that writes the job, so separate
+# queries would read a concurrent scrape as a missing row. Driving from
+# slurm_jobs covers everything: job_db_id is primary key and foreign key on
+# slurm_jobs.id, so job_series can hold neither a duplicate nor an orphan.
+MISMATCHES = f"""
+SELECT count(*) FILTER (WHERE no_row) AS n_no_row,
+       (array_agg(job_db_id ORDER BY job_db_id) FILTER (WHERE no_row))[1 : :limit]
+           AS ids_no_row,
+       count(*) FILTER (WHERE wrong_rgu) AS n_wrong_rgu,
+       (array_agg(job_db_id ORDER BY job_db_id) FILTER (WHERE wrong_rgu))[1 : :limit]
+           AS ids_wrong_rgu,
+       count(*) FILTER (WHERE wrong_sm) AS n_wrong_sm,
+       (array_agg(job_db_id ORDER BY job_db_id) FILTER (WHERE wrong_sm))[1 : :limit]
+           AS ids_wrong_sm
+  FROM (
+    SELECT j.job_db_id,
+           s.job_db_id IS NULL AS no_row,
+           -- a job with no row at all is reported once, as no_row
+           s.job_db_id IS NOT NULL
+               AND coalesce(j.gpu, false) <> coalesce(s.gpu, false) AS wrong_rgu,
+           s.job_db_id IS NOT NULL
+               AND (st.mean IS NOT NULL) <> (s.sm IS NOT NULL) AS wrong_sm
+      -- a subquery per side: both predicates name columns the two tables share,
+      -- and the same population: harmonized_gpu_type is a foreign key on
+      -- gpurgudb.name, whose rgu columns are NOT NULL, so a GPU type always
+      -- yields an RGU.
+      FROM (SELECT id AS job_db_id, (allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL) AS gpu
+            FROM slurm_jobs) j
+      LEFT JOIN (SELECT job_db_id, gpu_sm_occupancy_mean AS sm, {ELIGIBILITY} AS gpu
+                   FROM job_series) s ON s.job_db_id = j.job_db_id
+      LEFT JOIN jobstatisticdb st
+             ON st.job_id = j.job_db_id AND st.name = 'gpu_sm_occupancy'
+  ) d
 """
 
 # -- what only job_series has, by the trigger that maintains it -------------- #
@@ -65,10 +74,9 @@ DISPLAY = {
     "cluster_name": "c.name",
 }
 
-# From gpurgudb.
-WEIGHTS = {"gpu_type_rgu": "w.rgu", "gpu_type_rgu_drac": "w.drac_rgu"}
-
-# From jobstatisticdb, pivoted: (statistic, source column, job_series column).
+# One entry per statistic column: (name, jobstatisticdb column, job_series
+# column) -- jobstatisticdb holds one row per (job, name), job_series one
+# column per name.
 STATS = [
     *(
         (stat, src, column)
@@ -78,28 +86,11 @@ STATS = [
     (CPU_STAT, "mean", CPU_MEAN_COLUMN),
 ]
 
-# Computed. Every input is itself a job_series column checked above, so these
-# read the row alone. Same arithmetic as `_derived_exprs` in sarc/db/job_series.py,
-# and like the trigger that maintains them the waste columns read the stored cost.
-DERIVED = {
-    "requested_rgu": "coalesce(t.requested_gres_gpu, 0) * t.gpu_type_rgu",
-    "requested_rgu_drac": "coalesce(t.requested_gres_gpu, 0) * t.gpu_type_rgu_drac",
-    "allocated_rgu": "coalesce(t.allocated_gres_gpu, 0) * t.gpu_type_rgu",
-    "allocated_rgu_drac": "coalesce(t.allocated_gres_gpu, 0) * t.gpu_type_rgu_drac",
-    "requested_cpu_cost": "t.elapsed_time * t.requested_cpu",
-    "requested_cpu_waste": "(1 - t.cpu_utilization_mean) * t.requested_cpu_cost",
-    "allocated_cpu_cost": "t.elapsed_time * t.allocated_cpu",
-    "allocated_cpu_waste": "(1 - t.cpu_utilization_mean) * t.allocated_cpu_cost",
-    "cpu_overbilling_cost": "t.elapsed_time * (t.allocated_cpu - t.requested_cpu)",
-    "requested_gpu_cost": "t.elapsed_time * t.requested_gres_gpu * t.gpu_type_rgu_drac",
-    "requested_gpu_waste": "(1 - t.gpu_sm_occupancy_mean) * t.requested_gpu_cost",
-    "allocated_gpu_cost": "t.elapsed_time * t.allocated_gres_gpu * t.gpu_type_rgu_drac",
-    "allocated_gpu_waste": "(1 - t.gpu_sm_occupancy_mean) * t.allocated_gpu_cost",
-    "gpu_overbilling_cost": (
-        "t.elapsed_time * (t.allocated_gres_gpu - t.requested_gres_gpu)"
-        " * t.gpu_type_rgu_drac"
-    ),
-}
+# The RGU/cost/waste arithmetic, from the expressions the triggers themselves
+# are generated from: the stored row (`t.`) for job columns and statistics,
+# gpurgudb (`w.`) for the per-GPU-type RGU. Their inputs are compared above, so
+# a mismatch here is the arithmetic's own.
+DERIVED = derived_exprs("t.", "w.", "t.")
 
 # `NaN = NaN` is true on Postgres, so two NaNs read as equal here -- wanted:
 # a recorded NaN is a measurement, not drift.
@@ -107,19 +98,20 @@ DIFFERS = "\n        OR ".join(
     [
         *(f"t.{column} IS DISTINCT FROM j.{column}" for column in COPIED),
         *(f"t.{column} IS DISTINCT FROM {expr}" for column, expr in DISPLAY.items()),
-        *(f"t.{column} IS DISTINCT FROM {expr}" for column, expr in WEIGHTS.items()),
         *(f"t.{column} IS DISTINCT FROM s.{column}" for _, _, column in STATS),
         *(f"t.{column} IS DISTINCT FROM {expr}" for column, expr in DERIVED.items()),
     ]
 )
 
+# A job's statistic rows read back as that set of columns, so the comparison
+# below reads them like any other column.
 PIVOT = ",\n           ".join(
     f"max({src}) FILTER (WHERE name = '{stat}') AS {column}"
     for stat, src, column in STATS
 )
 
 STALE_ROWS = f"""
-SELECT j.id
+SELECT j.id AS job_db_id
   FROM slurm_jobs j
   JOIN job_series t ON t.job_db_id = j.id
   LEFT JOIN users u ON u.id = j.sarc_user_id
@@ -136,10 +128,10 @@ SELECT j.id
 """
 
 
-def _sample(ids: list[int], limit: int) -> str:
-    """`ids` as a message fragment, cut to `limit` entries."""
-    shown = ", ".join(str(i) for i in ids[:limit])
-    return f"{shown}, ..." if len(ids) > limit else shown
+def _examples(ids: Sequence[int] | None) -> str:
+    """`ids` as a message tail; empty when there are none. The count that
+    precedes it in the message is exact, so the sample needs no ellipsis."""
+    return f", e.g. job_db_id {', '.join(str(i) for i in ids)}" if ids else ""
 
 
 def check_job_series_coherence(
@@ -149,20 +141,20 @@ def check_job_series_coherence(
     Check that the job_series table agrees with the tables it is built from.
 
     - every job has a job_series row;
-    - every GPU job has its RGU columns;
-    - every recorded `gpu_sm_occupancy` reached the matching pivot column;
+    - every GPU job has its RGU value, and no other job has one;
+    - every recorded `gpu_sm_occupancy` reached its job_series column;
     - over `time_interval`, every column job_series adds on its own -- what the
       triggers copy, and the RGU/cost/waste arithmetic -- still holds.
 
-    The first three only count, so they span the whole database; the last reads
-    each row, hence the window.
+    The first three compare whole tables; the last reads each row, hence the
+    window.
 
     Parameters
     ----------
     time_interval: timedelta
         Width of the window, ending now and taken on `submit_time`, over which
         rows are compared column by column. Default is 1 day. None skips that
-        comparison, leaving only the counts.
+        comparison.
     report_limit: int
         How many job ids to name per alert. Default is 20.
 
@@ -173,34 +165,41 @@ def check_job_series_coherence(
     """
     from sarc.config import config
 
+    if time_interval is not None and time_interval <= timedelta(0):
+        logger.error(
+            f"Invalid time_interval (must be > 0) for job_series coherence: {time_interval}"
+        )
+        return False
+    if report_limit < 1:
+        logger.error(
+            f"Invalid report_limit (must be > 0) for job_series coherence: {report_limit}"
+        )
+        return False
+
     ok = True
     with config.db.session() as sess:
-        counts = sess.exec(text(COUNTS)).one()  # ty: ignore[no-matching-overload]
+        m = sess.exec(  # ty: ignore[no-matching-overload]
+            text(MISMATCHES), params={"limit": report_limit}
+        ).one()
 
-        # Counting is enough: job_db_id is both primary key and foreign key on
-        # slurm_jobs.id, so job_series can hold neither a duplicate nor an orphan.
-        if counts.jobs != counts.series:
-            missing = sess.exec(  # ty: ignore[no-matching-overload]
-                text(MISSING_JOBS), params={"limit": report_limit + 1}
-            ).all()
+        if m.n_no_row:
             logger.error(
-                f"[job_series] {counts.jobs - counts.series} jobs have no job_series row "
-                f"({counts.series} rows for {counts.jobs} jobs), "
-                f"e.g. job_db_id {_sample([row.id for row in missing], report_limit)}"
+                f"[job_series] {m.n_no_row} jobs have no job_series row"
+                f"{_examples(m.ids_no_row)}"
             )
             ok = False
 
-        if counts.gpu_jobs != counts.with_rgu:
+        if m.n_wrong_rgu:
             logger.error(
-                f"[job_series] {counts.gpu_jobs} GPU jobs but {counts.with_rgu} rows "
-                f"have RGU columns"
+                f"[job_series] {m.n_wrong_rgu} jobs have an RGU in job_series "
+                f"but not in slurm_jobs, or the reverse{_examples(m.ids_wrong_rgu)}"
             )
             ok = False
 
-        if counts.sm_occupancy_stats != counts.with_sm_occupancy:
+        if m.n_wrong_sm:
             logger.error(
-                f"[job_series] {counts.sm_occupancy_stats} gpu_sm_occupancy statistics "
-                f"but {counts.with_sm_occupancy} rows carry one"
+                f"[job_series] {m.n_wrong_sm} jobs have a gpu_sm_occupancy in job_series "
+                f"but not in jobstatisticdb, or the reverse{_examples(m.ids_wrong_sm)}"
             )
             ok = False
 
@@ -212,8 +211,8 @@ def check_job_series_coherence(
             if stale:
                 logger.error(
                     f"[job_series] {len(stale)} of the jobs submitted since {start} "
-                    f"disagree with their source tables, e.g. job_db_id "
-                    f"{_sample([row.id for row in stale], report_limit)}"
+                    f"disagree with expected values recomputed from source tables"
+                    f"{_examples([row.job_db_id for row in stale][:report_limit])}"
                 )
                 ok = False
 

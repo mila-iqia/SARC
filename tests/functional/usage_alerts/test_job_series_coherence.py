@@ -8,7 +8,6 @@ from sqlalchemy import text
 from sarc.alerts.usage_alerts.job_series_coherence import (
     DERIVED,
     STATS,
-    WEIGHTS,
     check_job_series_coherence,
 )
 from sarc.db.job import JobStatisticDB
@@ -101,20 +100,42 @@ def test_missing_rgu_detected(read_write_db, caplog):
     )
 
     assert not check_job_series_coherence(time_interval=None)
-    assert "GPU jobs but 0 rows have RGU columns" in caplog.text
+    assert "1 jobs have an RGU in job_series but not in slurm_jobs" in caplog.text
+
+
+@pytest.mark.usefixtures("read_write_db")
+def test_compensating_rgu_errors_detected(read_write_db, caplog):
+    """Two opposite errors leave the totals equal; comparing the sets does not."""
+    gpu_job = _scalar(
+        read_write_db,
+        "SELECT min(job_db_id) FROM job_series WHERE gpu_type_rgu_drac IS NOT NULL",
+    )
+    other = _first_job(read_write_db)
+    _corrupt(
+        read_write_db,
+        f"UPDATE job_series SET gpu_type_rgu_drac = NULL WHERE job_db_id = {gpu_job};"
+        f"UPDATE job_series SET gpu_type_rgu_drac = 1 WHERE job_db_id = {other}",
+    )
+
+    assert not check_job_series_coherence(time_interval=None)
+    assert "2 jobs have an RGU in job_series but not in slurm_jobs" in caplog.text
+    assert f"job_db_id {other}, {gpu_job}" in caplog.text
 
 
 def test_lost_sm_occupancy_detected(db_with_statistics, caplog):
-    # The trigger filled the pivot; drop it as a lost write would.
+    # The trigger filled the column; drop it as a lost write would.
     _corrupt(db_with_statistics, "UPDATE job_series SET gpu_sm_occupancy_mean = NULL")
 
     assert not check_job_series_coherence(time_interval=None)
-    assert "1 gpu_sm_occupancy statistics but 0 rows carry one" in caplog.text
+    assert (
+        "1 jobs have a gpu_sm_occupancy in job_series but not in jobstatisticdb"
+        in caplog.text
+    )
 
 
 @pytest.mark.usefixtures("read_write_db")
 def test_stale_value_detected_only_by_column_comparison(read_write_db, caplog):
-    """A wrong-but-filled value is invisible to the counts."""
+    """A wrong-but-filled value is invisible to the whole-table comparison."""
     job_db_id = _first_job(read_write_db)
     _corrupt(
         read_write_db,
@@ -128,9 +149,7 @@ def test_stale_value_detected_only_by_column_comparison(read_write_db, caplog):
     assert f"job_db_id {job_db_id}" in caplog.text
 
 
-@pytest.mark.parametrize(
-    "column", [*WEIGHTS, *DERIVED, *(column for _, _, column in STATS)]
-)
+@pytest.mark.parametrize("column", [*DERIVED, *(column for _, _, column in STATS)])
 def test_wrong_value_detected(db_with_statistics, caplog, column):
     _corrupt(
         db_with_statistics,
@@ -138,7 +157,7 @@ def test_wrong_value_detected(db_with_statistics, caplog, column):
     )
 
     assert not check_job_series_coherence(time_interval=WHOLE_HISTORY)
-    assert "disagree with their source tables" in caplog.text
+    assert "disagree with expected values recomputed from source tables" in caplog.text
 
 
 @pytest.mark.usefixtures("read_write_db", "health_config")
@@ -152,12 +171,13 @@ def test_check_runs_from_config(read_write_db, caplog, cli_main):
 
 
 # Each writes one kind of drift into job_series; some cascade into a second
-# message, which is what an operator would really see.
+# message, which is what an operator would really see. The two row-scoped ones
+# take different jobs, so the `all` scenario shows both of their alerts.
 CORRUPTIONS = {
-    "missing_row": "DELETE FROM job_series WHERE job_db_id = 1",
+    "missing_row": "DELETE FROM job_series WHERE job_db_id = {first}",
     "missing_rgu": "UPDATE job_series SET gpu_type_rgu_drac = NULL",
     "lost_sm_occupancy": "UPDATE job_series SET gpu_sm_occupancy_mean = NULL",
-    "stale_value": "UPDATE job_series SET display_name = 'Stale' WHERE job_db_id = 2",
+    "stale_value": "UPDATE job_series SET display_name = 'Stale' WHERE job_db_id = {second}",
 }
 
 
@@ -166,11 +186,16 @@ CORRUPTIONS = {
 @pytest.mark.parametrize("scenario", [*CORRUPTIONS, "all"])
 def test_messages(db_with_statistics, caplog, file_regression, cli_main, scenario):
     """Every message the check can log, as it comes out."""
+    first = _first_job(db_with_statistics)
+    second = _scalar(
+        db_with_statistics,
+        f"SELECT min(job_db_id) FROM job_series WHERE job_db_id > {first}",
+    )
     statements = (
         list(CORRUPTIONS.values()) if scenario == "all" else [CORRUPTIONS[scenario]]
     )
     for statement in statements:
-        _corrupt(db_with_statistics, statement)
+        _corrupt(db_with_statistics, statement.format(first=first, second=second))
 
     caplog.clear()
     assert cli_main(["health", "run", "--check", "job_series_coherence_365_days"]) == 0
