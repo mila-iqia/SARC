@@ -197,6 +197,7 @@ class SlurmJobDB(SQLModel, table=True):
     constraints: str | None = None
     priority: int | None = None
     qos: str | None = None
+    reservation: str | None = None
 
     # Flags
     CLEAR_SCHEDULING: bool = False

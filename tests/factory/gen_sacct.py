@@ -137,6 +137,7 @@ class _Job:
     priority: int
     job_name: str
     constraints: str
+    reservation: str  # "" when the job is not in a reservation
     work_dir: str
     # resources (fixed at creation)
     n_cpu: int
@@ -395,7 +396,9 @@ def _to_raw(j: _Job) -> RawSlurmJob:
         required=RawRequired(
             CPUs=j.n_cpu, memory_per_cpu=_UNSET, memory_per_node=_num(j.mem_mb)
         ),
-        reservation=RawReservation(id=0, name="", requested=""),
+        reservation=RawReservation(
+            id=1 if j.reservation else 0, name=j.reservation, requested=j.reservation
+        ),
         restart_cnt=0,
         script="",
         segment_size=0,
@@ -581,6 +584,9 @@ def generate_sacct(self: DataFactory, data: Data) -> None:
                     priority=rng.randint(1000, 100_000),
                     job_name=rng.choice(_JOB_NAMES),
                     constraints="x86_64" if domain == "mila" else "",
+                    reservation=rng.choices(
+                        ["", "troubleshooting-slurm"], weights=[90, 10]
+                    )[0],
                     work_dir=f"/home/{domain}/{username[0]}/{username}/scratch",
                     n_cpu=n_cpu,
                     mem_mb=mem_mb,

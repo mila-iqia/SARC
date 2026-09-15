@@ -65,6 +65,7 @@ ALL_COLUMNS = sorted(
         "partition",
         "priority",
         "qos",
+        "reservation",
         "requested_billing",
         "requested_cpu",
         "requested_gpu_type",

@@ -96,6 +96,7 @@ class JobSeries:
     gpu_memory_max: float | None = None
 
     cluster_name: str | None = None
+    reservation: str | None = None
     gpu_type_rgu: float | None = None
     gpu_type_rgu_drac: float | None = None
     requested_rgu: float | None = None

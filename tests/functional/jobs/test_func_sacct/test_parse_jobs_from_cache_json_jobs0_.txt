@@ -18,6 +18,7 @@
     "constraints": "",
     "priority": 46003,
     "qos": "normal",
+    "reservation": null,
     "CLEAR_SCHEDULING": false,
     "STARTED_ON_SUBMIT": false,
     "STARTED_ON_SCHEDULE": true,

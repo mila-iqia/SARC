@@ -36,6 +36,7 @@ base_job = {
     "partition": "long",
     "priority": 7152,
     "qos": "normal",
+    "reservation": None,
     "signal": None,
     "start_time": end_time - timedelta(seconds=elapsed_time),
     "submit_time": end_time - timedelta(seconds=elapsed_time + 60),

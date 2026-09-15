@@ -522,6 +522,7 @@ class JobSeriesTable(SQLModel, table=True):
     constraints: str | None = None
     priority: int | None = None
     qos: str | None = None
+    reservation: str | None = None
     CLEAR_SCHEDULING: bool = False
     STARTED_ON_SUBMIT: bool = False
     STARTED_ON_SCHEDULE: bool = False
@@ -687,6 +688,8 @@ class JobSeriesDB(SQLModel, table=True):
     """Dimensionless Slurm scheduling priority value."""
     qos: str | None
     """Quality-of-Service (QoS) name."""
+    reservation: str | None
+    """Name of the reservation (advanced reservation) the job ran within, if any."""
 
     # Flags
     # Slurm's own job flags (booleans, default False). Names come straight from

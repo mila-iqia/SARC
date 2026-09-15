@@ -1,6 +1,6 @@
 --- base job
 +++ patched job
-@@ -29,18 +29,18 @@
+@@ -30,18 +30,18 @@
      "elapsed_time": 3600.0,
      "latest_scraped_start": "2024-03-25T04:00:00Z",
      "latest_scraped_end": "2024-03-26T04:00:00Z",

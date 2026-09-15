@@ -31,7 +31,6 @@ from sqlalchemy.dialects.postgresql import JSONB
 
 import sarc.db.sqlmodel
 from alembic import op
-from sarc.db.job_series import JOB_SERIES_FUNCTIONS, JOB_SERIES_TRIGGERS
 
 # revision identifiers, used by Alembic.
 revision: str = "7fe5b57ffa1d"
@@ -57,6 +56,233 @@ WHERE user_supervisors.user_id = job_series.sarc_user_id AND user_supervisors.va
 FROM job_series"""
 
 ELIGIBILITY = "allocated_gres_gpu > 0 AND gpu_type_rgu_drac IS NOT NULL"
+
+# The trigger functions and triggers, frozen at this migration's creation time.
+# They embed the slurm_jobs/job_series column lists, so importing them from
+# sarc.db.job_series would silently change this migration whenever the model
+# evolves (a later column addition would make fresh-history upgrades create
+# triggers over columns that do not exist yet). ba029bf00184 is the migration
+# that swaps the slurm_jobs_job_series trigger and job_series_sync_job() for
+# its own, column-list-updated versions.
+JOB_SERIES_FUNCTIONS = {
+    "job_series_sync_job()": """
+returns trigger
+language plpgsql
+as $$
+begin
+    insert into job_series (job_db_id, cluster_id, account, job_id, array_job_id, task_id, name, cluster_user, "group", job_state, exit_code, signal, partition, nodes, work_dir, submit_line, constraints, priority, qos, "CLEAR_SCHEDULING", "STARTED_ON_SUBMIT", "STARTED_ON_SCHEDULE", "STARTED_ON_BACKFILL", time_limit, submit_time, start_time, end_time, elapsed_time, requested_cpu, requested_mem, requested_node, requested_billing, requested_gres_gpu, requested_gpu_type, allocated_cpu, allocated_mem, allocated_node, allocated_billing, allocated_gres_gpu, allocated_gpu_type, harmonized_gpu_type, sarc_user_id, display_name, email, cluster_name, gpu_type_rgu, gpu_type_rgu_drac, requested_rgu, requested_rgu_drac, allocated_rgu, allocated_rgu_drac, requested_cpu_cost, requested_cpu_waste, allocated_cpu_cost, allocated_cpu_waste, cpu_overbilling_cost, requested_gpu_cost, requested_gpu_waste, allocated_gpu_cost, allocated_gpu_waste, gpu_overbilling_cost, gpu_sm_occupancy_mean, gpu_sm_occupancy_max, gpu_utilization_mean, gpu_utilization_max, gpu_utilization_fp16_mean, gpu_utilization_fp16_max, gpu_utilization_fp32_mean, gpu_utilization_fp32_max, gpu_utilization_fp64_mean, gpu_utilization_fp64_max, gpu_memory_mean, gpu_memory_max, system_memory_mean, system_memory_max, cpu_utilization_mean)
+    select new.id, new.cluster_id, new.account, new.job_id, new.array_job_id, new.task_id, new.name, new.cluster_user, new."group", new.job_state, new.exit_code, new.signal, new.partition, new.nodes, new.work_dir, new.submit_line, new.constraints, new.priority, new.qos, new."CLEAR_SCHEDULING", new."STARTED_ON_SUBMIT", new."STARTED_ON_SCHEDULE", new."STARTED_ON_BACKFILL", new.time_limit, new.submit_time, new.start_time, new.end_time, new.elapsed_time, new.requested_cpu, new.requested_mem, new.requested_node, new.requested_billing, new.requested_gres_gpu, new.requested_gpu_type, new.allocated_cpu, new.allocated_mem, new.allocated_node, new.allocated_billing, new.allocated_gres_gpu, new.allocated_gpu_type, new.harmonized_gpu_type, new.sarc_user_id,
+           u.display_name, u.email,
+           c.name,
+           w.rgu, w.drac_rgu, coalesce(new.requested_gres_gpu, 0) * w.rgu, coalesce(new.requested_gres_gpu, 0) * w.drac_rgu, coalesce(new.allocated_gres_gpu, 0) * w.rgu, coalesce(new.allocated_gres_gpu, 0) * w.drac_rgu, new.elapsed_time * new.requested_cpu, (1 - s.cpu_utilization_mean) * (new.elapsed_time * new.requested_cpu), new.elapsed_time * new.allocated_cpu, (1 - s.cpu_utilization_mean) * (new.elapsed_time * new.allocated_cpu), new.elapsed_time * (new.allocated_cpu - new.requested_cpu), new.elapsed_time * new.requested_gres_gpu * w.drac_rgu, (1 - s.gpu_sm_occupancy_mean) * (new.elapsed_time * new.requested_gres_gpu * w.drac_rgu), new.elapsed_time * new.allocated_gres_gpu * w.drac_rgu, (1 - s.gpu_sm_occupancy_mean) * (new.elapsed_time * new.allocated_gres_gpu * w.drac_rgu), new.elapsed_time * (new.allocated_gres_gpu - new.requested_gres_gpu) * w.drac_rgu,
+           s.gpu_sm_occupancy_mean, s.gpu_sm_occupancy_max, s.gpu_utilization_mean, s.gpu_utilization_max, s.gpu_utilization_fp16_mean, s.gpu_utilization_fp16_max, s.gpu_utilization_fp32_mean, s.gpu_utilization_fp32_max, s.gpu_utilization_fp64_mean, s.gpu_utilization_fp64_max, s.gpu_memory_mean, s.gpu_memory_max, s.system_memory_mean, s.system_memory_max, s.cpu_utilization_mean
+      from (select 1) x
+      left join users u on u.id = new.sarc_user_id
+      left join clusters c on c.id = new.cluster_id
+      left join gpurgudb w on w.name = new.harmonized_gpu_type
+      left join lateral (select max(st.mean) FILTER (WHERE st.name = 'gpu_sm_occupancy') AS gpu_sm_occupancy_mean,
+                max(st.max) FILTER (WHERE st.name = 'gpu_sm_occupancy') AS gpu_sm_occupancy_max,
+                max(st.mean) FILTER (WHERE st.name = 'gpu_utilization') AS gpu_utilization_mean,
+                max(st.max) FILTER (WHERE st.name = 'gpu_utilization') AS gpu_utilization_max,
+                max(st.mean) FILTER (WHERE st.name = 'gpu_utilization_fp16') AS gpu_utilization_fp16_mean,
+                max(st.max) FILTER (WHERE st.name = 'gpu_utilization_fp16') AS gpu_utilization_fp16_max,
+                max(st.mean) FILTER (WHERE st.name = 'gpu_utilization_fp32') AS gpu_utilization_fp32_mean,
+                max(st.max) FILTER (WHERE st.name = 'gpu_utilization_fp32') AS gpu_utilization_fp32_max,
+                max(st.mean) FILTER (WHERE st.name = 'gpu_utilization_fp64') AS gpu_utilization_fp64_mean,
+                max(st.max) FILTER (WHERE st.name = 'gpu_utilization_fp64') AS gpu_utilization_fp64_max,
+                max(st.mean) FILTER (WHERE st.name = 'gpu_memory') AS gpu_memory_mean,
+                max(st.max) FILTER (WHERE st.name = 'gpu_memory') AS gpu_memory_max,
+                max(st.mean) FILTER (WHERE st.name = 'system_memory') AS system_memory_mean,
+                max(st.max) FILTER (WHERE st.name = 'system_memory') AS system_memory_max,
+                max(st.mean) FILTER (WHERE st.name = 'cpu_utilization') AS cpu_utilization_mean from jobstatisticdb st where st.job_id = new.id and st.name in ('gpu_sm_occupancy', 'gpu_utilization', 'gpu_utilization_fp16', 'gpu_utilization_fp32', 'gpu_utilization_fp64', 'gpu_memory', 'system_memory', 'cpu_utilization')) s on true
+    on conflict (job_db_id) do update set
+        cluster_id = excluded.cluster_id, account = excluded.account, job_id = excluded.job_id, array_job_id = excluded.array_job_id, task_id = excluded.task_id, name = excluded.name, cluster_user = excluded.cluster_user, "group" = excluded."group", job_state = excluded.job_state, exit_code = excluded.exit_code, signal = excluded.signal, partition = excluded.partition, nodes = excluded.nodes, work_dir = excluded.work_dir, submit_line = excluded.submit_line, constraints = excluded.constraints, priority = excluded.priority, qos = excluded.qos, "CLEAR_SCHEDULING" = excluded."CLEAR_SCHEDULING", "STARTED_ON_SUBMIT" = excluded."STARTED_ON_SUBMIT", "STARTED_ON_SCHEDULE" = excluded."STARTED_ON_SCHEDULE", "STARTED_ON_BACKFILL" = excluded."STARTED_ON_BACKFILL", time_limit = excluded.time_limit, submit_time = excluded.submit_time, start_time = excluded.start_time, end_time = excluded.end_time, elapsed_time = excluded.elapsed_time, requested_cpu = excluded.requested_cpu, requested_mem = excluded.requested_mem, requested_node = excluded.requested_node, requested_billing = excluded.requested_billing, requested_gres_gpu = excluded.requested_gres_gpu, requested_gpu_type = excluded.requested_gpu_type, allocated_cpu = excluded.allocated_cpu, allocated_mem = excluded.allocated_mem, allocated_node = excluded.allocated_node, allocated_billing = excluded.allocated_billing, allocated_gres_gpu = excluded.allocated_gres_gpu, allocated_gpu_type = excluded.allocated_gpu_type, harmonized_gpu_type = excluded.harmonized_gpu_type, sarc_user_id = excluded.sarc_user_id, display_name = excluded.display_name, email = excluded.email, cluster_name = excluded.cluster_name, gpu_type_rgu = excluded.gpu_type_rgu, gpu_type_rgu_drac = excluded.gpu_type_rgu_drac, requested_rgu = excluded.requested_rgu, requested_rgu_drac = excluded.requested_rgu_drac, allocated_rgu = excluded.allocated_rgu, allocated_rgu_drac = excluded.allocated_rgu_drac, requested_cpu_cost = excluded.requested_cpu_cost, requested_cpu_waste = excluded.requested_cpu_waste, allocated_cpu_cost = excluded.allocated_cpu_cost, allocated_cpu_waste = excluded.allocated_cpu_waste, cpu_overbilling_cost = excluded.cpu_overbilling_cost, requested_gpu_cost = excluded.requested_gpu_cost, requested_gpu_waste = excluded.requested_gpu_waste, allocated_gpu_cost = excluded.allocated_gpu_cost, allocated_gpu_waste = excluded.allocated_gpu_waste, gpu_overbilling_cost = excluded.gpu_overbilling_cost, gpu_sm_occupancy_mean = excluded.gpu_sm_occupancy_mean, gpu_sm_occupancy_max = excluded.gpu_sm_occupancy_max, gpu_utilization_mean = excluded.gpu_utilization_mean, gpu_utilization_max = excluded.gpu_utilization_max, gpu_utilization_fp16_mean = excluded.gpu_utilization_fp16_mean, gpu_utilization_fp16_max = excluded.gpu_utilization_fp16_max, gpu_utilization_fp32_mean = excluded.gpu_utilization_fp32_mean, gpu_utilization_fp32_max = excluded.gpu_utilization_fp32_max, gpu_utilization_fp64_mean = excluded.gpu_utilization_fp64_mean, gpu_utilization_fp64_max = excluded.gpu_utilization_fp64_max, gpu_memory_mean = excluded.gpu_memory_mean, gpu_memory_max = excluded.gpu_memory_max, system_memory_mean = excluded.system_memory_mean, system_memory_max = excluded.system_memory_max, cpu_utilization_mean = excluded.cpu_utilization_mean;
+    return new;
+end;
+$$""",
+    "job_series_sync_stat()": """
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.name not in ('gpu_sm_occupancy', 'gpu_utilization', 'gpu_utilization_fp16', 'gpu_utilization_fp32', 'gpu_utilization_fp64', 'gpu_memory', 'system_memory', 'cpu_utilization') then
+        return new;
+    end if;
+    update job_series set
+    gpu_sm_occupancy_mean = case when new.name = 'gpu_sm_occupancy' then new.mean
+                   else job_series.gpu_sm_occupancy_mean end,
+    gpu_sm_occupancy_max = case when new.name = 'gpu_sm_occupancy' then new.max
+                   else job_series.gpu_sm_occupancy_max end,
+    gpu_utilization_mean = case when new.name = 'gpu_utilization' then new.mean
+                   else job_series.gpu_utilization_mean end,
+    gpu_utilization_max = case when new.name = 'gpu_utilization' then new.max
+                   else job_series.gpu_utilization_max end,
+    gpu_utilization_fp16_mean = case when new.name = 'gpu_utilization_fp16' then new.mean
+                   else job_series.gpu_utilization_fp16_mean end,
+    gpu_utilization_fp16_max = case when new.name = 'gpu_utilization_fp16' then new.max
+                   else job_series.gpu_utilization_fp16_max end,
+    gpu_utilization_fp32_mean = case when new.name = 'gpu_utilization_fp32' then new.mean
+                   else job_series.gpu_utilization_fp32_mean end,
+    gpu_utilization_fp32_max = case when new.name = 'gpu_utilization_fp32' then new.max
+                   else job_series.gpu_utilization_fp32_max end,
+    gpu_utilization_fp64_mean = case when new.name = 'gpu_utilization_fp64' then new.mean
+                   else job_series.gpu_utilization_fp64_mean end,
+    gpu_utilization_fp64_max = case when new.name = 'gpu_utilization_fp64' then new.max
+                   else job_series.gpu_utilization_fp64_max end,
+    gpu_memory_mean = case when new.name = 'gpu_memory' then new.mean
+                   else job_series.gpu_memory_mean end,
+    gpu_memory_max = case when new.name = 'gpu_memory' then new.max
+                   else job_series.gpu_memory_max end,
+    system_memory_mean = case when new.name = 'system_memory' then new.mean
+                   else job_series.system_memory_mean end,
+    system_memory_max = case when new.name = 'system_memory' then new.max
+                   else job_series.system_memory_max end,
+    cpu_utilization_mean = case when new.name = 'cpu_utilization' then new.mean
+                   else job_series.cpu_utilization_mean end
+    where job_db_id = new.job_id;
+    if new.name in ('cpu_utilization', 'gpu_sm_occupancy') then
+        update job_series set
+    requested_cpu_waste = (1 - cpu_utilization_mean) * requested_cpu_cost,
+    allocated_cpu_waste = (1 - cpu_utilization_mean) * allocated_cpu_cost,
+    requested_gpu_waste = (1 - gpu_sm_occupancy_mean) * requested_gpu_cost,
+    allocated_gpu_waste = (1 - gpu_sm_occupancy_mean) * allocated_gpu_cost
+        where job_db_id = new.job_id;
+    end if;
+    return new;
+end;
+$$""",
+    "job_series_clear_stat()": """
+returns trigger
+language plpgsql
+as $$
+begin
+    if old.name not in ('gpu_sm_occupancy', 'gpu_utilization', 'gpu_utilization_fp16', 'gpu_utilization_fp32', 'gpu_utilization_fp64', 'gpu_memory', 'system_memory', 'cpu_utilization') then
+        return old;
+    end if;
+    update job_series set
+    gpu_sm_occupancy_mean = case when old.name = 'gpu_sm_occupancy' then null
+                   else job_series.gpu_sm_occupancy_mean end,
+    gpu_sm_occupancy_max = case when old.name = 'gpu_sm_occupancy' then null
+                   else job_series.gpu_sm_occupancy_max end,
+    gpu_utilization_mean = case when old.name = 'gpu_utilization' then null
+                   else job_series.gpu_utilization_mean end,
+    gpu_utilization_max = case when old.name = 'gpu_utilization' then null
+                   else job_series.gpu_utilization_max end,
+    gpu_utilization_fp16_mean = case when old.name = 'gpu_utilization_fp16' then null
+                   else job_series.gpu_utilization_fp16_mean end,
+    gpu_utilization_fp16_max = case when old.name = 'gpu_utilization_fp16' then null
+                   else job_series.gpu_utilization_fp16_max end,
+    gpu_utilization_fp32_mean = case when old.name = 'gpu_utilization_fp32' then null
+                   else job_series.gpu_utilization_fp32_mean end,
+    gpu_utilization_fp32_max = case when old.name = 'gpu_utilization_fp32' then null
+                   else job_series.gpu_utilization_fp32_max end,
+    gpu_utilization_fp64_mean = case when old.name = 'gpu_utilization_fp64' then null
+                   else job_series.gpu_utilization_fp64_mean end,
+    gpu_utilization_fp64_max = case when old.name = 'gpu_utilization_fp64' then null
+                   else job_series.gpu_utilization_fp64_max end,
+    gpu_memory_mean = case when old.name = 'gpu_memory' then null
+                   else job_series.gpu_memory_mean end,
+    gpu_memory_max = case when old.name = 'gpu_memory' then null
+                   else job_series.gpu_memory_max end,
+    system_memory_mean = case when old.name = 'system_memory' then null
+                   else job_series.system_memory_mean end,
+    system_memory_max = case when old.name = 'system_memory' then null
+                   else job_series.system_memory_max end,
+    cpu_utilization_mean = case when old.name = 'cpu_utilization' then null
+                   else job_series.cpu_utilization_mean end
+    where job_db_id = old.job_id;
+    if old.name in ('cpu_utilization', 'gpu_sm_occupancy') then
+        update job_series set
+    requested_cpu_waste = (1 - cpu_utilization_mean) * requested_cpu_cost,
+    allocated_cpu_waste = (1 - cpu_utilization_mean) * allocated_cpu_cost,
+    requested_gpu_waste = (1 - gpu_sm_occupancy_mean) * requested_gpu_cost,
+    allocated_gpu_waste = (1 - gpu_sm_occupancy_mean) * allocated_gpu_cost
+        where job_db_id = old.job_id;
+    end if;
+    return old;
+end;
+$$""",
+    "job_series_sync_weights()": """
+returns trigger
+language plpgsql
+as $$
+begin
+    update job_series set
+    gpu_type_rgu = g.rgu,
+    gpu_type_rgu_drac = g.drac_rgu,
+    requested_rgu = coalesce(job_series.requested_gres_gpu, 0) * g.rgu,
+    requested_rgu_drac = coalesce(job_series.requested_gres_gpu, 0) * g.drac_rgu,
+    allocated_rgu = coalesce(job_series.allocated_gres_gpu, 0) * g.rgu,
+    allocated_rgu_drac = coalesce(job_series.allocated_gres_gpu, 0) * g.drac_rgu,
+    requested_cpu_cost = job_series.elapsed_time * job_series.requested_cpu,
+    allocated_cpu_cost = job_series.elapsed_time * job_series.allocated_cpu,
+    cpu_overbilling_cost = job_series.elapsed_time * (job_series.allocated_cpu - job_series.requested_cpu),
+    requested_gpu_cost = job_series.elapsed_time * job_series.requested_gres_gpu * g.drac_rgu,
+    requested_gpu_waste = (1 - job_series.gpu_sm_occupancy_mean) * (job_series.elapsed_time * job_series.requested_gres_gpu * g.drac_rgu),
+    allocated_gpu_cost = job_series.elapsed_time * job_series.allocated_gres_gpu * g.drac_rgu,
+    allocated_gpu_waste = (1 - job_series.gpu_sm_occupancy_mean) * (job_series.elapsed_time * job_series.allocated_gres_gpu * g.drac_rgu),
+    gpu_overbilling_cost = job_series.elapsed_time * (job_series.allocated_gres_gpu - job_series.requested_gres_gpu) * g.drac_rgu
+      from gpurgudb g
+     where job_series.harmonized_gpu_type = g.name
+       and (job_series.gpu_type_rgu_drac is distinct from g.drac_rgu
+            or job_series.gpu_type_rgu is distinct from g.rgu);
+    return null;
+end;
+$$""",
+    "job_series_sync_user()": """
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.display_name is distinct from old.display_name
+       or new.email is distinct from old.email then
+        update job_series
+           set display_name = new.display_name, email = new.email
+         where sarc_user_id = new.id;
+    end if;
+    return new;
+end;
+$$""",
+    "job_series_sync_cluster()": """
+returns trigger
+language plpgsql
+as $$
+begin
+    if new.name is distinct from old.name then
+        update job_series set cluster_name = new.name where cluster_id = new.id;
+    end if;
+    return null;
+end;
+$$""",
+}
+
+JOB_SERIES_TRIGGERS = {
+    "slurm_jobs_job_series": (
+        "slurm_jobs",
+        """AFTER INSERT OR UPDATE OF cluster_id, account, job_id, array_job_id, task_id, name, cluster_user, "group", job_state, exit_code, signal, partition, nodes, work_dir, submit_line, constraints, priority, qos, "CLEAR_SCHEDULING", "STARTED_ON_SUBMIT", "STARTED_ON_SCHEDULE", "STARTED_ON_BACKFILL", time_limit, submit_time, start_time, end_time, elapsed_time, requested_cpu, requested_mem, requested_node, requested_billing, requested_gres_gpu, requested_gpu_type, allocated_cpu, allocated_mem, allocated_node, allocated_billing, allocated_gres_gpu, allocated_gpu_type, harmonized_gpu_type, sarc_user_id ON slurm_jobs FOR EACH ROW EXECUTE FUNCTION job_series_sync_job()""",
+    ),
+    "jobstatisticdb_job_series": (
+        "jobstatisticdb",
+        """AFTER INSERT OR UPDATE OF mean, max ON jobstatisticdb FOR EACH ROW EXECUTE FUNCTION job_series_sync_stat()""",
+    ),
+    "jobstatisticdb_job_series_del": (
+        "jobstatisticdb",
+        """AFTER DELETE ON jobstatisticdb FOR EACH ROW EXECUTE FUNCTION job_series_clear_stat()""",
+    ),
+    "gpurgudb_job_series": (
+        "gpurgudb",
+        """AFTER UPDATE OF rgu, drac_rgu ON gpurgudb FOR EACH STATEMENT EXECUTE FUNCTION job_series_sync_weights()""",
+    ),
+    "users_job_series": (
+        "users",
+        """AFTER UPDATE OF display_name, email ON users FOR EACH ROW EXECUTE FUNCTION job_series_sync_user()""",
+    ),
+    "clusters_job_series": (
+        "clusters",
+        """AFTER UPDATE OF name ON clusters FOR EACH ROW EXECUTE FUNCTION job_series_sync_cluster()""",
+    ),
+}
+
 
 COVERING = [
     "job_db_id",
