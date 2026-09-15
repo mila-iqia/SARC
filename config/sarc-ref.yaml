@@ -15,11 +15,11 @@ sarc:
   health_monitor:
     parameterizations: { "key": ["val1", "val2"] } # Parameterizations for the checks
     checks:
-      cluster_scraping: # This is an example of a check config, see the documentation about
+      prometheus_stats_coverage: # This is an example of a check config, see the documentation about
         # health checks for the different checks available and their parameters
-        $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
+        $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
         active: true
-        time_unit: "0s"
+        time_interval: 1d
   users:
     scrapers: # This is a list of scraping directives
       - drac: # The key is the plugin name (which can be repeated)
