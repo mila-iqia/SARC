@@ -197,12 +197,14 @@ class SlurmJobDB(SQLModel, table=True):
     constraints: str | None = None
     priority: int | None = None
     qos: str | None = None
+    reservation: str | None = None
 
     # Flags
     CLEAR_SCHEDULING: bool = False
     STARTED_ON_SUBMIT: bool = False
     STARTED_ON_SCHEDULE: bool = False
     STARTED_ON_BACKFILL: bool = False
+    JOB_ALTERED: bool = False
 
     # temporal fields
     time_limit: int | None = None

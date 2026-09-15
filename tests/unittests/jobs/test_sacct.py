@@ -170,6 +170,7 @@ def test_convert_gres_gpu():
         "constraints": "[cascade|milan]",
         "priority": {"set": True, "infinite": False, "number": 489206},
         "qos": "normal",
+        "reservation": {"id": 0, "name": "", "requested": ""},
         "working_directory": "/home/toto/my_job_name",
         "time": {
             "elapsed": 259223,
@@ -193,6 +194,8 @@ def test_convert_gres_gpu():
     assert job["allocated_gres_gpu"] == 2
     assert job["requested_gres_gpu"] == 2
     assert job["requested_gpu_type"] == "v100"
+    # An empty reservation name means the job is not in a reservation.
+    assert job["reservation"] is None
 
 
 def test_convert_version_supported():
@@ -238,6 +241,11 @@ def test_convert_version_supported():
         "constraints": "[cascade|milan]",
         "priority": {"set": True, "infinite": False, "number": 489206},
         "qos": "normal",
+        "reservation": {
+            "id": 42,
+            "name": "Troubleshooting-Slurm",
+            "requested": "Troubleshooting-Slurm",
+        },
         "working_directory": "/home/toto/my_job_name",
         "tres": {
             "allocated": [
@@ -253,7 +261,7 @@ def test_convert_version_supported():
                 {"type": "billing", "name": "", "id": 5, "count": 8000},
             ],
         },
-        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED"],
+        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED", "JOB_ALTERED"],
         "cluster": "test",
     }
 
@@ -268,6 +276,9 @@ def test_convert_version_supported():
     assert slurmjob["partition"] == "partition123"
     assert slurmjob["job_state"] == "TIMEOUT"
     assert slurmjob["work_dir"] == "/home/toto/my_job_name"
+    assert slurmjob["reservation"] == "Troubleshooting-Slurm"
+    assert slurmjob["STARTED_ON_BACKFILL"] is True
+    assert slurmjob["JOB_ALTERED"] is True
 
     # test version unsupported
     with pytest.raises(JobConversionError):
@@ -316,6 +327,10 @@ def test_convert_fast_gres_gpu():
     assert job["requested_gres_gpu"] == 2
     assert job["requested_gpu_type"] == "v100"
     assert job["allocated_gpu_type"] == "v100"
+    # A missing resv_name (older fastsacct payload) means no reservation.
+    assert job["reservation"] is None
+    # Flags absent from the entry are not emitted; they default to False.
+    assert "JOB_ALTERED" not in job
 
 
 def test_convert_fast_basic():
@@ -340,6 +355,7 @@ def test_convert_fast_basic():
         "constraints": "[cascade|milan]",
         "priority": 489206,
         "qos": "normal",
+        "resv_name": "Troubleshooting-Slurm",
         "work_dir": "/home/toto/my_job_name",
         "submit_line": "sbatch my_job_name.sh",
         "requested_cpu": 8,
@@ -350,7 +366,7 @@ def test_convert_fast_basic():
         "allocated_mem": 16000,
         "allocated_node": 1,
         "allocated_billing": 8000,
-        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED"],
+        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED", "JOB_ALTERED"],
         "cluster": "test",
     }
 
@@ -369,12 +385,14 @@ def test_convert_fast_basic():
     assert job["partition"] == "partition123"
     assert job["job_state"] == "TIMEOUT"
     assert job["work_dir"] == "/home/toto/my_job_name"
+    assert job["reservation"] == "Troubleshooting-Slurm"
     assert job["exit_code"] == 0
     assert job["signal"] is None
     assert job["time_limit"] == 4320 * 60
     assert job["requested_cpu"] == 8
     assert job["allocated_cpu"] == 8
     assert job["STARTED_ON_BACKFILL"] is True
+    assert job["JOB_ALTERED"] is True
     assert job["latest_scraped_start"] == scraped_start
     assert job["latest_scraped_end"] == scraped_end
 
@@ -443,6 +461,7 @@ def test_convert_fast_none_values():
         "constraints": None,
         "priority": None,
         "qos": "normal",
+        "resv_name": None,
         "work_dir": "/home/toto/my_job_name",
         "submit_line": "salloc",
         "flags": [],
@@ -461,6 +480,7 @@ def test_convert_fast_none_values():
     assert job["time_limit"] is None
     assert job["constraints"] is None
     assert job["priority"] is None
+    assert job["reservation"] is None
     assert job["nodes"] == []
 
 

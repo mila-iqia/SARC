@@ -3,6 +3,7 @@ Found 22 result(s):
 Result #1
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -39,6 +40,7 @@ Result #1
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T05:01:00Z",
@@ -51,6 +53,7 @@ Result #1
 Result #2
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -87,6 +90,7 @@ Result #2
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T11:01:00Z",
@@ -99,6 +103,7 @@ Result #2
 Result #3
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -135,6 +140,7 @@ Result #3
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T17:01:00Z",
@@ -147,6 +153,7 @@ Result #3
 Result #4
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -183,6 +190,7 @@ Result #4
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-14T23:01:00Z",
@@ -195,6 +203,7 @@ Result #4
 Result #5
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -231,6 +240,7 @@ Result #5
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T05:01:00Z",
@@ -243,6 +253,7 @@ Result #5
 Result #6
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -279,6 +290,7 @@ Result #6
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T11:01:00Z",
@@ -291,6 +303,7 @@ Result #6
 Result #7
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -327,6 +340,7 @@ Result #7
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T17:01:00Z",
@@ -339,6 +353,7 @@ Result #7
 Result #8
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -375,6 +390,7 @@ Result #8
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-15T23:01:00Z",
@@ -387,6 +403,7 @@ Result #8
 Result #9
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -423,6 +440,7 @@ Result #9
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T05:01:00Z",
@@ -435,6 +453,7 @@ Result #9
 Result #10
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -471,6 +490,7 @@ Result #10
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T05:01:00Z",
@@ -483,6 +503,7 @@ Result #10
 Result #11
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -519,6 +540,7 @@ Result #11
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T05:01:00Z",
@@ -531,6 +553,7 @@ Result #11
 Result #12
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -567,6 +590,7 @@ Result #12
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-16T23:01:00Z",
@@ -579,6 +603,7 @@ Result #12
 Result #13
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -617,6 +642,7 @@ Result #13
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T05:01:00Z",
@@ -629,6 +655,7 @@ Result #13
 Result #14
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -665,6 +692,7 @@ Result #14
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T11:01:00Z",
@@ -677,6 +705,7 @@ Result #14
 Result #15
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -713,6 +742,7 @@ Result #15
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T17:01:00Z",
@@ -725,6 +755,7 @@ Result #15
 Result #16
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -761,6 +792,7 @@ Result #16
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-17T23:01:00Z",
@@ -773,6 +805,7 @@ Result #16
 Result #17
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -809,6 +842,7 @@ Result #17
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-18T05:01:00Z",
@@ -821,6 +855,7 @@ Result #17
 Result #18
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -857,6 +892,7 @@ Result #18
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 10,
     "signal": null,
     "start_time": "2023-02-18T11:01:00Z",
@@ -869,6 +905,7 @@ Result #18
 Result #19
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -905,6 +942,7 @@ Result #19
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-18T17:01:00Z",
@@ -917,6 +955,7 @@ Result #19
 Result #20
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -953,6 +992,7 @@ Result #20
     "requested_gres_gpu": 1,
     "requested_mem": 49152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-18T23:01:00Z",
@@ -965,6 +1005,7 @@ Result #20
 Result #21
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -1001,6 +1042,7 @@ Result #21
     "requested_gres_gpu": 1,
     "requested_mem": 59152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-19T05:01:00Z",
@@ -1013,6 +1055,7 @@ Result #21
 Result #22
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -1049,6 +1092,7 @@ Result #22
     "requested_gres_gpu": 0,
     "requested_mem": 59152,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 9,
     "signal": null,
     "start_time": "2023-02-19T11:01:00Z",

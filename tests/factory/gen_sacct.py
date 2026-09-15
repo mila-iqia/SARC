@@ -137,6 +137,7 @@ class _Job:
     priority: int
     job_name: str
     constraints: str
+    reservation: str  # "" when the job is not in a reservation
     work_dir: str
     # resources (fixed at creation)
     n_cpu: int
@@ -184,6 +185,14 @@ def _exit_code(state: str) -> RawExitCode:
         )
     # CANCELLED, RUNNING, PENDING
     return RawExitCode(status=[state], return_code=_UNSET, signal=_NO_SIGNAL)
+
+
+def _start_flags(rng: random.Random) -> list[str]:
+    """Flags set once a job starts; JOB_ALTERED on a few jobs."""
+    flags = [rng.choice(["STARTED_ON_BACKFILL", "STARTED_ON_SCHEDULE"])]
+    if rng.random() < 0.05:
+        flags.append("JOB_ALTERED")
+    return flags
 
 
 def _tres_list(
@@ -395,7 +404,9 @@ def _to_raw(j: _Job) -> RawSlurmJob:
         required=RawRequired(
             CPUs=j.n_cpu, memory_per_cpu=_UNSET, memory_per_node=_num(j.mem_mb)
         ),
-        reservation=RawReservation(id=0, name="", requested=""),
+        reservation=RawReservation(
+            id=1 if j.reservation else 0, name=j.reservation, requested=j.reservation
+        ),
         restart_cnt=0,
         script="",
         segment_size=0,
@@ -470,7 +481,7 @@ def _transition(
         j.start_ts = j.submission_ts + rng.randint(60, min(3600, tick_sec))
         j.start_ts = min(j.start_ts, tick_ts)
         j.elapsed = tick_ts - j.start_ts
-        j.flags = [rng.choice(["STARTED_ON_BACKFILL", "STARTED_ON_SCHEDULE"])]
+        j.flags = _start_flags(rng)
 
     elif new_state in _TERMINAL_STATES:
         # RUNNING → terminal: assign end time
@@ -581,6 +592,9 @@ def generate_sacct(self: DataFactory, data: Data) -> None:
                     priority=rng.randint(1000, 100_000),
                     job_name=rng.choice(_JOB_NAMES),
                     constraints="x86_64" if domain == "mila" else "",
+                    reservation=rng.choices(
+                        ["", "troubleshooting-slurm"], weights=[90, 10]
+                    )[0],
                     work_dir=f"/home/{domain}/{username[0]}/{username}/scratch",
                     n_cpu=n_cpu,
                     mem_mb=mem_mb,
@@ -599,9 +613,7 @@ def generate_sacct(self: DataFactory, data: Data) -> None:
                 job_ids[cluster_name] += 1
                 if state != "PENDING":
                     job.start_ts = rng.randint(job.submission_ts, tick_ts - 1)
-                    job.flags = [
-                        rng.choice(["STARTED_ON_BACKFILL", "STARTED_ON_SCHEDULE"])
-                    ]
+                    job.flags = _start_flags(rng)
                     if state in _TERMINAL_STATES:
                         max_elapsed = time_limit_min * 60
                         job.elapsed = (

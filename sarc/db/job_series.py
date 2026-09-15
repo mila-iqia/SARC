@@ -522,10 +522,12 @@ class JobSeriesTable(SQLModel, table=True):
     constraints: str | None = None
     priority: int | None = None
     qos: str | None = None
+    reservation: str | None = None
     CLEAR_SCHEDULING: bool = False
     STARTED_ON_SUBMIT: bool = False
     STARTED_ON_SCHEDULE: bool = False
     STARTED_ON_BACKFILL: bool = False
+    JOB_ALTERED: bool = False
     time_limit: int | None = None
     submit_time: datetime_utc = datetime_utc_field()
     start_time: datetime_utc | None = datetime_utc_field(default=None)
@@ -687,6 +689,8 @@ class JobSeriesDB(SQLModel, table=True):
     """Dimensionless Slurm scheduling priority value."""
     qos: str | None
     """Quality-of-Service (QoS) name."""
+    reservation: str | None
+    """Name of the reservation (advanced reservation) the job ran within, if any."""
 
     # Flags
     # Slurm's own job flags (booleans, default False). Names come straight from
@@ -699,6 +703,8 @@ class JobSeriesDB(SQLModel, table=True):
     """Slurm flag: the job started via the main scheduler."""
     STARTED_ON_BACKFILL: bool
     """Slurm flag: the job started via the backfill scheduler."""
+    JOB_ALTERED: bool
+    """Slurm flag: the job was modified with scontrol/sacctmgr update."""
 
     # temporal fields
     time_limit: int | None

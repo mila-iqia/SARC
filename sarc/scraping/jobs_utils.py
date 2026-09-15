@@ -195,6 +195,7 @@ def _convert_json_job(
         "STARTED_ON_SUBMIT",
         "STARTED_ON_SCHEDULE",
         "STARTED_ON_BACKFILL",
+        "JOB_ALTERED",
     ]
     flags = {k: True for k in entry["flags"] if k in tracked_flags}
 
@@ -285,6 +286,7 @@ def _convert_json_job(
         constraints=entry["constraints"],
         priority=(entry["priority"] if v_before_23 else entry["priority"]["number"]),
         qos=entry["qos"],
+        reservation=entry.get("reservation", {}).get("name") or None,
         work_dir=entry["working_directory"],
         submit_line=entry.get("submit_line", ""),
         **resources,
@@ -314,6 +316,7 @@ def _convert_json_fast(
         "STARTED_ON_SUBMIT",
         "STARTED_ON_SCHEDULE",
         "STARTED_ON_BACKFILL",
+        "JOB_ALTERED",
     ]
     flags = {k: True for k in entry["flags"] if k in tracked_flags}
 
@@ -364,6 +367,7 @@ def _convert_json_fast(
         constraints=entry["constraints"],
         priority=entry["priority"],
         qos=entry["qos"],
+        reservation=entry.get("resv_name") or None,
         work_dir=entry["work_dir"],
         submit_line=entry["submit_line"],
         **resources,

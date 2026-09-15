@@ -1,6 +1,7 @@
 Found 5 job(s):
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -35,6 +36,7 @@ Found 5 job(s):
     "requested_gres_gpu": null,
     "requested_mem": 32768,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 11,
     "signal": 0,
     "start_time": "2023-02-15T06:00:00Z",
@@ -46,6 +48,7 @@ Found 5 job(s):
 }
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -80,6 +83,7 @@ Found 5 job(s):
     "requested_gres_gpu": null,
     "requested_mem": 32768,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 11,
     "signal": 0,
     "start_time": "2023-02-16T06:00:00Z",
@@ -91,6 +95,7 @@ Found 5 job(s):
 }
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -125,6 +130,7 @@ Found 5 job(s):
     "requested_gres_gpu": null,
     "requested_mem": 32768,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 11,
     "signal": 0,
     "start_time": "2023-02-17T06:00:00Z",
@@ -136,6 +142,7 @@ Found 5 job(s):
 }
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -170,6 +177,7 @@ Found 5 job(s):
     "requested_gres_gpu": null,
     "requested_mem": 32768,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 11,
     "signal": 0,
     "start_time": "2023-02-18T06:00:00Z",
@@ -181,6 +189,7 @@ Found 5 job(s):
 }
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -215,6 +224,7 @@ Found 5 job(s):
     "requested_gres_gpu": null,
     "requested_mem": 32768,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 11,
     "signal": 0,
     "start_time": "2023-02-19T06:00:00Z",

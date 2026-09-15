@@ -1,6 +1,7 @@
 Found 1 job(s):
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -35,6 +36,7 @@ Found 1 job(s):
     "requested_gres_gpu": null,
     "requested_mem": 32768,
     "requested_node": 1,
+    "reservation": null,
     "sarc_user_id": 11,
     "signal": null,
     "start_time": "2023-02-14T10:00:00Z",

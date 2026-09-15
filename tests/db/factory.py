@@ -18,6 +18,7 @@ elapsed_time = 60 * 60 * 12
 end_time = datetime(2023, 2, 14, 23, 48, 54, tzinfo=MTL).astimezone(UTC)
 base_job = {
     "CLEAR_SCHEDULING": True,
+    "JOB_ALTERED": False,
     "STARTED_ON_BACKFILL": True,
     "STARTED_ON_SCHEDULE": False,
     "STARTED_ON_SUBMIT": False,
@@ -36,6 +37,7 @@ base_job = {
     "partition": "long",
     "priority": 7152,
     "qos": "normal",
+    "reservation": None,
     "signal": None,
     "start_time": end_time - timedelta(seconds=elapsed_time),
     "submit_time": end_time - timedelta(seconds=elapsed_time + 60),
