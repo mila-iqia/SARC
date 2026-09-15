@@ -1,2 +1,2 @@
-[job_series] 1 jobs have no job_series row, e.g. job_db_id 1
+1 jobs have no job_series row, e.g. job_db_id 1
 [job_series_whole] FAILURE: job_series_whole

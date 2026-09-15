@@ -12,7 +12,7 @@ from sarc.alerts.usage_alerts.job_series_coherence import (
     check_job_series_whole,
 )
 from sarc.db.job import JobStatisticDB
-from sarc.db.job_series import CPU_STAT
+from sarc.db.job_series import CPU_STAT, ELIGIBILITY
 from tests.functional.common import MOCK_TIME, _get_warnings
 
 get_warnings = functools.partial(
@@ -44,6 +44,21 @@ def _scalar(sess, sql: str):
 
 def _first_job(sess) -> int:
     return _scalar(sess, "SELECT min(job_db_id) FROM job_series")
+
+
+# The two counts the check compared before it compared the sets themselves.
+def _gpu_jobs(sess) -> int:
+    """GPU jobs, as slurm_jobs sees them."""
+    return _scalar(
+        sess,
+        "SELECT count(*) FROM slurm_jobs"
+        " WHERE allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL",
+    )
+
+
+def _eligible(sess) -> int:
+    """job_series rows carrying an RGU."""
+    return _scalar(sess, f"SELECT count(*) FROM job_series WHERE {ELIGIBILITY}")
 
 
 def _corrupt(sess, sql: str) -> None:
@@ -83,7 +98,6 @@ def test_seeded_db_is_coherent(db_with_statistics, caplog):
     assert "job_series" not in caplog.text
 
 
-@pytest.mark.usefixtures("read_write_db")
 def test_missing_row_detected(read_write_db, caplog):
     job_db_id = _first_job(read_write_db)
     _corrupt(read_write_db, f"DELETE FROM job_series WHERE job_db_id = {job_db_id}")
@@ -93,7 +107,6 @@ def test_missing_row_detected(read_write_db, caplog):
     assert f"job_db_id {job_db_id}" in caplog.text
 
 
-@pytest.mark.usefixtures("read_write_db")
 def test_missing_rgu_detected(read_write_db, caplog):
     _corrupt(
         read_write_db,
@@ -105,7 +118,6 @@ def test_missing_rgu_detected(read_write_db, caplog):
     assert "1 jobs have an RGU in job_series but not in slurm_jobs" in caplog.text
 
 
-@pytest.mark.usefixtures("read_write_db")
 def test_compensating_rgu_errors_detected(read_write_db, caplog):
     """Two opposite errors leave the totals equal; comparing the sets does not."""
     gpu_job = _scalar(
@@ -118,6 +130,10 @@ def test_compensating_rgu_errors_detected(read_write_db, caplog):
         f"UPDATE job_series SET gpu_type_rgu_drac = NULL WHERE job_db_id = {gpu_job};"
         f"UPDATE job_series SET gpu_type_rgu_drac = 1 WHERE job_db_id = {other}",
     )
+
+    # The premise: one job left the set as another entered it, so the two
+    # counts still match and a count-based check reports nothing.
+    assert _gpu_jobs(read_write_db) == _eligible(read_write_db)
 
     assert not check_job_series_whole()
     assert "2 jobs have an RGU in job_series but not in slurm_jobs" in caplog.text
@@ -135,7 +151,6 @@ def test_lost_sm_occupancy_detected(db_with_statistics, caplog):
     )
 
 
-@pytest.mark.usefixtures("read_write_db")
 def test_stale_value_detected_only_by_column_comparison(read_write_db, caplog):
     """A wrong-but-filled value is invisible to the whole-table comparison."""
     job_db_id = _first_job(read_write_db)
@@ -162,7 +177,7 @@ def test_wrong_value_detected(db_with_statistics, caplog, column):
     assert "disagree with expected values recomputed from source tables" in caplog.text
 
 
-@pytest.mark.usefixtures("read_write_db", "health_config")
+@pytest.mark.usefixtures("health_config")
 def test_check_runs_from_config(read_write_db, caplog, cli_main):
     """The check is reachable through the health_monitor config."""
     job_db_id = _first_job(read_write_db)

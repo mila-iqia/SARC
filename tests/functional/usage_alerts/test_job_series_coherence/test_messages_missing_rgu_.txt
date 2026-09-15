@@ -1,4 +1,4 @@
-[job_series] 1 jobs have an RGU in job_series but not in slurm_jobs, or the reverse, e.g. job_db_id 21
+1 jobs have an RGU in job_series but not in slurm_jobs, or the reverse, e.g. job_db_id 21
 [job_series_whole] FAILURE: job_series_whole
-[job_series] 1 of the jobs submitted since 2022-11-22 00:00:00+00:00 disagree with expected values recomputed from source tables, e.g. job_db_id 21
+1 of the jobs submitted since 2022-11-22 00:00:00+00:00 disagree with expected values recomputed from source tables, e.g. job_db_id 21
 [job_series_recent_365_days] FAILURE: job_series_recent_365_days

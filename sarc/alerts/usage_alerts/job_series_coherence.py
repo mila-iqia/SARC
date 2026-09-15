@@ -11,17 +11,24 @@ from sarc.db.job_series import (
     CPU_STAT,
     DASH_STATS,
     ELIGIBILITY,
-    derived_exprs,
+    _derived_exprs,
+    _stat_pivot_expr,
 )
 
 logger = logging.getLogger(__name__)
 
-# Every way job_series can disagree with its sources, in one statement: an exact
-# count and a sample of job ids for each. One statement, one snapshot -- the
-# triggers write the row in the transaction that writes the job, so separate
-# queries would read a concurrent scrape as a missing row. Driving from
-# slurm_jobs covers everything: job_db_id is primary key and foreign key on
-# slurm_jobs.id, so job_series can hold neither a duplicate nor an orphan.
+
+def _examples(ids: Sequence[int] | None) -> str:
+    """`ids` as a message tail; empty when there are none."""
+    return f", e.g. job_db_id {', '.join(str(i) for i in ids)}" if ids else ""
+
+
+# -- the whole table, against its sources ------------------------------------ #
+
+# The three comparisons below, in one statement: an exact count and a sample of
+# job ids for each. Driving from slurm_jobs covers every job: job_db_id is
+# primary key and foreign key on slurm_jobs.id, so job_series can hold neither a
+# duplicate nor an orphan.
 MISMATCHES = f"""
 SELECT count(*) FILTER (WHERE no_row) AS n_no_row,
        (array_agg(job_db_id ORDER BY job_db_id) FILTER (WHERE no_row))[1 : :limit]
@@ -53,11 +60,71 @@ SELECT count(*) FILTER (WHERE no_row) AS n_no_row,
   ) d
 """
 
-# -- what only job_series has, by the trigger that maintains it -------------- #
 
-# From slurm_jobs. One trigger writes every mirrored column in a single
-# statement, so they cannot drift apart: these few stand for all of them, and
-# are the ones the arithmetic below consumes.
+def check_job_series_whole(report_limit: int = 20) -> bool:
+    """
+    Check what the whole of job_series can be compared for, in one statement.
+
+    - every job has a job_series row;
+    - every GPU job has its RGU value;
+    - every recorded `gpu_sm_occupancy` reached its job_series column.
+
+    Parameters
+    ----------
+    report_limit: int
+        How many job ids to name per alert. Default is 20.
+
+    Returns
+    -------
+    bool
+        True if check succeeds, False otherwise.
+    """
+    from sarc.config import config
+
+    if report_limit < 1:
+        logger.error(
+            f"Invalid report_limit (must be > 0) for job_series coherence: {report_limit}"
+        )
+        return False
+
+    ok = True
+    with config.db.session() as sess:
+        m = sess.exec(  # ty: ignore[no-matching-overload]
+            text(MISMATCHES), params={"limit": report_limit}
+        ).one()
+
+        if m.n_no_row:
+            logger.error(
+                f"{m.n_no_row} jobs have no job_series row{_examples(m.ids_no_row)}"
+            )
+            ok = False
+
+        if m.n_wrong_rgu:
+            logger.error(
+                f"{m.n_wrong_rgu} jobs have an RGU in job_series "
+                f"but not in slurm_jobs, or the reverse{_examples(m.ids_wrong_rgu)}"
+            )
+            ok = False
+
+        if m.n_wrong_sm:
+            logger.error(
+                f"{m.n_wrong_sm} jobs have a gpu_sm_occupancy in job_series "
+                f"but not in jobstatisticdb, or the reverse{_examples(m.ids_wrong_sm)}"
+            )
+            ok = False
+
+    return ok
+
+
+# -- recent rows, column by column ------------------------------------------- #
+
+# The constants below build STALE_ROWS, which recomputes each job_series column
+# from the sources its trigger reads and compares it to the stored row, over
+# `time_interval`. One per family of columns, grouped by where they come from.
+
+# From slurm_jobs: the inputs the arithmetic below reads. The other mirrored
+# columns are out of scope -- what is checked here is what job_series computes,
+# not what it copies verbatim.
 COPIED = [
     "elapsed_time",
     "requested_cpu",
@@ -90,7 +157,7 @@ STATS = [
 # are generated from: the stored row (`t.`) for job columns and statistics,
 # gpurgudb (`w.`) for the per-GPU-type RGU. Their inputs are compared above, so
 # a mismatch here is the arithmetic's own.
-DERIVED = derived_exprs("t.", "w.", "t.")
+DERIVED = _derived_exprs("t.", "w.", "t.")
 
 # `NaN = NaN` is true on Postgres, so two NaNs read as equal here -- wanted:
 # a recorded NaN is a measurement, not drift.
@@ -103,13 +170,6 @@ DIFFERS = "\n        OR ".join(
     ]
 )
 
-# A job's statistic rows read back as that set of columns, so the comparison
-# below reads them like any other column.
-PIVOT = ",\n           ".join(
-    f"max({src}) FILTER (WHERE name = '{stat}') AS {column}"
-    for stat, src, column in STATS
-)
-
 STALE_ROWS = f"""
 SELECT j.id AS job_db_id
   FROM slurm_jobs j
@@ -118,79 +178,14 @@ SELECT j.id AS job_db_id
   LEFT JOIN clusters c ON c.id = j.cluster_id
   LEFT JOIN gpurgudb w ON w.name = j.harmonized_gpu_type
   LEFT JOIN LATERAL (
-    SELECT {PIVOT}
-      FROM jobstatisticdb
-     WHERE job_id = j.id
+    SELECT {_stat_pivot_expr("max")}
+      FROM jobstatisticdb st
+     WHERE st.job_id = j.id
   ) s ON true
  WHERE j.submit_time >= :start
    AND ({DIFFERS})
  ORDER BY j.id
 """
-
-
-def _examples(ids: Sequence[int] | None) -> str:
-    """`ids` as a message tail; empty when there are none. The count that
-    precedes it in the message is exact, so the sample needs no ellipsis."""
-    return f", e.g. job_db_id {', '.join(str(i) for i in ids)}" if ids else ""
-
-
-def check_job_series_whole(report_limit: int = 20) -> bool:
-    """
-    Check what the whole of job_series can be compared for, in one statement.
-
-    - every job has a job_series row;
-    - every GPU job has its RGU value, and no other job has one;
-    - every recorded `gpu_sm_occupancy` reached its job_series column.
-
-    Scans both tables end to end. The column values need a window, and are
-    `check_job_series_recent`'s half.
-
-    Parameters
-    ----------
-    report_limit: int
-        How many job ids to name per alert. Default is 20.
-
-    Returns
-    -------
-    bool
-        True if check succeeds, False otherwise.
-    """
-    from sarc.config import config
-
-    if report_limit < 1:
-        logger.error(
-            f"Invalid report_limit (must be > 0) for job_series coherence: {report_limit}"
-        )
-        return False
-
-    ok = True
-    with config.db.session() as sess:
-        m = sess.exec(  # ty: ignore[no-matching-overload]
-            text(MISMATCHES), params={"limit": report_limit}
-        ).one()
-
-        if m.n_no_row:
-            logger.error(
-                f"[job_series] {m.n_no_row} jobs have no job_series row"
-                f"{_examples(m.ids_no_row)}"
-            )
-            ok = False
-
-        if m.n_wrong_rgu:
-            logger.error(
-                f"[job_series] {m.n_wrong_rgu} jobs have an RGU in job_series "
-                f"but not in slurm_jobs, or the reverse{_examples(m.ids_wrong_rgu)}"
-            )
-            ok = False
-
-        if m.n_wrong_sm:
-            logger.error(
-                f"[job_series] {m.n_wrong_sm} jobs have a gpu_sm_occupancy in job_series "
-                f"but not in jobstatisticdb, or the reverse{_examples(m.ids_wrong_sm)}"
-            )
-            ok = False
-
-    return ok
 
 
 def check_job_series_recent(
@@ -199,10 +194,9 @@ def check_job_series_recent(
     """
     Check the columns job_series adds on its own, over recently submitted jobs.
 
-    What the triggers copy, and the RGU/cost/waste arithmetic, recomputed from
-    the source tables and compared to the stored row. Reads every row in the
-    window, hence the window; what a whole-table pass can do instead is
-    `check_job_series_whole`'s half.
+    The display columns, the statistics pivot, the RGU/cost/waste arithmetic and
+    the job columns it reads, recomputed from the source tables and compared to
+    the stored row. Reads every row in the window.
 
     Parameters
     ----------
@@ -237,13 +231,16 @@ def check_job_series_recent(
         ).all()
         if stale:
             logger.error(
-                f"[job_series] {len(stale)} of the jobs submitted since {start} "
+                f"{len(stale)} of the jobs submitted since {start} "
                 f"disagree with expected values recomputed from source tables"
                 f"{_examples([row.job_db_id for row in stale][:report_limit])}"
             )
             return False
 
     return True
+
+
+# -- the two public check classes -------------------------------------------- #
 
 
 @dataclass
