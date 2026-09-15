@@ -31,8 +31,8 @@ def test_import_sarc_config_does_not_trigger_circular_import(tmp_path):
           patches: patches
           health_monitor:
             checks:
-              cluster_scraping:
-                $class: "sarc.alerts.usage_alerts.cluster_scraping:ClusterScrapingCheck"
+              prometheus_stats_coverage:
+                $class: "sarc.alerts.usage_alerts.prometheus_stats_coverage:PrometheusStatsCoverageCheck"
                 active: true
     """)
     )
