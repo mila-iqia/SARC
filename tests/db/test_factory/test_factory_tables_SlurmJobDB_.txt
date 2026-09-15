@@ -3,6 +3,7 @@ Found 22 result(s):
 Result #1
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -52,6 +53,7 @@ Result #1
 Result #2
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -101,6 +103,7 @@ Result #2
 Result #3
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -150,6 +153,7 @@ Result #3
 Result #4
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -199,6 +203,7 @@ Result #4
 Result #5
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -248,6 +253,7 @@ Result #5
 Result #6
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -297,6 +303,7 @@ Result #6
 Result #7
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -346,6 +353,7 @@ Result #7
 Result #8
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -395,6 +403,7 @@ Result #8
 Result #9
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -444,6 +453,7 @@ Result #9
 Result #10
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -493,6 +503,7 @@ Result #10
 Result #11
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -542,6 +553,7 @@ Result #11
 Result #12
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -591,6 +603,7 @@ Result #12
 Result #13
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -642,6 +655,7 @@ Result #13
 Result #14
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -691,6 +705,7 @@ Result #14
 Result #15
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -740,6 +755,7 @@ Result #15
 Result #16
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -789,6 +805,7 @@ Result #16
 Result #17
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -838,6 +855,7 @@ Result #17
 Result #18
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -887,6 +905,7 @@ Result #18
 Result #19
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -936,6 +955,7 @@ Result #19
 Result #20
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -985,6 +1005,7 @@ Result #20
 Result #21
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,
@@ -1034,6 +1055,7 @@ Result #21
 Result #22
 {
     "CLEAR_SCHEDULING": true,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": true,
     "STARTED_ON_SCHEDULE": false,
     "STARTED_ON_SUBMIT": false,

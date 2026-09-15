@@ -261,7 +261,7 @@ def test_convert_version_supported():
                 {"type": "billing", "name": "", "id": 5, "count": 8000},
             ],
         },
-        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED"],
+        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED", "JOB_ALTERED"],
         "cluster": "test",
     }
 
@@ -277,6 +277,8 @@ def test_convert_version_supported():
     assert slurmjob["job_state"] == "TIMEOUT"
     assert slurmjob["work_dir"] == "/home/toto/my_job_name"
     assert slurmjob["reservation"] == "Troubleshooting-Slurm"
+    assert slurmjob["STARTED_ON_BACKFILL"] is True
+    assert slurmjob["JOB_ALTERED"] is True
 
     # test version unsupported
     with pytest.raises(JobConversionError):
@@ -327,6 +329,8 @@ def test_convert_fast_gres_gpu():
     assert job["allocated_gpu_type"] == "v100"
     # A missing resv_name (older fastsacct payload) means no reservation.
     assert job["reservation"] is None
+    # Flags absent from the entry are not emitted; they default to False.
+    assert "JOB_ALTERED" not in job
 
 
 def test_convert_fast_basic():
@@ -362,7 +366,7 @@ def test_convert_fast_basic():
         "allocated_mem": 16000,
         "allocated_node": 1,
         "allocated_billing": 8000,
-        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED"],
+        "flags": ["STARTED_ON_BACKFILL", "START_RECEIVED", "JOB_ALTERED"],
         "cluster": "test",
     }
 
@@ -388,6 +392,7 @@ def test_convert_fast_basic():
     assert job["requested_cpu"] == 8
     assert job["allocated_cpu"] == 8
     assert job["STARTED_ON_BACKFILL"] is True
+    assert job["JOB_ALTERED"] is True
     assert job["latest_scraped_start"] == scraped_start
     assert job["latest_scraped_end"] == scraped_end
 

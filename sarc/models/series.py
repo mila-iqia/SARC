@@ -41,6 +41,7 @@ class JobSeries:
     STARTED_ON_SUBMIT: bool
     STARTED_ON_SCHEDULE: bool
     STARTED_ON_BACKFILL: bool
+    JOB_ALTERED: bool
 
     # temporal fields
     time_limit: int | None

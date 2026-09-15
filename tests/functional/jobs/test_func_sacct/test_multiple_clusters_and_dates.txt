@@ -1,6 +1,7 @@
 Found 4 job(s):
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -47,6 +48,7 @@ Found 4 job(s):
 }
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -93,6 +95,7 @@ Found 4 job(s):
 }
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,
@@ -139,6 +142,7 @@ Found 4 job(s):
 }
 {
     "CLEAR_SCHEDULING": false,
+    "JOB_ALTERED": false,
     "STARTED_ON_BACKFILL": false,
     "STARTED_ON_SCHEDULE": true,
     "STARTED_ON_SUBMIT": false,

@@ -34,6 +34,7 @@ from tests.functional.job_series.rgu_utils import (
 ALL_COLUMNS = sorted(
     [
         "CLEAR_SCHEDULING",
+        "JOB_ALTERED",
         "STARTED_ON_BACKFILL",
         "STARTED_ON_SCHEDULE",
         "STARTED_ON_SUBMIT",

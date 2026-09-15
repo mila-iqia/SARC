@@ -195,6 +195,7 @@ def _convert_json_job(
         "STARTED_ON_SUBMIT",
         "STARTED_ON_SCHEDULE",
         "STARTED_ON_BACKFILL",
+        "JOB_ALTERED",
     ]
     flags = {k: True for k in entry["flags"] if k in tracked_flags}
 
@@ -315,6 +316,7 @@ def _convert_json_fast(
         "STARTED_ON_SUBMIT",
         "STARTED_ON_SCHEDULE",
         "STARTED_ON_BACKFILL",
+        "JOB_ALTERED",
     ]
     flags = {k: True for k in entry["flags"] if k in tracked_flags}
 

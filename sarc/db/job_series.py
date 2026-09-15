@@ -527,6 +527,7 @@ class JobSeriesTable(SQLModel, table=True):
     STARTED_ON_SUBMIT: bool = False
     STARTED_ON_SCHEDULE: bool = False
     STARTED_ON_BACKFILL: bool = False
+    JOB_ALTERED: bool = False
     time_limit: int | None = None
     submit_time: datetime_utc = datetime_utc_field()
     start_time: datetime_utc | None = datetime_utc_field(default=None)
@@ -702,6 +703,8 @@ class JobSeriesDB(SQLModel, table=True):
     """Slurm flag: the job started via the main scheduler."""
     STARTED_ON_BACKFILL: bool
     """Slurm flag: the job started via the backfill scheduler."""
+    JOB_ALTERED: bool
+    """Slurm flag: the job was modified with scontrol/sacctmgr update."""
 
     # temporal fields
     time_limit: int | None

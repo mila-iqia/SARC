@@ -187,6 +187,14 @@ def _exit_code(state: str) -> RawExitCode:
     return RawExitCode(status=[state], return_code=_UNSET, signal=_NO_SIGNAL)
 
 
+def _start_flags(rng: random.Random) -> list[str]:
+    """Flags set once a job starts; JOB_ALTERED on a few jobs."""
+    flags = [rng.choice(["STARTED_ON_BACKFILL", "STARTED_ON_SCHEDULE"])]
+    if rng.random() < 0.05:
+        flags.append("JOB_ALTERED")
+    return flags
+
+
 def _tres_list(
     n_cpu: int,
     mem_mb: int,
@@ -473,7 +481,7 @@ def _transition(
         j.start_ts = j.submission_ts + rng.randint(60, min(3600, tick_sec))
         j.start_ts = min(j.start_ts, tick_ts)
         j.elapsed = tick_ts - j.start_ts
-        j.flags = [rng.choice(["STARTED_ON_BACKFILL", "STARTED_ON_SCHEDULE"])]
+        j.flags = _start_flags(rng)
 
     elif new_state in _TERMINAL_STATES:
         # RUNNING → terminal: assign end time
@@ -605,9 +613,7 @@ def generate_sacct(self: DataFactory, data: Data) -> None:
                 job_ids[cluster_name] += 1
                 if state != "PENDING":
                     job.start_ts = rng.randint(job.submission_ts, tick_ts - 1)
-                    job.flags = [
-                        rng.choice(["STARTED_ON_BACKFILL", "STARTED_ON_SCHEDULE"])
-                    ]
+                    job.flags = _start_flags(rng)
                     if state in _TERMINAL_STATES:
                         max_elapsed = time_limit_min * 60
                         job.elapsed = (
