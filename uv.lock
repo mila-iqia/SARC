@@ -652,19 +652,20 @@ wheels = [
 
 [[package]]
 name = "easy-oauth"
-version = "0.0.8"
+version = "0.0.9"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "authlib" },
     { name = "httpx" },
     { name = "itsdangerous" },
+    { name = "python-multipart" },
     { name = "pyyaml" },
     { name = "serieux" },
     { name = "starlette" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/f7/9f/53c10a7aa21c347c414d6fd86ef27d047ea53456db9723ab5593e32e81fd/easy_oauth-0.0.8.tar.gz", hash = "sha256:5f444d9c7e9f1e42d30cc714880af860393b1bf10b9a8d00546c3ce46b3edb2e", size = 15403, upload-time = "2026-09-16T18:26:41.829Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/f4/cd/7dad29fd9fac735e64092a06b5e33ee14133cf881d9616efb6c0a79b097a/easy_oauth-0.0.9.tar.gz", hash = "sha256:7469b4dc02ad8d19dc7c62f59faf8ad7969192966fcf27f1fece33c385905974", size = 15410, upload-time = "2026-09-16T20:15:55.458Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/eb/0f/34821dfaaf840616ba5cb5077675a554a21ef1e5449b38b6a4dff2b1d55b/easy_oauth-0.0.8-py3-none-any.whl", hash = "sha256:ba4eae9c6ed71875386ec8d1fa0b46185e796b57d52cea99e04978889c167f35", size = 18342, upload-time = "2026-09-16T18:26:40.723Z" },
+    { url = "https://files.pythonhosted.org/packages/1e/94/73003f5e5cdd3f7e6d63e10753cceedbf6703baf54fed9e3b71d8fad3042/easy_oauth-0.0.9-py3-none-any.whl", hash = "sha256:3e75e1f8d2938ea7adc383d84aed8607d5a694e71dad294a792043a99bbb31f6", size = 18358, upload-time = "2026-09-16T20:15:54.236Z" },
 ]
 
 [[package]]
@@ -2499,7 +2500,7 @@ requires-dist = [
     { name = "alembic-utils", specifier = ">=0.8.8" },
     { name = "certifi", specifier = ">=2024.2.2" },
     { name = "cloud-sql-python-connector", specifier = ">=1.20.3" },
-    { name = "easy-oauth", specifier = ">=0.0.8" },
+    { name = "easy-oauth", specifier = ">=0.0.9" },
     { name = "fabric", specifier = ">=3.0.0,<4" },
     { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.141,<0.142" },
     { name = "filelock", specifier = ">=3.18.0" },
