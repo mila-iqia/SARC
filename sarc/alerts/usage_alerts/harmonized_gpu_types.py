@@ -12,12 +12,16 @@ logger = logging.getLogger(__name__)
 
 
 def _unharmonized(start: datetime | None, cluster_names: list[str] | None, *columns):
-    """Select `columns` over the GPU jobs that have no harmonized GPU type.
+    """Select `columns` over the GPU jobs whose raw GPU name was not harmonized.
 
     `allocated_gres_gpu > 0` is the first conjunct of the `ELIGIBILITY` predicate in
     `sarc/db/job_series.py`; the second one is the `gpurgudb` row reached through
     `harmonized_gpu_type`. So this is exactly the population that drops out of the
     whole `/dash` scope, and whose RGU, cost and waste are NULL.
+
+    Jobs with no `allocated_gpu_type` at all are left out: sacct reported no GPU name
+    for them, so there is nothing to harmonize -- they are repaired by re-running the
+    node->GPU inference, not by fixing a mapping.
     """
     query = (
         select(*columns)
@@ -25,6 +29,7 @@ def _unharmonized(start: datetime | None, cluster_names: list[str] | None, *colu
         .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
         .where(
             col(SlurmJobDB.allocated_gres_gpu) > 0,
+            col(SlurmJobDB.allocated_gpu_type).is_not(None),
             col(SlurmJobDB.harmonized_gpu_type).is_(None),
         )
     )
@@ -41,17 +46,13 @@ def check_harmonized_gpu_types(
     cluster_names: list[str] | None = None,
 ) -> bool:
     """
-    Check that GPU jobs have a harmonized GPU type.
+    Check that GPU jobs whose GPU name is known have a harmonized one.
     Log an alert per cluster and `allocated_gpu_type` that has jobs without one.
 
     A job counted here silently leaves the `/dash` population and has NULL RGU, cost
-    and waste: the symptom is an under-count, never an error. There are two ways in,
-    with two different fixes:
-
-    - an `allocated_gpu_type` that recurs is a key missing from the cluster's
-      `gpus_per_nodes` mapping -- look up the named jobs' `nodes` to see which entry;
-    - no `allocated_gpu_type` at all means sacct reported no GPU name, so
-      `fix_gpu_types` -- which only reads jobs that have one -- can never repair them.
+    and waste: the symptom is an under-count, never an error. The reported
+    `allocated_gpu_type` is a key missing from the cluster's `gpus_per_nodes` mapping
+    -- look up the named jobs' `nodes` to see which entry.
 
     Parameters
     ----------
@@ -106,7 +107,7 @@ def check_harmonized_gpu_types(
         # Biggest offender first, per cluster; the name breaks ties so alerts stay
         # comparable from one run to the next.
         for cluster_name, gpu_type, nb_jobs in sorted(
-            counts, key=lambda row: (row[0], -row[2], row[1] or "")
+            counts, key=lambda row: (row[0], -row[2], row[1])
         ):
             # Unordered on purpose: with an ORDER BY, LIMIT cannot stop before the
             # whole group has been examined, which costs a scan per group. Examples
@@ -115,20 +116,14 @@ def check_harmonized_gpu_types(
                 _unharmonized(start, cluster_names, SlurmJobDB.job_id)
                 .where(
                     SlurmClusterDB.name == cluster_name,
-                    col(SlurmJobDB.allocated_gpu_type).is_(None)
-                    if gpu_type is None
-                    else SlurmJobDB.allocated_gpu_type == gpu_type,
+                    SlurmJobDB.allocated_gpu_type == gpu_type,
                 )
                 .limit(report_limit)
             ).all()
-            subject = (
-                "no allocated_gpu_type"
-                if gpu_type is None
-                else f"allocated_gpu_type '{gpu_type}'"
-            )
             logger.error(
-                f"[{cluster_name}] {subject}: {nb_jobs} GPU job{'s' if nb_jobs > 1 else ''} "
-                f"{window} have no harmonized GPU type, "
+                f"[{cluster_name}] allocated_gpu_type '{gpu_type}': "
+                f"{nb_jobs} GPU job{'s' if nb_jobs > 1 else ''} {window} "
+                f"{'have' if nb_jobs > 1 else 'has'} no harmonized GPU type, "
                 f"e.g. job_id {', '.join(str(job_id) for job_id in examples)}"
             )
 
@@ -137,7 +132,7 @@ def check_harmonized_gpu_types(
 
 @dataclass
 class HarmonizedGpuTypeCheck(HealthCheck):
-    """Health check for GPU jobs without a harmonized GPU type."""
+    """Health check for GPU jobs whose GPU name was not harmonized."""
 
     time_interval: timedelta | None = timedelta(days=1)
     report_limit: int = 5

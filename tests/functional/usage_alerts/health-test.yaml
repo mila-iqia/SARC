@@ -366,13 +366,13 @@ sarc:
 
       # harmonized_gpu_types_* checks correspond to test params in test_harmonized_gpu_types.py.
       #
-      # GPU jobs (allocated_gres_gpu > 0) without a harmonized GPU type in the testing DB,
-      # after the test seeds raw GPU names on raisin's first jobs (SEED in the test file):
-      #   raisin  <none> (12), a100l (3), v100 (1)
-      #   fromage <none> (1)
-      #   patate  <none> (1)
-      # raisin has 19 GPU jobs in all, 3 of which are harmonized. mila's only job has
-      # allocated_gres_gpu = 0, so it is not a GPU job.
+      # GPU jobs (allocated_gres_gpu > 0) with a raw GPU name but no harmonized one in
+      # the testing DB, after the test seeds raw GPU names on raisin's first jobs
+      # (SEED in the test file):
+      #   raisin  a100l (3), v100 (1)
+      # raisin has 19 GPU jobs in all: 3 harmonized, and 12 with no allocated_gpu_type,
+      # which the check ignores -- as it does fromage's and patate's single GPU jobs,
+      # untyped too, and mila's only job, which has allocated_gres_gpu = 0.
       #
       # The fixture jobs are submitted in February 2023 and MOCK_TIME is November 2023,
       # so every check that has to see them opens the window wide.

@@ -34,7 +34,7 @@ def _count_examples(line: str) -> str:
 
 # Raw GPU names given to raisin's first GPU jobs, in submit order, as
 # (allocated_gpu_type, harmonized_gpu_type). The fixture's other GPU jobs keep
-# allocated_gpu_type NULL, which is the other way to miss a harmonized name.
+# allocated_gpu_type NULL, so the check ignores them: nothing to harmonize.
 SEED = [
     ("a100l", None),
     ("a100l", None),
@@ -108,16 +108,19 @@ def test_check_harmonized_gpu_types(check_name, caplog, file_regression, cli_mai
 
 @time_machine.travel(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_write_db", "health_config")
-def test_missing_raw_name_and_failed_harmonization_are_told_apart(caplog, cli_main):
-    """No `allocated_gpu_type` is sacct; a real one is a gap in `gpus_per_nodes`."""
+def test_jobs_without_raw_name_are_ignored(caplog, cli_main):
+    """No `allocated_gpu_type` is sacct, not a gap in `gpus_per_nodes`.
+
+    raisin has 12 such GPU jobs and they are the only GPU jobs fromage and patate
+    have; none of them is the harmonization failure this check looks for.
+    """
     with config.db.session() as sess:
         _seed_gpu_types(sess)
     caplog.clear()
     assert cli_main(["health", "run", "--check", "harmonized_gpu_types_all"]) == 0
-    assert (
-        "[raisin] no allocated_gpu_type: 12 GPU jobs in database "
-        "have no harmonized GPU type" in caplog.text
-    )
+    assert "no allocated_gpu_type" not in caplog.text
+    assert "[fromage]" not in caplog.text
+    assert "[patate]" not in caplog.text
     assert (
         "[raisin] allocated_gpu_type 'a100l': 3 GPU jobs in database "
         "have no harmonized GPU type" in caplog.text
@@ -154,7 +157,23 @@ def test_examples_belong_to_their_group(caplog, cli_main):
 @time_machine.travel(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_write_db", "health_config")
 def test_cpu_jobs_are_not_counted(caplog, cli_main):
-    """mila's only job has allocated_gres_gpu = 0, so mila has nothing to report."""
+    """mila's only job has allocated_gres_gpu = 0, so mila has nothing to report.
+
+    It is given a raw GPU name here so that only `allocated_gres_gpu` keeps it out.
+    """
+    with config.db.session() as sess:
+        (job,) = sess.exec(
+            sqlmodel.select(SlurmJobDB)
+            .join(
+                SlurmClusterDB,
+                sqlmodel.col(SlurmJobDB.cluster_id) == sqlmodel.col(SlurmClusterDB.id),
+            )
+            .where(SlurmClusterDB.name == "mila")
+        ).all()
+        assert job.allocated_gres_gpu == 0
+        job.allocated_gpu_type = "a100l"
+        sess.commit()
+    caplog.clear()
     assert cli_main(["health", "run", "--check", "harmonized_gpu_types_clusters"]) == 0
     assert "[mila]" not in caplog.text
 
