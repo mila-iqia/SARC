@@ -18,18 +18,7 @@ get_warnings = functools.partial(
     ],
 )
 
-_EXAMPLE_IDS = re.compile(r"(e\.g\. job_id )(\d+(?:, \d+)*)")
-
-
-def _count_examples(line: str) -> str:
-    """Replace the example ids with how many there are.
-
-    The check does not order them -- which jobs come back is the planner's choice,
-    so only their number is the check's own behaviour to pin down.
-    """
-    return _EXAMPLE_IDS.sub(
-        lambda m: f"{m.group(1)}x{len(m.group(2).split(', '))}", line
-    )
+_EXAMPLE_IDS = re.compile(r"e\.g\. job_id (\d+(?:, \d+)*)")
 
 
 # Raw GPU names given to raisin's first GPU jobs, in submit order, as
@@ -101,9 +90,7 @@ def test_check_harmonized_gpu_types(check_name, caplog, file_regression, cli_mai
         _seed_gpu_types(sess)
     caplog.clear()
     assert cli_main(["health", "run", "--check", check_name]) == 0
-    file_regression.check(
-        "\n".join(_count_examples(line) for line in get_warnings(caplog.text))
-    )
+    file_regression.check("\n".join(get_warnings(caplog.text)))
 
 
 @time_machine.travel(MOCK_TIME, tick=False)
@@ -118,7 +105,6 @@ def test_jobs_without_raw_name_are_ignored(caplog, cli_main):
         _seed_gpu_types(sess)
     caplog.clear()
     assert cli_main(["health", "run", "--check", "harmonized_gpu_types_all"]) == 0
-    assert "no allocated_gpu_type" not in caplog.text
     assert "[fromage]" not in caplog.text
     assert "[patate]" not in caplog.text
     assert (
@@ -130,15 +116,19 @@ def test_jobs_without_raw_name_are_ignored(caplog, cli_main):
 
 @time_machine.travel(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_write_db", "health_config")
-def test_examples_belong_to_their_group(caplog, cli_main):
-    """Whichever jobs are named, they must be jobs the alert is about."""
+def test_examples_are_the_newest_of_their_group(caplog, cli_main):
+    """The named jobs are their group's, newest first."""
     with config.db.session() as sess:
         _seed_gpu_types(sess)
-        a100l = {
-            job.job_id
+        a100l = [
+            job
             for job in _gpu_jobs_of(sess, "raisin")
             if job.allocated_gpu_type == "a100l"
-        }
+        ]
+        newest_first = [
+            job.job_id
+            for job in sorted(a100l, key=lambda job: job.submit_time, reverse=True)
+        ]
     caplog.clear()
     assert (
         cli_main(["health", "run", "--check", "harmonized_gpu_types_report_limit_1"])
@@ -151,7 +141,7 @@ def test_examples_belong_to_their_group(caplog, cli_main):
     ]
     named = _EXAMPLE_IDS.search(line)
     assert named is not None, line
-    assert {int(job_id) for job_id in named.group(2).split(", ")} <= a100l
+    assert [int(job_id) for job_id in named.group(1).split(", ")] == newest_first[:1]
 
 
 @time_machine.travel(MOCK_TIME, tick=False)

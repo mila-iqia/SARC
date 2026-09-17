@@ -11,8 +11,8 @@ from sarc.db.job import SlurmJobDB
 logger = logging.getLogger(__name__)
 
 
-def _unharmonized(start: datetime | None, cluster_names: list[str] | None, *columns):
-    """Select `columns` over the GPU jobs whose raw GPU name was not harmonized.
+def _unharmonized(start: datetime | None):
+    """Conditions matching a GPU job whose raw GPU name was not harmonized.
 
     `allocated_gres_gpu > 0` is the first conjunct of the `ELIGIBILITY` predicate in
     `sarc/db/job_series.py`; the second one is the `gpurgudb` row reached through
@@ -23,21 +23,14 @@ def _unharmonized(start: datetime | None, cluster_names: list[str] | None, *colu
     for them, so there is nothing to harmonize -- they are repaired by re-running the
     node->GPU inference, not by fixing a mapping.
     """
-    query = (
-        select(*columns)
-        .select_from(SlurmJobDB)
-        .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
-        .where(
-            col(SlurmJobDB.allocated_gres_gpu) > 0,
-            col(SlurmJobDB.allocated_gpu_type).is_not(None),
-            col(SlurmJobDB.harmonized_gpu_type).is_(None),
-        )
-    )
+    conditions = [
+        col(SlurmJobDB.allocated_gres_gpu) > 0,
+        col(SlurmJobDB.allocated_gpu_type).is_not(None),
+        col(SlurmJobDB.harmonized_gpu_type).is_(None),
+    ]
     if start is not None:
-        query = query.where(SlurmJobDB.submit_time >= start)
-    if cluster_names:
-        query = query.where(col(SlurmClusterDB.name).in_(cluster_names))
-    return query
+        conditions.append(SlurmJobDB.submit_time >= start)
+    return conditions
 
 
 def check_harmonized_gpu_types(
@@ -92,32 +85,46 @@ def check_harmonized_gpu_types(
     window = f"submitted since {start}" if start is not None else "in database"
 
     with config.db.session() as sess:
-        # Grouped by raw GPU name, which is what makes an alert actionable. Every column
-        # read is in ix_slurm_jobs_submit, so a windowed run stays index-only.
-        counts = sess.exec(
-            _unharmonized(
-                start,
-                cluster_names,
+        # Grouped by raw GPU name, which is what makes an alert actionable. Every
+        # column read is in ix_slurm_jobs_submit, so a windowed run stays index-only.
+        counts_query = (
+            select(
+                SlurmClusterDB.id,
                 SlurmClusterDB.name,
                 SlurmJobDB.allocated_gpu_type,
                 func.count(col(SlurmJobDB.id)).label("jobs"),
-            ).group_by(col(SlurmClusterDB.name), col(SlurmJobDB.allocated_gpu_type))
-        ).all()
+            )
+            .select_from(SlurmJobDB)
+            .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
+            .where(*_unharmonized(start))
+            .group_by(
+                col(SlurmClusterDB.id),
+                col(SlurmClusterDB.name),
+                col(SlurmJobDB.allocated_gpu_type),
+            )
+        )
+        if cluster_names:
+            counts_query = counts_query.where(
+                col(SlurmClusterDB.name).in_(cluster_names)
+            )
+        counts = sess.exec(counts_query).all()
 
-        # Biggest offender first, per cluster; the name breaks ties so alerts stay
-        # comparable from one run to the next.
-        for cluster_name, gpu_type, nb_jobs in sorted(
-            counts, key=lambda row: (row[0], -row[2], row[1])
+        # Biggest offender first, per cluster.
+        for cluster_id, cluster_name, gpu_type, nb_jobs in sorted(
+            counts, key=lambda row: (row[1], -row[3], row[2])
         ):
-            # Unordered on purpose: with an ORDER BY, LIMIT cannot stop before the
-            # whole group has been examined, which costs a scan per group. Examples
-            # are examples.
+            # Newest first, and the cluster pinned by id rather than joined: only
+            # then can the planner prove the scan is already in submit_time order
+            # and stop at LIMIT instead of sorting the whole group. Through the
+            # join it sorts, which costs a full scan per group.
             examples = sess.exec(
-                _unharmonized(start, cluster_names, SlurmJobDB.job_id)
+                select(SlurmJobDB.job_id)
                 .where(
-                    SlurmClusterDB.name == cluster_name,
+                    *_unharmonized(start),
+                    SlurmJobDB.cluster_id == cluster_id,
                     SlurmJobDB.allocated_gpu_type == gpu_type,
                 )
+                .order_by(col(SlurmJobDB.submit_time).desc())
                 .limit(report_limit)
             ).all()
             logger.error(
