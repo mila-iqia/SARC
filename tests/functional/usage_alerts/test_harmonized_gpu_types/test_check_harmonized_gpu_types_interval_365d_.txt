@@ -1,0 +1,6 @@
+[fromage] no allocated_gpu_type: 1 GPU job submitted since 2022-11-22 00:00:00+00:00 have no harmonized GPU type, e.g. job_id x1
+[patate] no allocated_gpu_type: 1 GPU job submitted since 2022-11-22 00:00:00+00:00 have no harmonized GPU type, e.g. job_id x1
+[raisin] no allocated_gpu_type: 12 GPU jobs submitted since 2022-11-22 00:00:00+00:00 have no harmonized GPU type, e.g. job_id x5
+[raisin] allocated_gpu_type 'a100l': 3 GPU jobs submitted since 2022-11-22 00:00:00+00:00 have no harmonized GPU type, e.g. job_id x3
+[raisin] allocated_gpu_type 'v100': 1 GPU job submitted since 2022-11-22 00:00:00+00:00 have no harmonized GPU type, e.g. job_id x1
+[harmonized_gpu_types_interval_365d] FAILURE: harmonized_gpu_types_interval_365d
