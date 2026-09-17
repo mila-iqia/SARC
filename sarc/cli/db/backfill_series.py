@@ -6,6 +6,7 @@ from sqlalchemy import text
 
 from sarc.config import config
 from sarc.db.job_series import job_series_backfill_sql
+from sarc.db.maintenance import maintenance_connection
 
 logger = logging.getLogger(__name__)
 
@@ -56,6 +57,8 @@ class BackfillSeriesCommand:
                 )
                 lo += chunk
             logger.info("Backfilled %d job_series rows", total)
-            sess.exec(text("ANALYZE job_series"))  # ty: ignore[no-matching-overload]
-            sess.commit()
+        # ANALYZE, like VACUUM, refuses to run inside a transaction block —
+        # hence its own autocommit connection instead of sess.
+        with maintenance_connection() as conn:
+            conn.execute(text("ANALYZE job_series"))
         return 0
