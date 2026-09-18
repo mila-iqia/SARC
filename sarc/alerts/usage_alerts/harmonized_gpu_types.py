@@ -16,8 +16,8 @@ def _unharmonized(start: datetime | None):
 
     `allocated_gres_gpu > 0` is the first conjunct of the `ELIGIBILITY` predicate in
     `sarc/db/job_series.py`; the second one is the `gpurgudb` row reached through
-    `harmonized_gpu_type`. So this is exactly the population that drops out of the
-    whole `/dash` scope, and whose RGU, cost and waste are NULL.
+    `harmonized_gpu_type`. So these jobs drop out of the whole `/dash` scope, with
+    NULL RGU, cost and waste.
 
     Jobs with no `allocated_gpu_type` at all are left out: sacct reported no GPU name
     for them, so there is nothing to harmonize -- they are repaired by re-running the
@@ -40,12 +40,7 @@ def check_harmonized_gpu_types(
 ) -> bool:
     """
     Check that GPU jobs whose GPU name is known have a harmonized one.
-    Log an alert per cluster and `allocated_gpu_type` that has jobs without one.
-
-    A job counted here silently leaves the `/dash` population and has NULL RGU, cost
-    and waste: the symptom is an under-count, never an error. The reported
-    `allocated_gpu_type` is a key missing from the cluster's `gpus_per_nodes` mapping
-    -- look up the named jobs' `nodes` to see which entry.
+    Log an alert per cluster and `allocated_gpu_type` that has jobs without harmonized GPU name.
 
     Parameters
     ----------
@@ -53,8 +48,7 @@ def check_harmonized_gpu_types(
         Width of the window, ending now and taken on `submit_time`. Default is 1 day.
         If None, all jobs are checked.
     report_limit: int
-        How many example job ids to name per alert. Default is 5. Which ones is up to
-        the planner: they are there to be looked up, not to be the latest.
+        How many example job ids to name per alert, newest first. Default is 5.
     cluster_names: list
         Clusters to check. Jobs from other clusters are ignored.
         If empty (or not specified), check every cluster.
