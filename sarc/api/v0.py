@@ -423,6 +423,10 @@ def query_jobs(
     extra_fields: str | None = None,
     sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
+    """Paginated list of jobs matching the query.
+
+    `extra_fields` is a comma-separated list of optional fields to join in.
+    """
     extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
     if query_opt.cluster_name:
         extra_fields_set.add("cluster_name")
@@ -450,6 +454,7 @@ def query_jobs(
 
 @router.get("/job/count")
 def count_jobs(query_opt: JobQueryType, sess: Session = Depends(session_dep)) -> int:
+    """Number of jobs matching the query."""
     return sess.exec(query_opt.get_query(select(func.count(col(SlurmJobDB.id))))).one()
 
 
@@ -457,6 +462,7 @@ def count_jobs(query_opt: JobQueryType, sess: Session = Depends(session_dep)) ->
 def get_job(
     id: int, extra_fields: str | None = None, sess: Session = Depends(session_dep)
 ) -> SlurmJob:
+    """Get job with given ID."""
     job = sess.get(SlurmJobDB, id)
     if job is None:
         raise HTTPException(
@@ -494,6 +500,11 @@ def job_series(
     extra_fields: str | None = None,
     sess: Session = Depends(session_dep),
 ) -> JobSeriesList:
+    """Paginated list of jobs with their metrics, from the `job_series` view.
+
+    `extra_fields` selects optional columns; unlisted ones are left out of the
+    query so their joins are dropped.
+    """
     extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
     unknown = extra_fields_set - set(_EXTRA_FIELDS)
     if unknown:
@@ -552,6 +563,7 @@ def get_rgu_value_per_gpu(sess: Session = Depends(session_dep)) -> list[GpuRgu]:
 
 @router.post("/gpu/rgu", dependencies=[Depends(require_admin)])
 def update_rgu(update: list[GpuRgu], sess: Session = Depends(session_dep)) -> bool:
+    """Insert or update the given GPU->RGU entries."""
     for gpu_rgu in update:
         sess.merge(
             GpuRguDB(name=gpu_rgu.name, rgu=gpu_rgu.rgu, drac_rgu=gpu_rgu.drac_rgu)
@@ -566,6 +578,7 @@ def query_users(
     list_opt: ListOptionsType,
     sess: Session = Depends(session_dep),
 ) -> UserList:
+    """Paginated list of users matching the query."""
     query = query_opt.get_query(select(UserDB))
     query = list_opt.add_list_options(query, col(UserDB.id), None)  # ty:ignore[invalid-argument-type]
 

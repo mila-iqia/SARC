@@ -102,8 +102,13 @@ async def _dash_login_redirect(request: Request) -> None:
     await auth.ensure_email(request)
 
 
+# Kept out of the OpenAPI schema: these endpoints serve the dashboard's own JS,
+# whose contract lives in metrics.html, and they return ad hoc dicts a schema
+# would not describe.
 router = APIRouter(
-    prefix="/dash", dependencies=[Depends(_dash_login_redirect), Depends(requestor)]
+    prefix="/dash",
+    dependencies=[Depends(_dash_login_redirect), Depends(requestor)],
+    include_in_schema=False,
 )
 
 
