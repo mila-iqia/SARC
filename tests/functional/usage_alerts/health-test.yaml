@@ -363,3 +363,70 @@ sarc:
         $class: "sarc.alerts.usage_alerts.job_series_coherence:JobSeriesRecentCheck"
         active: true
         time_interval: 365d
+
+      # harmonized_gpu_types_* checks correspond to test params in test_harmonized_gpu_types.py.
+      #
+      # GPU jobs (allocated_gres_gpu > 0) with a raw GPU name but no harmonized one in
+      # the testing DB, after the test seeds raw GPU names on raisin's first jobs
+      # (SEED in the test file):
+      #   raisin  a100l (3), v100 (1)
+      # raisin has 19 GPU jobs in all: 3 harmonized, and 12 with no allocated_gpu_type,
+      # which the check ignores -- as it does fromage's and patate's single GPU jobs,
+      # untyped too, and mila's only job, which has allocated_gres_gpu = 0.
+      #
+      # The fixture jobs are submitted in February 2023 and MOCK_TIME is November 2023,
+      # so every check that has to see them opens the window wide.
+
+      # Whole table: every cluster and raw GPU name above is reported.
+      harmonized_gpu_types_all:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+        time_interval: null
+
+      # Default 1-day window, which no fixture job falls into.
+      harmonized_gpu_types_default:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+
+      # Wide enough window to hold every fixture job.
+      harmonized_gpu_types_interval_365d:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+        time_interval: 365d
+
+      # Restricted to some clusters, one of which has no GPU job and one of which
+      # is not a configured cluster at all.
+      harmonized_gpu_types_clusters:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+        time_interval: null
+        cluster_names:
+          - raisin
+          - mila
+          - invisible-cluster
+
+      # A single example job per alert.
+      harmonized_gpu_types_report_limit_1:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+        time_interval: null
+        report_limit: 1
+
+      # More examples than the smallest groups hold.
+      harmonized_gpu_types_report_limit_20:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+        time_interval: null
+        report_limit: 20
+
+      # Empty window: rejected before any query.
+      harmonized_gpu_types_invalid_interval:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+        time_interval: 0s
+
+      # Nothing reported: rejected before any query.
+      harmonized_gpu_types_invalid_report_limit:
+        $class: "sarc.alerts.usage_alerts.harmonized_gpu_types:HarmonizedGpuTypeCheck"
+        active: true
+        report_limit: 0

@@ -1,0 +1,3 @@
+[raisin] allocated_gpu_type 'a100l': 3 GPU jobs submitted since 2022-11-22 00:00:00+00:00 have no harmonized GPU type, e.g. job_id 3, 2, 1
+[raisin] allocated_gpu_type 'v100': 1 GPU job submitted since 2022-11-22 00:00:00+00:00 has no harmonized GPU type, e.g. job_id 4
+[harmonized_gpu_types_interval_365d] FAILURE: harmonized_gpu_types_interval_365d
