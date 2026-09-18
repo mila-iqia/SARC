@@ -188,12 +188,17 @@ def test_empty_window_passes(caplog, cli_main):
 @time_machine.travel(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_write_db", "health_config")
 def test_all_harmonized_passes(caplog, cli_main):
-    """A cluster whose GPU jobs all have a harmonized name raises no alert."""
+    """A cluster whose GPU jobs all have a harmonized name raises no alert.
+
+    The raw names have to be seeded first: without them there is nothing for the
+    check to look at, and it would pass whatever `harmonized_gpu_type` holds.
+    """
     with config.db.session() as sess:
+        _seed_gpu_types(sess)
         for job in _gpu_jobs_of(sess, "raisin"):
             job.harmonized_gpu_type = "A100-SXM4-80GB"
         sess.commit()
     caplog.clear()
-    assert cli_main(["health", "run", "--check", "harmonized_gpu_types_clusters"]) == 0
+    assert cli_main(["health", "run", "--check", "harmonized_gpu_types_all"]) == 0
     assert "[raisin]" not in caplog.text
     assert "FAILURE" not in caplog.text

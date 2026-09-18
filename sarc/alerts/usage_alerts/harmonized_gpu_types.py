@@ -2,6 +2,7 @@ import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
+from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlmodel import col, func, select
 
 from sarc.alerts.common import CheckResult, HealthCheck
@@ -9,28 +10,6 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 
 logger = logging.getLogger(__name__)
-
-
-def _unharmonized(start: datetime | None):
-    """Conditions matching a GPU job whose raw GPU name was not harmonized.
-
-    `allocated_gres_gpu > 0` is the first conjunct of the `ELIGIBILITY` predicate in
-    `sarc/db/job_series.py`; the second one is the `gpurgudb` row reached through
-    `harmonized_gpu_type`. So these jobs drop out of the whole `/dash` scope, with
-    NULL RGU, cost and waste.
-
-    Jobs with no `allocated_gpu_type` at all are left out: sacct reported no GPU name
-    for them, so there is nothing to harmonize -- they are repaired by re-running the
-    node->GPU inference, not by fixing a mapping.
-    """
-    conditions = [
-        col(SlurmJobDB.allocated_gres_gpu) > 0,
-        col(SlurmJobDB.allocated_gpu_type).is_not(None),
-        col(SlurmJobDB.harmonized_gpu_type).is_(None),
-    ]
-    if start is not None:
-        conditions.append(SlurmJobDB.submit_time >= start)
-    return conditions
 
 
 def check_harmonized_gpu_types(
@@ -71,64 +50,71 @@ def check_harmonized_gpu_types(
         )
         return False
 
+    ok = True
+
     # A name that is not a configured cluster would silently narrow the check to nothing.
     for cluster_name in sorted(set(cluster_names or ()) - set(config.clusters)):
-        logger.warning(f"[{cluster_name}] unknown cluster, nothing to check")
+        logger.error(f"[{cluster_name}] unknown cluster, nothing to check")
+        ok = False
 
     start = None if time_interval is None else datetime.now(tz=UTC) - time_interval
     window = f"submitted since {start}" if start is not None else "in database"
 
+    # A GPU job whose raw GPU name was not harmonized.
+    # Jobs with no `allocated_gpu_type` at all are left out: they are repaired by
+    # re-running the node->GPU inference, not by fixing a mapping.
+    conditions = [
+        col(SlurmJobDB.allocated_gres_gpu) > 0,
+        col(SlurmJobDB.allocated_gpu_type).is_not(None),
+        col(SlurmJobDB.harmonized_gpu_type).is_(None),
+    ]
+    if start is not None:
+        conditions.append(SlurmJobDB.submit_time >= start)
+    if cluster_names:
+        conditions.append(col(SlurmClusterDB.name).in_(cluster_names))
+
+    nb_jobs = func.count(col(SlurmJobDB.id)).label("jobs")
     with config.db.session() as sess:
-        # Grouped by raw GPU name, which is what makes an alert actionable. Every
-        # column read is in ix_slurm_jobs_submit, so a windowed run stays index-only.
-        counts_query = (
+        # Grouped by raw GPU name, and the examples taken in the same pass: a separate
+        # `ORDER BY submit_time DESC LIMIT n` per group would walk the submit_time index backwards
+        # until it has filled the limit, so a group whose newest job is old would cost a scan back to it.
+        query = (
             select(
-                SlurmClusterDB.id,
                 SlurmClusterDB.name,
                 SlurmJobDB.allocated_gpu_type,
-                func.count(col(SlurmJobDB.id)).label("jobs"),
+                nb_jobs,
+                func.array_agg(
+                    aggregate_order_by(
+                        # value collected
+                        col(SlurmJobDB.job_id),
+                        # order by these columns
+                        col(SlurmJobDB.submit_time).desc(),
+                        col(SlurmJobDB.job_id).desc(),
+                    )
+                )[1:report_limit].label("examples"),
             )
             .select_from(SlurmJobDB)
             .join(SlurmClusterDB, col(SlurmJobDB.cluster_id) == col(SlurmClusterDB.id))
-            .where(*_unharmonized(start))
-            .group_by(
-                col(SlurmClusterDB.id),
+            .where(*conditions)
+            .group_by(col(SlurmClusterDB.name), col(SlurmJobDB.allocated_gpu_type))
+            # Biggest offender first, per cluster.
+            .order_by(
                 col(SlurmClusterDB.name),
+                nb_jobs.desc(),
                 col(SlurmJobDB.allocated_gpu_type),
             )
         )
-        if cluster_names:
-            counts_query = counts_query.where(
-                col(SlurmClusterDB.name).in_(cluster_names)
-            )
-        counts = sess.exec(counts_query).all()
+        groups = sess.exec(query).all()
 
-        # Biggest offender first, per cluster.
-        for cluster_id, cluster_name, gpu_type, nb_jobs in sorted(
-            counts, key=lambda row: (row[1], -row[3], row[2])
-        ):
-            # Newest first, and the cluster pinned by id rather than joined: only
-            # then can the planner prove the scan is already in submit_time order
-            # and stop at LIMIT instead of sorting the whole group. Through the
-            # join it sorts, which costs a full scan per group.
-            examples = sess.exec(
-                select(SlurmJobDB.job_id)
-                .where(
-                    *_unharmonized(start),
-                    SlurmJobDB.cluster_id == cluster_id,
-                    SlurmJobDB.allocated_gpu_type == gpu_type,
-                )
-                .order_by(col(SlurmJobDB.submit_time).desc())
-                .limit(report_limit)
-            ).all()
-            logger.error(
-                f"[{cluster_name}] allocated_gpu_type '{gpu_type}': "
-                f"{nb_jobs} GPU job{'s' if nb_jobs > 1 else ''} {window} "
-                f"{'have' if nb_jobs > 1 else 'has'} no harmonized GPU type, "
-                f"e.g. job_id {', '.join(str(job_id) for job_id in examples)}"
-            )
+    for cluster_name, gpu_type, jobs, examples in groups:
+        logger.error(
+            f"[{cluster_name}] allocated_gpu_type '{gpu_type}': "
+            f"{jobs} GPU job{'s' if jobs > 1 else ''} {window} "
+            f"{'have' if jobs > 1 else 'has'} no harmonized GPU type, "
+            f"e.g. job_id {', '.join(str(job_id) for job_id in examples)}"
+        )
 
-    return not counts
+    return ok and not groups
 
 
 @dataclass
