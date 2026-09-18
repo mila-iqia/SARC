@@ -5,7 +5,7 @@ from datetime import datetime, timedelta
 from functools import reduce
 from typing import Annotated
 
-from fastapi import APIRouter, Depends, HTTPException, Query, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import AfterValidator, BaseModel, Field
 from serieux import deserialize
 from sqlalchemy.dialects.postgresql import Range
@@ -153,7 +153,15 @@ class ListOptions(BaseModel):
         return query
 
 
-def list_options(limit: int = 100, cursor: int | str | None = None) -> ListOptions:
+def list_options(
+    limit: int = Query(
+        default=100, description="Maximum number of results per page. Defaults to 100."
+    ),
+    cursor: int | str | None = Query(
+        default=None,
+        description="Where to resume from: the `cursor` returned by the previous page, or an integer offset.",
+    ),
+) -> ListOptions:
     return ListOptions(limit=limit, cursor=cursor)
 
 
@@ -209,14 +217,30 @@ class JobQuery(BaseModel):
 
 
 def job_query_params(
-    cluster_name: str | None = None,
-    job_id: Annotated[list[str] | None, Query()] = None,
-    job_state: SlurmState | None = None,
-    email: str | None = None,
-    sarc_user_id: int | None = None,
-    cluster_user: str | None = None,
-    start: datetime_api | None = None,
-    end: datetime_api | None = None,
+    cluster_name: str | None = Query(
+        default=None, description="Cluster the jobs ran on."
+    ),
+    job_id: Annotated[
+        list[str] | None, Query(description="SLURM job ids (repeatable).")
+    ] = None,
+    job_state: SlurmState | None = Query(
+        default=None, description="SLURM state of the jobs."
+    ),
+    email: str | None = Query(default=None, description="Email of the jobs' user."),
+    sarc_user_id: int | None = Query(
+        default=None, description="SARC id of the jobs' user."
+    ),
+    cluster_user: str | None = Query(
+        default=None, description="Username of the jobs' user on the cluster."
+    ),
+    start: datetime_api | None = Query(
+        default=None,
+        description="Lower bound: jobs not yet ended, or ended after it. Must carry a timezone.",
+    ),
+    end: datetime_api | None = Query(
+        default=None,
+        description="Upper bound, on `submit_time`. Must carry a timezone.",
+    ),
     requestor: Requestor = Depends(requestor),
     sess: Session = Depends(session_dep),
 ) -> JobQuery:
@@ -299,14 +323,30 @@ class JobSeriesQuery(BaseModel):
 
 
 def job_series_query_params(
-    cluster_name: str | None = None,
-    job_id: Annotated[list[str] | None, Query()] = None,
-    job_state: SlurmState | None = None,
-    email: str | None = None,
-    sarc_user_id: int | None = None,
-    cluster_user: str | None = None,
-    start: datetime_api | None = None,
-    end: datetime_api | None = None,
+    cluster_name: str | None = Query(
+        default=None, description="Cluster the jobs ran on."
+    ),
+    job_id: Annotated[
+        list[str] | None, Query(description="SLURM job ids (repeatable).")
+    ] = None,
+    job_state: SlurmState | None = Query(
+        default=None, description="SLURM state of the jobs."
+    ),
+    email: str | None = Query(default=None, description="Email of the jobs' user."),
+    sarc_user_id: int | None = Query(
+        default=None, description="SARC id of the jobs' user."
+    ),
+    cluster_user: str | None = Query(
+        default=None, description="Username of the jobs' user on the cluster."
+    ),
+    start: datetime_api | None = Query(
+        default=None,
+        description="Lower bound: jobs not yet ended, or ended after it. Must carry a timezone.",
+    ),
+    end: datetime_api | None = Query(
+        default=None,
+        description="Upper bound, on `submit_time`. Must carry a timezone.",
+    ),
     requestor: Requestor = Depends(requestor),
     sess: Session = Depends(session_dep),
 ) -> JobSeriesQuery:
@@ -354,7 +394,7 @@ class UserQuery(BaseModel):
     member_type: MemberType | None = None
     supervisor: int | None = None
 
-    requestor: Requestor = Depends(requestor)
+    requestor: Requestor
 
     def get_query[T: SelectOfScalar](self, query: T) -> T:
         start = self.start
@@ -393,7 +433,40 @@ class UserQuery(BaseModel):
         return query
 
 
-UserQueryType = Annotated[UserQuery, Depends(UserQuery)]
+def user_query_params(
+    display_name: str | None = Query(
+        default=None,
+        description="Substring of the display name, matched case-insensitively.",
+    ),
+    email: str | None = Query(default=None, description="Exact email of the user."),
+    start: datetime_api | None = Query(
+        default=None,
+        description="Start of the window over which `member_type` and `supervisor` must hold. Defaults to now. Must carry a timezone.",
+    ),
+    end: datetime_api | None = Query(
+        default=None,
+        description="End of that window. Defaults to now. Must carry a timezone.",
+    ),
+    member_type: MemberType | None = Query(
+        default=None, description="Membership held over the window."
+    ),
+    supervisor: int | None = Query(
+        default=None, description="SARC id of a supervisor over the window."
+    ),
+    requestor: Requestor = Depends(requestor),
+) -> UserQuery:
+    return UserQuery(
+        display_name=display_name,
+        email=email,
+        start=start,
+        end=end,
+        member_type=member_type,
+        supervisor=supervisor,
+        requestor=requestor,
+    )
+
+
+UserQueryType = Annotated[UserQuery, Depends(user_query_params)]
 
 
 def job_convert(doc: SlurmJobDB, extra_fields: set[str]) -> SlurmJob:
@@ -420,13 +493,13 @@ def job_convert(doc: SlurmJobDB, extra_fields: set[str]) -> SlurmJob:
 def query_jobs(
     query_opt: JobQueryType,
     list_opt: ListOptionsType,
-    extra_fields: str | None = None,
+    extra_fields: str | None = Query(
+        default=None,
+        description="Comma-separated optional fields to join in: `cluster_name`, `sarc_user`, `statistics`.",
+    ),
     sess: Session = Depends(session_dep),
 ) -> SlurmJobList:
-    """Paginated list of jobs matching the query.
-
-    `extra_fields` is a comma-separated list of optional fields to join in.
-    """
+    """Paginated list of jobs matching the query."""
     extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
     if query_opt.cluster_name:
         extra_fields_set.add("cluster_name")
@@ -460,7 +533,12 @@ def count_jobs(query_opt: JobQueryType, sess: Session = Depends(session_dep)) ->
 
 @router.get("/job/id/{id}", dependencies=[Depends(require_admin)])
 def get_job(
-    id: int, extra_fields: str | None = None, sess: Session = Depends(session_dep)
+    id: int = Path(description="SARC database id of the job, not its SLURM job id."),
+    extra_fields: str | None = Query(
+        default=None,
+        description="Comma-separated optional fields to join in: `cluster_name`, `sarc_user`, `statistics`.",
+    ),
+    sess: Session = Depends(session_dep),
 ) -> SlurmJob:
     """Get job with given ID."""
     job = sess.get(SlurmJobDB, id)
@@ -497,14 +575,13 @@ _SERIES_OPTIONAL_COLS = reduce(operator.or_, _EXTRA_FIELDS.values())
 def job_series(
     query_opt: JobSeriesQueryType,
     list_opt: ListOptionsType,
-    extra_fields: str | None = None,
+    extra_fields: str | None = Query(
+        default=None,
+        description="Comma-separated optional columns to select: `cluster_name`, `sarc_user`, `supervisors`, `rgu`, `gpu_sm_occupancy_mean`, `gpu_sm_occupancy_max`, `gpu_utilization_mean`, `gpu_memory_max`. Columns left out are not queried, so their joins are dropped.",
+    ),
     sess: Session = Depends(session_dep),
 ) -> JobSeriesList:
-    """Paginated list of jobs with their metrics, from the `job_series` view.
-
-    `extra_fields` selects optional columns; unlisted ones are left out of the
-    query so their joins are dropped.
-    """
+    """Paginated list of jobs with their metrics, from the `job_series` view."""
     extra_fields_set = set(extra_fields.split(",")) if extra_fields else set()
     unknown = extra_fields_set - set(_EXTRA_FIELDS)
     if unknown:
@@ -595,7 +672,10 @@ def query_users(
 
 
 @router.get("/user/id/{id}", dependencies=[Depends(require_admin)])
-def get_user_by_id(id: int, sess: Session = Depends(session_dep)) -> User:
+def get_user_by_id(
+    id: int = Path(description="SARC database id of the user."),
+    sess: Session = Depends(session_dep),
+) -> User:
     """Get user with given ID."""
     user = sess.get(UserDB, id)
     if user is None:
@@ -606,7 +686,10 @@ def get_user_by_id(id: int, sess: Session = Depends(session_dep)) -> User:
 
 
 @router.get("/user/email/{email}", dependencies=[Depends(require_admin)])
-def get_user_by_email(email: str, sess: Session = Depends(session_dep)) -> User:
+def get_user_by_email(
+    email: str = Path(description="Email of the user."),
+    sess: Session = Depends(session_dep),
+) -> User:
     """Get user with given email."""
     user = sess.exec(select(UserDB).where(UserDB.email == email)).one_or_none()
     if user is None:

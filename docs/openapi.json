@@ -8,7 +8,7 @@
   "/v0/job/query": {
    "get": {
     "summary": "Query Jobs",
-    "description": "Paginated list of jobs matching the query.\n\n`extra_fields` is a comma-separated list of optional fields to join in.",
+    "description": "Paginated list of jobs matching the query.",
     "operationId": "query_jobs_v0_job_query_get",
     "parameters": [
      {
@@ -24,8 +24,10 @@
          "type": "null"
         }
        ],
+       "description": "Comma-separated optional fields to join in: `cluster_name`, `sarc_user`, `statistics`.",
        "title": "Extra Fields"
-      }
+      },
+      "description": "Comma-separated optional fields to join in: `cluster_name`, `sarc_user`, `statistics`."
      },
      {
       "name": "cluster_name",
@@ -40,8 +42,10 @@
          "type": "null"
         }
        ],
+       "description": "Cluster the jobs ran on.",
        "title": "Cluster Name"
-      }
+      },
+      "description": "Cluster the jobs ran on."
      },
      {
       "name": "job_id",
@@ -59,8 +63,10 @@
          "type": "null"
         }
        ],
+       "description": "SLURM job ids (repeatable).",
        "title": "Job Id"
-      }
+      },
+      "description": "SLURM job ids (repeatable)."
      },
      {
       "name": "job_state",
@@ -75,8 +81,10 @@
          "type": "null"
         }
        ],
+       "description": "SLURM state of the jobs.",
        "title": "Job State"
-      }
+      },
+      "description": "SLURM state of the jobs."
      },
      {
       "name": "email",
@@ -91,8 +99,10 @@
          "type": "null"
         }
        ],
+       "description": "Email of the jobs' user.",
        "title": "Email"
-      }
+      },
+      "description": "Email of the jobs' user."
      },
      {
       "name": "sarc_user_id",
@@ -107,8 +117,10 @@
          "type": "null"
         }
        ],
+       "description": "SARC id of the jobs' user.",
        "title": "Sarc User Id"
-      }
+      },
+      "description": "SARC id of the jobs' user."
      },
      {
       "name": "cluster_user",
@@ -123,8 +135,10 @@
          "type": "null"
         }
        ],
+       "description": "Username of the jobs' user on the cluster.",
        "title": "Cluster User"
-      }
+      },
+      "description": "Username of the jobs' user on the cluster."
      },
      {
       "name": "start",
@@ -140,8 +154,10 @@
          "type": "null"
         }
        ],
+       "description": "Lower bound: jobs not yet ended, or ended after it. Must carry a timezone.",
        "title": "Start"
-      }
+      },
+      "description": "Lower bound: jobs not yet ended, or ended after it. Must carry a timezone."
      },
      {
       "name": "end",
@@ -157,8 +173,10 @@
          "type": "null"
         }
        ],
+       "description": "Upper bound, on `submit_time`. Must carry a timezone.",
        "title": "End"
-      }
+      },
+      "description": "Upper bound, on `submit_time`. Must carry a timezone."
      },
      {
       "name": "limit",
@@ -166,9 +184,11 @@
       "required": false,
       "schema": {
        "type": "integer",
+       "description": "Maximum number of results per page. Defaults to 100.",
        "default": 100,
        "title": "Limit"
-      }
+      },
+      "description": "Maximum number of results per page. Defaults to 100."
      },
      {
       "name": "cursor",
@@ -186,8 +206,10 @@
          "type": "null"
         }
        ],
+       "description": "Where to resume from: the `cursor` returned by the previous page, or an integer offset.",
        "title": "Cursor"
-      }
+      },
+      "description": "Where to resume from: the `cursor` returned by the previous page, or an integer offset."
      }
     ],
     "responses": {
@@ -233,8 +255,10 @@
          "type": "null"
         }
        ],
+       "description": "Cluster the jobs ran on.",
        "title": "Cluster Name"
-      }
+      },
+      "description": "Cluster the jobs ran on."
      },
      {
       "name": "job_id",
@@ -252,8 +276,10 @@
          "type": "null"
         }
        ],
+       "description": "SLURM job ids (repeatable).",
        "title": "Job Id"
-      }
+      },
+      "description": "SLURM job ids (repeatable)."
      },
      {
       "name": "job_state",
@@ -268,8 +294,10 @@
          "type": "null"
         }
        ],
+       "description": "SLURM state of the jobs.",
        "title": "Job State"
-      }
+      },
+      "description": "SLURM state of the jobs."
      },
      {
       "name": "email",
@@ -284,8 +312,10 @@
          "type": "null"
         }
        ],
+       "description": "Email of the jobs' user.",
        "title": "Email"
-      }
+      },
+      "description": "Email of the jobs' user."
      },
      {
       "name": "sarc_user_id",
@@ -300,8 +330,10 @@
          "type": "null"
         }
        ],
+       "description": "SARC id of the jobs' user.",
        "title": "Sarc User Id"
-      }
+      },
+      "description": "SARC id of the jobs' user."
      },
      {
       "name": "cluster_user",
@@ -316,8 +348,10 @@
          "type": "null"
         }
        ],
+       "description": "Username of the jobs' user on the cluster.",
        "title": "Cluster User"
-      }
+      },
+      "description": "Username of the jobs' user on the cluster."
      },
      {
       "name": "start",
@@ -333,8 +367,10 @@
          "type": "null"
         }
        ],
+       "description": "Lower bound: jobs not yet ended, or ended after it. Must carry a timezone.",
        "title": "Start"
-      }
+      },
+      "description": "Lower bound: jobs not yet ended, or ended after it. Must carry a timezone."
      },
      {
       "name": "end",
@@ -350,8 +386,10 @@
          "type": "null"
         }
        ],
+       "description": "Upper bound, on `submit_time`. Must carry a timezone.",
        "title": "End"
-      }
+      },
+      "description": "Upper bound, on `submit_time`. Must carry a timezone."
      }
     ],
     "responses": {
@@ -391,8 +429,10 @@
       "required": true,
       "schema": {
        "type": "integer",
+       "description": "SARC database id of the job, not its SLURM job id.",
        "title": "Id"
-      }
+      },
+      "description": "SARC database id of the job, not its SLURM job id."
      },
      {
       "name": "extra_fields",
@@ -407,8 +447,10 @@
          "type": "null"
         }
        ],
+       "description": "Comma-separated optional fields to join in: `cluster_name`, `sarc_user`, `statistics`.",
        "title": "Extra Fields"
-      }
+      },
+      "description": "Comma-separated optional fields to join in: `cluster_name`, `sarc_user`, `statistics`."
      }
     ],
     "responses": {
@@ -438,7 +480,7 @@
   "/v0/job/series": {
    "get": {
     "summary": "Job Series",
-    "description": "Paginated list of jobs with their metrics, from the `job_series` view.\n\n`extra_fields` selects optional columns; unlisted ones are left out of the\nquery so their joins are dropped.",
+    "description": "Paginated list of jobs with their metrics, from the `job_series` view.",
     "operationId": "job_series_v0_job_series_get",
     "parameters": [
      {
@@ -454,8 +496,10 @@
          "type": "null"
         }
        ],
+       "description": "Comma-separated optional columns to select: `cluster_name`, `sarc_user`, `supervisors`, `rgu`, `gpu_sm_occupancy_mean`, `gpu_sm_occupancy_max`, `gpu_utilization_mean`, `gpu_memory_max`. Columns left out are not queried, so their joins are dropped.",
        "title": "Extra Fields"
-      }
+      },
+      "description": "Comma-separated optional columns to select: `cluster_name`, `sarc_user`, `supervisors`, `rgu`, `gpu_sm_occupancy_mean`, `gpu_sm_occupancy_max`, `gpu_utilization_mean`, `gpu_memory_max`. Columns left out are not queried, so their joins are dropped."
      },
      {
       "name": "cluster_name",
@@ -470,8 +514,10 @@
          "type": "null"
         }
        ],
+       "description": "Cluster the jobs ran on.",
        "title": "Cluster Name"
-      }
+      },
+      "description": "Cluster the jobs ran on."
      },
      {
       "name": "job_id",
@@ -489,8 +535,10 @@
          "type": "null"
         }
        ],
+       "description": "SLURM job ids (repeatable).",
        "title": "Job Id"
-      }
+      },
+      "description": "SLURM job ids (repeatable)."
      },
      {
       "name": "job_state",
@@ -505,8 +553,10 @@
          "type": "null"
         }
        ],
+       "description": "SLURM state of the jobs.",
        "title": "Job State"
-      }
+      },
+      "description": "SLURM state of the jobs."
      },
      {
       "name": "email",
@@ -521,8 +571,10 @@
          "type": "null"
         }
        ],
+       "description": "Email of the jobs' user.",
        "title": "Email"
-      }
+      },
+      "description": "Email of the jobs' user."
      },
      {
       "name": "sarc_user_id",
@@ -537,8 +589,10 @@
          "type": "null"
         }
        ],
+       "description": "SARC id of the jobs' user.",
        "title": "Sarc User Id"
-      }
+      },
+      "description": "SARC id of the jobs' user."
      },
      {
       "name": "cluster_user",
@@ -553,8 +607,10 @@
          "type": "null"
         }
        ],
+       "description": "Username of the jobs' user on the cluster.",
        "title": "Cluster User"
-      }
+      },
+      "description": "Username of the jobs' user on the cluster."
      },
      {
       "name": "start",
@@ -570,8 +626,10 @@
          "type": "null"
         }
        ],
+       "description": "Lower bound: jobs not yet ended, or ended after it. Must carry a timezone.",
        "title": "Start"
-      }
+      },
+      "description": "Lower bound: jobs not yet ended, or ended after it. Must carry a timezone."
      },
      {
       "name": "end",
@@ -587,8 +645,10 @@
          "type": "null"
         }
        ],
+       "description": "Upper bound, on `submit_time`. Must carry a timezone.",
        "title": "End"
-      }
+      },
+      "description": "Upper bound, on `submit_time`. Must carry a timezone."
      },
      {
       "name": "limit",
@@ -596,9 +656,11 @@
       "required": false,
       "schema": {
        "type": "integer",
+       "description": "Maximum number of results per page. Defaults to 100.",
        "default": 100,
        "title": "Limit"
-      }
+      },
+      "description": "Maximum number of results per page. Defaults to 100."
      },
      {
       "name": "cursor",
@@ -616,8 +678,10 @@
          "type": "null"
         }
        ],
+       "description": "Where to resume from: the `cursor` returned by the previous page, or an integer offset.",
        "title": "Cursor"
-      }
+      },
+      "description": "Where to resume from: the `cursor` returned by the previous page, or an integer offset."
      }
     ],
     "responses": {
@@ -751,8 +815,10 @@
          "type": "null"
         }
        ],
+       "description": "Substring of the display name, matched case-insensitively.",
        "title": "Display Name"
-      }
+      },
+      "description": "Substring of the display name, matched case-insensitively."
      },
      {
       "name": "email",
@@ -767,8 +833,10 @@
          "type": "null"
         }
        ],
+       "description": "Exact email of the user.",
        "title": "Email"
-      }
+      },
+      "description": "Exact email of the user."
      },
      {
       "name": "start",
@@ -784,8 +852,10 @@
          "type": "null"
         }
        ],
+       "description": "Start of the window over which `member_type` and `supervisor` must hold. Defaults to now. Must carry a timezone.",
        "title": "Start"
-      }
+      },
+      "description": "Start of the window over which `member_type` and `supervisor` must hold. Defaults to now. Must carry a timezone."
      },
      {
       "name": "end",
@@ -801,8 +871,10 @@
          "type": "null"
         }
        ],
+       "description": "End of that window. Defaults to now. Must carry a timezone.",
        "title": "End"
-      }
+      },
+      "description": "End of that window. Defaults to now. Must carry a timezone."
      },
      {
       "name": "member_type",
@@ -817,8 +889,10 @@
          "type": "null"
         }
        ],
+       "description": "Membership held over the window.",
        "title": "Member Type"
-      }
+      },
+      "description": "Membership held over the window."
      },
      {
       "name": "supervisor",
@@ -833,8 +907,10 @@
          "type": "null"
         }
        ],
+       "description": "SARC id of a supervisor over the window.",
        "title": "Supervisor"
-      }
+      },
+      "description": "SARC id of a supervisor over the window."
      },
      {
       "name": "limit",
@@ -842,9 +918,11 @@
       "required": false,
       "schema": {
        "type": "integer",
+       "description": "Maximum number of results per page. Defaults to 100.",
        "default": 100,
        "title": "Limit"
-      }
+      },
+      "description": "Maximum number of results per page. Defaults to 100."
      },
      {
       "name": "cursor",
@@ -862,8 +940,10 @@
          "type": "null"
         }
        ],
+       "description": "Where to resume from: the `cursor` returned by the previous page, or an integer offset.",
        "title": "Cursor"
-      }
+      },
+      "description": "Where to resume from: the `cursor` returned by the previous page, or an integer offset."
      }
     ],
     "responses": {
@@ -902,8 +982,10 @@
       "required": true,
       "schema": {
        "type": "integer",
+       "description": "SARC database id of the user.",
        "title": "Id"
-      }
+      },
+      "description": "SARC database id of the user."
      }
     ],
     "responses": {
@@ -942,8 +1024,10 @@
       "required": true,
       "schema": {
        "type": "string",
+       "description": "Email of the user.",
        "title": "Email"
-      }
+      },
+      "description": "Email of the user."
      }
     ],
     "responses": {
