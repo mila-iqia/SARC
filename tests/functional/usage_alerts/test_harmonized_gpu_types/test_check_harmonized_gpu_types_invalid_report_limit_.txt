@@ -1,0 +1,2 @@
+Invalid report_limit (must be > 0) for harmonized GPU types: 0
+[harmonized_gpu_types_invalid_report_limit] FAILURE: harmonized_gpu_types_invalid_report_limit

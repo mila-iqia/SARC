@@ -24,6 +24,7 @@ token.json
 .zed
 .claude
 .mypy_cache
+AGENTS.md
 GEMINI.md
 CLAUDE.md
 .pytype
