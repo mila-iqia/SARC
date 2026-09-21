@@ -15,6 +15,14 @@ author = "Mila"
 
 extensions = ["myst_parser", "sphinxcontrib.openapi", "sphinxcontrib.mermaid"]
 
+# Without this, myst passes ```mermaid fences to Pygments as a language
+# and the diagrams render as plain code blocks.
+myst_fence_as_directive = ["mermaid"]
+
+# The pages use GitHub's alert syntax (`> [!NOTE]`), which myst renders as a
+# plain quote with the marker left in the text unless this is enabled.
+myst_enable_extensions = ["alert"]
+
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
