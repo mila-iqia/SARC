@@ -1,9 +1,10 @@
 from dataclasses import dataclass
 
 from simple_parsing import subparsers
-from sqlmodel import Session, text
+from sqlmodel import Session
 
 from sarc.config import config
+from sarc.db.maintenance import vacuum_database
 from sarc.patch import declare_patch
 
 from .allocations import ParseAllocations
@@ -44,6 +45,8 @@ class Parse:
             patch_db(sess)
             sess.commit()
         res = self.command.execute()
-        with config.db.session() as sess:
-            sess.execute(text("analyze"))  # ty: ignore[deprecated]
+        # Restore visibility maps + stats after scrapers that write job data
+        # (see sarc/db/maintenance.py for why and how).
+        if isinstance(self.command, ParseJobs | ParsePrometheus):
+            vacuum_database()
         return res
