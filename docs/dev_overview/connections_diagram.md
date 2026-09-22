@@ -1,3 +1,5 @@
+# Connections diagram
+
 <div style="background-color: #838383;">
 
 ```mermaid
