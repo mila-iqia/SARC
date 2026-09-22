@@ -4,7 +4,6 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 
 from sqlmodel import col, select
-from tqdm import tqdm
 
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.validators import datetime_utc
@@ -62,9 +61,10 @@ def check_old_running_jobs(since: datetime_utc | None = None) -> bool:
                 (job.cluster_id, job.job_id) for job in jobs_over_limit
             }
             job_story: dict[tuple[int, int], list[SlurmJobDB]] = {}
-            for cluster_id, job_id in tqdm(
-                index_jobs, total=len(index_jobs), desc="running job states"
-            ):
+            logger.debug(
+                f"Getting latest job state for {len(index_jobs)} running cluster jobs"
+            )
+            for cluster_id, job_id in index_jobs:
                 local_query = select(SlurmJobDB).where(
                     SlurmJobDB.cluster_id == cluster_id, SlurmJobDB.job_id == job_id
                 )
