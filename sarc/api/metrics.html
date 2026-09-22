@@ -764,17 +764,32 @@
       return { showlegend: true, legend: { orientation: 'h', x: 0, xanchor: 'left', yanchor: 'bottom', y: 1.02 } };
     }
 
-    // Stable colour per cluster (assigned by sorted index).
-    // Palette assigned by stacking order (largest cluster first). Ordered to
-    // match the current clusters-by-size; purely positional (not keyed on names),
-    // so it may no longer match the reference if the size ranking changes.
-    const CLUSTER_COLORS = ['#29a3f5', '#2e3192', '#e0479e', '#6d2d91', '#e8852a', '#2ca02c', '#17becf', '#8c564b'];
-    // Distinct colour for cluster i of n: fixed palette when it fits, else
-    // evenly-spaced HSL hues so any number of clusters stays distinguishable.
-    function clusterColor(i, n) {
-      return n <= CLUSTER_COLORS.length
-        ? CLUSTER_COLORS[i]
-        : `hsl(${Math.round(360 * i / n)}, 65%, 52%)`;
+    // Colour locked on the cluster NAME: the same cluster keeps the same
+    // colour whatever the date range, the cluster filters or the requesting
+    // user. (The old palette was positional — assigned by total-RGU rank in
+    // the current window — so colours drifted with every query and differed
+    // between admin and per-user views. Colours below match the ranking of
+    // 2026-04-01 → 2026-09-22.) Add a line per new cluster to give it a
+    // chosen colour; unknown clusters fall back to a name-hashed hue below.
+    const CLUSTER_COLOR_BY_NAME = {
+      mila: '#29a3f5',
+      tamia: '#2e3192',
+      fir: '#e0479e',
+      rorqual: '#6d2d91',
+      nibi: '#e8852a',
+      grillium: '#2ca02c',
+      narval: '#17becf',
+      trillium: '#8c564b',
+    };
+    // Fallback for clusters absent from the map: hue hashed on the name, so
+    // an un-mapped cluster still gets one stable colour (independent of which
+    // other clusters happen to be in the window).
+    function clusterColor(name) {
+      const known = CLUSTER_COLOR_BY_NAME[name];
+      if (known) return known;
+      let h = 0;
+      for (let i = 0; i < name.length; i++) h = (h * 31 + name.charCodeAt(i)) >>> 0;
+      return `hsl(${h % 360}, 65%, 52%)`;
     }
 
     // Base colour of each RGU segment. Shared by the bars and by the discs in
@@ -1741,10 +1756,10 @@
         let cum = 0;
         for (const i of order) { bases[i][p] = cum; cum += yvals[i][p]; }
       }
-      // Colour is keyed on the by-total index i, so each cluster keeps its current
-      // colour; the traces are then sorted by name so the legend reads A→Z. Trace
-      // order is cosmetic here — the per-period `base` stacking above is independent
-      // of it.
+      // Colour is keyed on the cluster name (CLUSTER_COLOR_BY_NAME), so it is
+      // stable across windows, filters and users; the traces are then sorted
+      // by name so the legend reads A→Z. Trace order is cosmetic here — the
+      // per-period `base` stacking above is independent of it.
       const traces = series.map((s, i) => ({
         type: 'bar', name: s.cluster,
         // customdata = [period_end (for click-focus), this cluster's value]. We
@@ -1752,7 +1767,7 @@
         // %{y} renders the cumulative top (base + value), not the segment value.
         x: x, y: yvals[i], base: bases[i],
         customdata: ends.map((e, p) => [e, yvals[i][p]]),
-        marker: { color: clusterColor(i, series.length), opacity: opac },
+        marker: { color: clusterColor(s.cluster), opacity: opac },
         hovertemplate: s.cluster + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[1]:,.2f}<extra></extra>',
       })).sort((a, b) => a.name.localeCompare(b.name));
       Plotly.react(id, traces, pLayout({
