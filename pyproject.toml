@@ -77,7 +77,6 @@ dev = [
     "myst-parser>=5,<6",
     "sphinxcontrib-mermaid>=2.0.2",
 ]
-examples = ["seaborn>=0.13.2,<0.14"]
 
 # to consider
 #  - DTZ: datetimes without timezones (not right now)
@@ -105,7 +104,6 @@ ignore = [
 [tool.ruff.lint.per-file-ignores]
 "tests/**" = ["ARG", "E", "PERF", "T20"]
 "sarc/testing/**" = ["T20"]
-"examples/**" = ["T20"]
 "docs/**" = ["T20"]
 "scripts/**" = ["T201"]
 
@@ -113,10 +111,7 @@ ignore = [
 "sqlmodel.SQLModel".msg = "Use 'from sarc.db.sqlmodel import SQLModel' (only for the SQLModel class itself)"
 
 [tool.uv]
-default-groups = [
-    "dev",
-    "examples",
-]
+default-groups = ["dev"]
 
 [tool.uv.sources]
 iguane = { git = "https://github.com/mila-iqia/IGUANE.git", rev = "9cd7b5e1253033c935e39da9c1b8a22cda440112" }
