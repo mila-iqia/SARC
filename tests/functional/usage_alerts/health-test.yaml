@@ -247,6 +247,53 @@ sarc:
         active: true
         time_interval: 0s
 
+      # zero_sm_occupancy_power_* checks correspond to test params in
+      # test_zero_sm_occupancy_power.py (SEED in the test file).
+      #
+      # Anomalies seeded on raisin: one submitted 2h before MOCK_TIME (250 W),
+      # one submitted 8 days before MOCK_TIME (350 W); fromage has one submitted
+      # 2h before MOCK_TIME at exactly 100 W.
+      zero_sm_occupancy_power_default:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+      zero_sm_occupancy_power_all:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        time_interval: null
+      zero_sm_occupancy_power_threshold_300:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        time_interval: null
+        min_power_watts: 300
+      zero_sm_occupancy_power_threshold_300_recent:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        min_power_watts: 300
+      zero_sm_occupancy_power_clusters:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        time_interval: null
+        cluster_names:
+          - raisin
+          - invisible-cluster
+      zero_sm_occupancy_power_report_limit_1:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        time_interval: null
+        report_limit: 1
+      zero_sm_occupancy_power_invalid_interval:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        time_interval: 0s
+      zero_sm_occupancy_power_invalid_threshold:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        min_power_watts: 0
+      zero_sm_occupancy_power_invalid_report_limit:
+        $class: "sarc.alerts.usage_alerts.zero_sm_occupancy_power:ZeroSmOccupancyPowerCheck"
+        active: true
+        report_limit: 0
+
       # same_job_id_* checks correspond to test params in test_alert_same_job_id.py
       same_job_id_default:
         $class: "sarc.alerts.usage_alerts.same_job_id:SameJobIdCheck"

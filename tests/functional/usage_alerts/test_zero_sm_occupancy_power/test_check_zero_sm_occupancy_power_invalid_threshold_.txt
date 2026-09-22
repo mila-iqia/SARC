@@ -1,0 +1,2 @@
+Invalid min_power_watts (must be > 0) for zero-occupancy power: 0
+[zero_sm_occupancy_power_invalid_threshold] FAILURE: zero_sm_occupancy_power_invalid_threshold

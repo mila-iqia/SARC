@@ -1,0 +1,2 @@
+Invalid time_interval (must be > 0) for zero-occupancy power: 0:00:00
+[zero_sm_occupancy_power_invalid_interval] FAILURE: zero_sm_occupancy_power_invalid_interval
