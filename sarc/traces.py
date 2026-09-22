@@ -1,9 +1,12 @@
 import functools
 import inspect
+import logging
 from contextlib import contextmanager
 from typing import Callable, Iterator
 
 from opentelemetry.trace import Span, Status, StatusCode, get_tracer
+
+logger = logging.getLogger(__name__)
 
 
 # context manager to manage traces & span,
@@ -26,6 +29,7 @@ def using_trace(
     exception_types : tuple, optional
         Types of exceptions to catch, other types will be raised.
         By default, `Exception` is caught so that nothing would be raised.
+        Caught exceptions are recorded on the span and logged as errors.
 
     Yields
     ------
@@ -41,8 +45,19 @@ def using_trace(
             span.set_status(Status(StatusCode.ERROR))
             span.record_exception(exc)
 
-            # re-raise the exception to be caught by the caller
-            if not isinstance(exc, exception_types):
+            if isinstance(exc, exception_types):
+                # The exception is not re-raised: without this log it would
+                # only be visible in the tracing backend, and callers would
+                # silently keep stale data.
+                logger.error(
+                    "Ignoring exception caught by trace '%s/%s': %s",
+                    tracer_name,
+                    span_name,
+                    exc,
+                    exc_info=exc,
+                )
+            else:
+                # re-raise the exception to be caught by the caller
                 raise
 
 

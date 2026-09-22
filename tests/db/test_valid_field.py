@@ -225,3 +225,47 @@ def test_db_upper_inf_and_input_upper_inf_diff_value_clipped2(user_and_field):
     assert len(bob_records) == 1
     assert bob_records[0].valid.lower == dt(2020)
     assert bob_records[0].valid.upper == dt(2022)
+
+
+def test_truncate_overlapping_diff_value_stores_remainder(user_and_field):
+    """truncate=True keeps the stored range and only stores the uncovered tail."""
+    sess, user, field = user_and_field
+    field.insert("alice", start=dt(2020), end=dt(2023))
+    field.insert("bob", start=dt(2020), end=dt(2025), truncate=True)
+    assert field.get_value(dt(2021)) == "alice"
+    assert field.get_value(dt(2024)) == "bob"
+    records = sorted(get_records(sess, user.id), key=lambda r: r.valid.lower)
+    assert [(r.valid.lower, r.valid.upper, r.username) for r in records] == [
+        (dt(2020), dt(2023), "alice"),
+        (dt(2023), dt(2025), "bob"),
+    ]
+
+
+def test_truncate_fully_covered_diff_value_is_noop(user_and_field):
+    """truncate=True silently drops an input fully covered by a different value."""
+    sess, user, field = user_and_field
+    field.insert("alice", start=dt(2020), end=dt(2025))
+    field.insert("bob", start=dt(2021), end=dt(2023), truncate=True)
+    records = get_records(sess, user.id)
+    assert len(records) == 1
+    assert records[0].username == "alice"
+
+
+def test_truncate_diff_value_inserts_gaps(user_and_field):
+    """truncate=True inserts the parts of the input around stored ranges."""
+    sess, user, field = user_and_field
+    field.insert("alice", start=dt(2021), end=dt(2023))
+    field.insert("bob", start=dt(2020), end=dt(2025), truncate=True)
+    assert field.get_value(dt(2020)) == "bob"
+    assert field.get_value(dt(2022)) == "alice"
+    assert field.get_value(dt(2024)) == "bob"
+
+
+def test_truncate_same_value_still_merges(user_and_field):
+    """truncate=True does not change how same-value ranges are merged."""
+    sess, user, field = user_and_field
+    field.insert("alice", start=dt(2020), end=dt(2023))
+    field.insert("alice", start=dt(2020), end=dt(2025), truncate=True)
+    records = get_records(sess, user.id)
+    assert len(records) == 1
+    assert records[0].valid.upper == dt(2025)

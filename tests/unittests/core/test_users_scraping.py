@@ -9,9 +9,10 @@ from typing import Any
 from unittest.mock import patch
 
 import pytest
+from sqlmodel import select
 
 from sarc.cache import Cache
-from sarc.db.users import UserDB
+from sarc.db.users import MatchingID, MemberTypeDB, SupervisorsDB, UserDB
 from sarc.models.user import MemberType
 from sarc.scraping.users import (
     Credentials,
@@ -558,3 +559,64 @@ def test_parse_users_supervisor_ordering_before_fix(mock_get_scraper, read_write
     sups = u.supervisors.values_in_range(None, None)
     assert len(sups) == 1
     assert len(sups[0]) == 1
+
+
+def test_member_type_promotion_replaced_in_place(read_write_db):
+    """A master's nomination that becomes a PhD in the source must update the DB.
+
+    MyMila updates a student's record in place (same Start_Date_with_MILA,
+    affiliation master -> PhD, later end date), so the re-reported member type
+    fully overlaps the stored one with a different value. This used to raise
+    DateOverlapError, get swallowed by update_user's using_trace, and silently
+    freeze the user's member type (and the supervisors merged after it).
+    """
+    supervisor = UserDB(display_name="Prof X", email="prof.x@example.com")
+    read_write_db.add(supervisor)
+    read_write_db.flush()
+    read_write_db.add(
+        MatchingID(user_id=supervisor.id, plugin_name="mock", match_id="promotion_sup")
+    )
+
+    student = UserDB(display_name="Alice Student", email="alice.promo@example.com")
+    read_write_db.add(student)
+    read_write_db.flush()
+    read_write_db.add(
+        MatchingID(user_id=student.id, plugin_name="mock", match_id="promotion_student")
+    )
+
+    start = datetime(2024, 2, 1, tzinfo=UTC)
+    masters_end = datetime(2026, 8, 31, tzinfo=UTC)
+    phd_end = datetime(2030, 8, 31, tzinfo=UTC)
+    student.member_type.insert(MemberType.MASTER_RESEARCH, start, masters_end)
+    student.supervisors.insert([supervisor.id], start, masters_end)
+    read_write_db.flush()
+
+    # The same student, re-reported after the master's -> PhD conversion
+    um = UserMatch(
+        display_name="Alice Student",
+        email="alice.promo@example.com",
+        sort_sub=0,
+        matching_id=MatchID(name="mock", mid="promotion_student"),
+    )
+    um.member_type.insert(MemberType.PHD_STUDENT, start, phd_end)
+    um.supervisors.insert([MatchID(name="mock", mid="promotion_sup")], start, phd_end)
+
+    update_user(read_write_db, um)
+
+    db_student = UserDB.by_email(read_write_db, "alice.promo@example.com")
+    assert db_student is not None
+    rows = read_write_db.exec(
+        select(MemberTypeDB).where(MemberTypeDB.user_id == db_student.id)
+    ).all()
+    # The stored master's history is kept and the PhD covers the rest
+    assert {(r.member_type, r.valid.lower, r.valid.upper) for r in rows} == {
+        (MemberType.MASTER_RESEARCH, start, masters_end),
+        (MemberType.PHD_STUDENT, masters_end, phd_end),
+    }
+    # The supervisors merge after the member type must have gone through too
+    sups = db_student.supervisors.values_in_range(None, None)
+    assert sups == [[supervisor.id]]
+    sups_db = read_write_db.exec(
+        select(SupervisorsDB).where(SupervisorsDB.user_id == db_student.id)
+    ).all()
+    assert [(s.valid.lower, s.valid.upper) for s in sups_db] == [(start, phd_end)]
