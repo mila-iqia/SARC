@@ -1,0 +1,30 @@
+%%{init: {"layout": "elk"}}%%
+erDiagram
+    direction LR
+    clusters ||--|{ allocationdb : cluster_id
+    users ||--|{ credentialsdb : user_id
+    diskusage_reports ||--|{ diskusage_groups : report_id
+    clusters ||--|{ diskusage_reports : cluster_id
+    diskusage_groups ||--|{ diskusage_users : group_id
+    clusters ||--|{ gpubillingdb : cluster_id
+    slurm_jobs ||--|{ job_series : job_db_id
+    slurm_jobs ||--|{ jobstatisticdb : job_id
+    slurm_jobs ||--|{ jobstatistics_fetchdate : job_id
+    jobstatisticdb ||--o{ jobstatistics_fetchdate : jobstatistic_id
+    users ||--|{ matchingid : user_id
+    users ||--|{ membertypedb : user_id
+    clusters ||--|{ nodegpumappingdb : cluster_id
+    clusters ||--|{ slurm_jobs : cluster_id
+    slurm_jobs }o--|| gpurgudb : "harmonized_gpu_type → name"
+    users ||--|{ slurm_jobs : sarc_user_id
+    user_supervisors ||--|{ supervisorshelper : list_id
+    users ||--|{ supervisorshelper : supervisor
+    users ||--|{ user_periods : user_id
+    clusters ||--|{ user_periods : cluster_id
+    users ||--|{ user_supervisors : user_id
+    healthcheckstatedb {
+        integer id PK
+    }
+    parsedates {
+        varchar name PK
+    }

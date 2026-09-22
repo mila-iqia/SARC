@@ -23,6 +23,19 @@ myst_fence_as_directive = ["mermaid"]
 # plain quote with the marker left in the text unless this is enabled.
 myst_enable_extensions = ["alert"]
 
+# The ER diagram in dev_overview/db_tables.md asks for the elk layout engine;
+# without this mermaid falls back to dagre without a word.
+mermaid_include_elk = True
+
+# The default fullscreen glyph is U+26F6, which no font here covers, so the
+# button shows a tofu box. U+2922 is the same idea and is covered.
+mermaid_fullscreen_button = "⤢"
+
+# The default pins every diagram's svg to 500px tall, which letterboxes the
+# small ones and shrinks the big ones; auto lets each keep its aspect ratio
+# at full width.
+mermaid_height = "auto"
+
 templates_path = ["_templates"]
 exclude_patterns = ["_build", "Thumbs.db", ".DS_Store"]
 
