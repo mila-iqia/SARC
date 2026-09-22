@@ -94,6 +94,7 @@ class ValidField[V]:
         start: datetime | None = None,
         end: datetime | None = None,
         session: SASession | None = None,
+        truncate: bool = False,
     ) -> None:
         """Add a value with optional validity bounds.
 
@@ -105,6 +106,10 @@ class ValidField[V]:
         exisiting values and the end bound of the most recent value is None (aka infinite),
         instead of an overlapping error, the bound of the most recent value will
         be adjusted to end at the start of the new value.
+
+        If truncate=True, an overlap with a different value is not an error:
+        the inserted range is reduced to the parts that existing values do not
+        cover (see merge_with).
         """
         if session is None:
             session = self.session
@@ -116,7 +121,9 @@ class ValidField[V]:
             assert end.tzinfo is not None
             end = end.astimezone(UTC)
 
-        self._insert_tag(session, value, Range(start, end, bounds="[)"))
+        self._insert_tag(
+            session, value, Range(start, end, bounds="[)"), truncate=truncate
+        )
         session.flush()
 
     def _insert_tag(
@@ -421,11 +428,12 @@ class SupervisorIDsField:
         start: datetime | None = None,
         end: datetime | None = None,
         session: SASession | None = None,
+        truncate: bool = False,
     ) -> None:
         helpers = [
             SupervisorsHelper(pos=i, supervisor=sid) for i, sid in enumerate(value)
         ]
-        self._field.insert(helpers, start, end, session)
+        self._field.insert(helpers, start, end, session, truncate=truncate)
 
 
 class MatchingID(SQLModel, table=True):

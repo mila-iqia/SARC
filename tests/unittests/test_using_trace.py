@@ -164,3 +164,29 @@ def test_using_trace_error_nested(captrace):
     assert "event1.1" in [e.name for e in spans[1].events]
     assert "event1.2" in [e.name for e in spans[1].events]
     assert spans[1].status.status_code == StatusCode.OK
+
+
+def test_using_trace_swallowed_exception_is_logged(caplog):
+    # An exception caught and swallowed by using_trace (the default) must be
+    # visible in the logs, not only recorded on the span.
+    with caplog.at_level("ERROR", logger="sarc.traces"):
+        with using_trace("test_using_trace_logging", "span_swallowed"):
+            raise ValueError("boom")
+
+    assert "boom" in caplog.text
+    assert "span_swallowed" in caplog.text
+
+
+def test_using_trace_reraised_exception_not_logged(caplog):
+    # Exceptions that are re-raised are left to the caller: using_trace must
+    # not log them (it would double-report them up the call stack).
+    with caplog.at_level("ERROR", logger="sarc.traces"):
+        with pytest.raises(ValueError):
+            with using_trace(
+                "test_using_trace_logging",
+                "span_reraised",
+                exception_types=(ZeroDivisionError,),
+            ):
+                raise ValueError("not swallowed")
+
+    assert "not swallowed" not in caplog.text

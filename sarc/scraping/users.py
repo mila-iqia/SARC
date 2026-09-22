@@ -304,13 +304,21 @@ def update_user(sess: Session, user: UserMatch) -> None:
 
 @overload
 def valid_merge[T](
-    valid: ValidField[T], db_valid: ValidFieldDB[T], *, map: None = None
+    valid: ValidField[T],
+    db_valid: ValidFieldDB[T],
+    *,
+    map: None = None,
+    truncate: bool = False,
 ) -> None: ...
 
 
 @overload
 def valid_merge[T, U](
-    valid: ValidField[T], db_valid: ValidFieldDB[U], *, map: Callable[[T], U]
+    valid: ValidField[T],
+    db_valid: ValidFieldDB[U],
+    *,
+    map: Callable[[T], U],
+    truncate: bool = False,
 ) -> None: ...
 
 
@@ -320,6 +328,7 @@ def valid_merge[T, U](
     db_valid: ValidFieldDB[U],
     *,
     map: Callable[[T], U] | None = None,
+    truncate: bool = False,
 ) -> None:
     if map is None:
 
@@ -329,19 +338,28 @@ def valid_merge[T, U](
         map = mapf
 
     for tag in valid.values:
-        db_valid.insert(map(tag.value), tag.valid.lower, tag.valid.upper)
+        db_valid.insert(
+            map(tag.value), tag.valid.lower, tag.valid.upper, truncate=truncate
+        )
 
 
 @trace_decorator()
 def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
+    # truncate=True because the scraped data is a re-report of the current
+    # state, not new history: when a source changes a value in place (e.g. a
+    # MyMila master's nomination becomes a PhD with the same start date and a
+    # later end date), the incoming range overlaps the previously stored
+    # different value. Instead of failing, keep the stored history and insert
+    # only the range it does not cover, like update_user_match does within a
+    # single cache entry.
     for domain, creds in user.associated_accounts.items():
-        valid_merge(creds, db_user.associated_accounts[domain])
-    valid_merge(user.member_type, db_user.member_type)
+        valid_merge(creds, db_user.associated_accounts[domain], truncate=True)
+    valid_merge(user.member_type, db_user.member_type, truncate=True)
 
     def map_super(match_id: MatchID) -> int:
         res = lookup_match_id(sess, match_id)
         if len(res) == 0:
-            raise ValueError("Supervisor (%s) not found in database")
+            raise ValueError(f"Supervisor {match_id} not found in database")
         else:
             if len(res) > 1:
                 logger.error(
@@ -355,6 +373,7 @@ def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
         user.supervisors,
         db_user.supervisors,
         map=lambda v: sorted(map_super(m) for m in v),
+        truncate=True,
     )  # ty:ignore[no-matching-overload]
 
 
