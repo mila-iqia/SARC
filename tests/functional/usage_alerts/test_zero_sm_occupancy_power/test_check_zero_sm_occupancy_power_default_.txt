@@ -1,0 +1,3 @@
+[fromage] 1 job submitted since 2023-11-15 00:00:00+00:00 has gpu_sm_occupancy.max = 0 but gpu_power.max >= 100 W (100000 mW): e.g. job_id 15 (100000 mW)
+[raisin] 1 job submitted since 2023-11-15 00:00:00+00:00 has gpu_sm_occupancy.max = 0 but gpu_power.max >= 100 W (100000 mW): e.g. job_id 1 (250000 mW)
+[zero_sm_occupancy_power_default] FAILURE: zero_sm_occupancy_power_default
