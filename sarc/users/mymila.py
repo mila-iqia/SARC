@@ -144,6 +144,12 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
         assert headers[-1] == "_MEMBER_NUM_"
         headers[-1] = "MEMBER_NUM"
         assert headers == [h.name for h in Headers]
+        num_to_email: dict[int, str] = {}
+        for record in records:
+            email = record[Headers.MILA_Email]
+            member_num = record[Headers.MEMBER_NUM]
+            if email is not None and member_num not in Invalid_MEMBER_NUM:
+                num_to_email[member_num] = email.lower()
         for i, record in enumerate(records):
             if (
                 record[Headers.MILA_Email] is None
@@ -194,14 +200,30 @@ class MyMilaScraper(UserScraper[MyMilaConfig]):
                 supervisors = []
                 supervisor = record[Headers.Supervisor_Principal__MEMBER_NUM_]
                 if supervisor is not None and supervisor not in Invalid_MEMBER_NUM:
-                    supervisors.append(MatchID(name="mymila", mid=str(supervisor)))
+                    sup_email = num_to_email.get(supervisor)
+                    if sup_email is not None:
+                        supervisors.append(MatchID(name="mila_ldap", mid=sup_email))
+                    else:
+                        logger.warning(
+                            "Supervisor %s of %s not found in MyMila extract, skipping",
+                            supervisor,
+                            um.email,
+                        )
 
                 co_supervisor = record[Headers.Co_Supervisor__MEMBER_NUM_]
                 if (
                     co_supervisor is not None
                     and co_supervisor not in Invalid_MEMBER_NUM
                 ):
-                    supervisors.append(MatchID(name="mymila", mid=str(co_supervisor)))
+                    co_sup_email = num_to_email.get(co_supervisor)
+                    if co_sup_email is not None:
+                        supervisors.append(MatchID(name="mila_ldap", mid=co_sup_email))
+                    else:
+                        logger.warning(
+                            "Co-supervisor %s of %s not found in MyMila extract, skipping",
+                            co_supervisor,
+                            um.email,
+                        )
                 if len(supervisors) != 0:
                     um.supervisors.insert(supervisors, start=start_date, end=end_date)
             yield um

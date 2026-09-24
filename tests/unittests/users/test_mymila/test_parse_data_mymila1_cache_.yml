@@ -49,8 +49,8 @@
         lower: '2023-09-01T00:00:00Z'
         upper: '2024-09-01T00:00:00Z'
       value:
-      - mid: '1'
-        name: mymila
+      - mid: john.smith001@mila.quebec
+        name: mila_ldap
 - associated_accounts: {}
   display_name: John Smith005
   email: john.smith005@mila.quebec
@@ -85,10 +85,10 @@
         lower: '2023-09-01T00:00:00Z'
         upper: '2025-09-01T00:00:00Z'
       value:
-      - mid: '0'
-        name: mymila
-      - mid: '1'
-        name: mymila
+      - mid: john.smith000@mila.quebec
+        name: mila_ldap
+      - mid: john.smith001@mila.quebec
+        name: mila_ldap
 - associated_accounts: {}
   display_name: John Smith007
   email: john.smith007@mila.quebec
@@ -106,8 +106,8 @@
         lower: '2023-09-01T00:00:00Z'
         upper: '2025-09-01T00:00:00Z'
       value:
-      - mid: '1'
-        name: mymila
+      - mid: john.smith001@mila.quebec
+        name: mila_ldap
 - associated_accounts: {}
   display_name: Jane Smith008
   email: john.smith008@mila.quebec
@@ -146,7 +146,7 @@
         lower: '2023-09-01T00:00:00Z'
         upper: '2024-09-01T00:00:00Z'
       value:
-      - mid: '0'
-        name: mymila
-      - mid: '1'
-        name: mymila
+      - mid: john.smith000@mila.quebec
+        name: mila_ldap
+      - mid: john.smith001@mila.quebec
+        name: mila_ldap
