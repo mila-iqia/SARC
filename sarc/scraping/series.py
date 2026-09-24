@@ -202,10 +202,6 @@ def compute_metric_statistics(
     usable sample remains. std uses ddof=0 (population std, 0.0 for a single
     sample): jobs are only fetched once finished, so their samples form the
     complete population. Quantiles interpolate linearly.
-
-    A detected DCGM PROF blackout (sarc.scraping.dcgm.dcgm_prof_blackout)
-    drops the whole PROF family from the result, keeping DEV power and the
-    cgroup metrics: their false zeros must not reach the database.
     """
     if not results:
         return None
@@ -261,6 +257,12 @@ _PROF_BLACKOUT_STATS = (
 def compute_job_statistics(
     job: SlurmJobDB, prom_stats: list[dict]
 ) -> dict[str, JobStatisticDB]:
+    """Compute the stored statistics of a job from its raw Prometheus series.
+
+    A detected DCGM PROF blackout (sarc.scraping.dcgm.dcgm_prof_blackout)
+    drops the whole PROF family from the result, keeping DEV power and the
+    cgroup metrics: their false zeros must not reach the database.
+    """
     # We get all required job time series with just 1 call to
     # get_job_time_series(), then split them by metric.
     metric_to_data: dict[str, list[dict]] = {

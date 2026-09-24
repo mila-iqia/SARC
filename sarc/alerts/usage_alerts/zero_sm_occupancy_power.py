@@ -10,7 +10,7 @@ from sqlmodel import and_, col, func, select
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
-from sarc.scraping.dcgm import dcgm_prof_blackout_conditions
+from sarc.scraping.dcgm import DEFAULT_MIN_POWER_MW, dcgm_prof_blackout_conditions
 
 logger = logging.getLogger(__name__)
 
@@ -18,15 +18,14 @@ OCCUPANCY_STAT = "gpu_sm_occupancy"
 MEMORY_STAT = "gpu_memory"
 POWER_STAT = "gpu_power"
 
-# `slurm_job_power_gpu` is exposed in mW by the exporter
-# (github.com/guilbaults/slurm-job-exporter) and sarc stores it untouched,
-# so the stored statistics are mW too.
+# The stored power statistics are mW (see sarc.scraping.dcgm.DEFAULT_MIN_POWER_MW).
 WATTS_PER_MW = 1000.0
+DEFAULT_MIN_POWER_WATTS = DEFAULT_MIN_POWER_MW / WATTS_PER_MW
 
 
 def check_zero_sm_occupancy_power(
     time_interval: timedelta | None = timedelta(days=7),
-    min_power_watts: float = 100.0,
+    min_power_watts: float = DEFAULT_MIN_POWER_WATTS,
     report_limit: int = 5,
     cluster_names: list[str] | None = None,
 ) -> bool:
@@ -40,10 +39,7 @@ def check_zero_sm_occupancy_power(
 
     A resting job with a power spike is no longer reported: resting jobs with a
     live CUDA context usually keep measurable DRAM activity, and a truly idle
-    GPU does not burn `min_power_watts`. The statistics must all be present:
-    the pipeline drops DCGM BLANK/NaN samples before aggregation, so a missing
-    statistic is an honest "no sample" and stays out (a stored 0 means real
-    zero samples).
+    GPU does not burn `min_power_watts`.
 
     Parameters
     ----------
@@ -54,7 +50,8 @@ def check_zero_sm_occupancy_power(
         If None, all jobs are checked.
     min_power_watts: float
         Alert from this per-GPU power draw up, in watts (compared against the
-        mW-stored `gpu_power.max`). Default is 100.
+        mW-stored `gpu_power.max`). Default is 100
+        (`sarc.scraping.dcgm.DEFAULT_MIN_POWER_MW`).
     report_limit: int
         How many example jobs to name per alert, newest first. Default is 5.
     cluster_names: list
@@ -176,7 +173,7 @@ class ZeroSmOccupancyPowerCheck(HealthCheck):
     """Health check for GPU jobs drawing power with zero SM occupancy."""
 
     time_interval: timedelta | None = timedelta(days=7)
-    min_power_watts: float = 100.0
+    min_power_watts: float = DEFAULT_MIN_POWER_WATTS
     report_limit: int = 5
     cluster_names: list[str] | None = None
 

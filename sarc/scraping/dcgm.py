@@ -57,11 +57,10 @@ def dcgm_prof_blackout(
     A missing (None) statistic is an honest "no usable sample" -- never
     flagged, and so are NaN/infinity. `gpu_utilization` and the fp* ratios
     are deliberately absent from the rule: they are the same PROF family (no
-    extra signal, and their zeros/absences add only noise -- 41 % of known
-    blackouts have no fp64 statistic at all), and `gpu_utilization` switched
-    source from PROF SM_UTIL_RATIO to DEV GPU_UTIL (slurm-job-exporter #72),
-    so requiring it to be 0 would stop matching blackouts after that
-    exporter change.
+    extra signal, and their zeros/absences add only noise), and
+    `gpu_utilization` switched source from PROF SM_UTIL_RATIO to DEV GPU_UTIL
+    (slurm-job-exporter #72), so requiring it to be 0 would stop matching
+    blackouts after that exporter change.
 
     >>> dcgm_prof_blackout(0.0, 0.0, 150_000.0)
     True
