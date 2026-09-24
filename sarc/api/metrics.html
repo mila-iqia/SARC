@@ -388,7 +388,7 @@
       (e.head||e.getElementsByTagName('head')[0]).appendChild(s);
     }(window,document,'betterstack','KvQHwrtdHybRDS8anMJLVH6z');
     betterstack('init', { environment: 'production' });
-    betterstack('user', email: '{{ user_email }}')
+    betterstack('user', { email: '{{ user_email }}' });
   </script>
 </head>
 <body>
