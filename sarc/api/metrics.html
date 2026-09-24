@@ -379,6 +379,17 @@
     .range-panel .period-custom input[type="date"] { width: 130px; }
     .range-panel .period-custom label { white-space: nowrap; }
   </style>
+  <script>
+    !function(b,e,t,r){
+      b[t]=b[t]||function(...args){(b[t].q=b[t].q||[]).push(args)};
+      b[t].l=+new Date;
+      var s=e.createElement('script'); s.async=1; s.crossOrigin='anonymous';
+      s.src='https://betterstack.net/b.js?t='+r;
+      (e.head||e.getElementsByTagName('head')[0]).appendChild(s);
+    }(window,document,'betterstack','KvQHwrtdHybRDS8anMJLVH6z');
+    betterstack('init', { environment: 'production' });
+    betterstack('user', email: '{{ user_email }}')
+  </script>
 </head>
 <body>
   <h3 class="page-head">
