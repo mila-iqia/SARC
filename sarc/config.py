@@ -438,10 +438,22 @@ class UsageNotifyConfig:
 
 
 @dataclass
+class OTLPEndpoint:
+    endpoint: str
+    token: Secret[str] | None
+
+    def get_headers(self) -> dict[str, str]:
+        if self.token is None:
+            return {}
+        else:
+            return {"Authorization": "Bearer {self.token}"}
+
+
+@dataclass
 class LoggingConfig:
     log_level: str
-    OTLP_log_endpoint: str | None = None
-    OTLP_trace_endpoint: str | None = None
+    OTLP_log_endpoint: OTLPEndpoint | None = None
+    OTLP_trace_endpoint: OTLPEndpoint | None = None
     service_name: str | None = None
     slack: SlackConfig | None = None
 

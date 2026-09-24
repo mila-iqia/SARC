@@ -33,7 +33,10 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     )
     set_logger_provider(logger_provider)
 
-    otlp_exporter = OTLPLogExporter(log_conf.OTLP_log_endpoint)
+    otlp_exporter = OTLPLogExporter(
+        endpoint=log_conf.OTLP_log_endpoint.endpoint,
+        headers=log_conf.OTLP_log_endpoint.get_headers(),
+    )
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     # Use logging.NOTSET to let the logger level control filtering, not the handler
     return LoggingHandler(level=logging.NOTSET, logger_provider=logger_provider)
@@ -62,7 +65,10 @@ def setup_opentelemetry_tracing(log_conf: LoggingConfig):
     tracer_provider = TracerProvider(resource=resource)
     trace.set_tracer_provider(tracer_provider)
 
-    trace_exporter = OTLPSpanExporter(endpoint=log_conf.OTLP_trace_endpoint)
+    trace_exporter = OTLPSpanExporter(
+        endpoint=log_conf.OTLP_trace_endpoint.endpoint,
+        headers=log_conf.OTLP_trace_endpoint.get_headers(),
+    )
 
     span_processor = BatchSpanProcessor(trace_exporter)
     tracer_provider.add_span_processor(span_processor)
