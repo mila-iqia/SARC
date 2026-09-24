@@ -452,8 +452,8 @@ class OTLPEndpoint:
 @dataclass
 class LoggingConfig:
     log_level: str
-    OTLP_log_endpoint: OTLPEndpoint | None = None
-    OTLP_trace_endpoint: OTLPEndpoint | None = None
+    OTLP_log: OTLPEndpoint | None = None
+    OTLP_trace: OTLPEndpoint | None = None
     service_name: str | None = None
     slack: SlackConfig | None = None
 

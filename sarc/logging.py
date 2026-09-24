@@ -21,7 +21,7 @@ rapporteur_report: Report | None = None
 
 
 def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
-    if log_conf.OTLP_log_endpoint is None or log_conf.service_name is None:
+    if log_conf.OTLP_log is None or log_conf.service_name is None:
         return None
     logger_provider = LoggerProvider(
         resource=Resource.create(
@@ -34,8 +34,7 @@ def getOpenTelemetryLoggingHandler(log_conf: LoggingConfig):
     set_logger_provider(logger_provider)
 
     otlp_exporter = OTLPLogExporter(
-        endpoint=log_conf.OTLP_log_endpoint.endpoint,
-        headers=log_conf.OTLP_log_endpoint.get_headers(),
+        endpoint=log_conf.OTLP_log.endpoint, headers=log_conf.OTLP_log.get_headers()
     )
     logger_provider.add_log_record_processor(BatchLogRecordProcessor(otlp_exporter))
     # Use logging.NOTSET to let the logger level control filtering, not the handler
@@ -46,13 +45,13 @@ def tracing_enabled() -> bool:
     log_conf = config.logging
     return (
         log_conf is not None
-        and log_conf.OTLP_trace_endpoint is not None
+        and log_conf.OTLP_trace is not None
         and log_conf.service_name is not None
     )
 
 
 def setup_opentelemetry_tracing(log_conf: LoggingConfig):
-    if log_conf.OTLP_trace_endpoint is None or log_conf.service_name is None:
+    if log_conf.OTLP_trace is None or log_conf.service_name is None:
         return
 
     resource = Resource.create(
@@ -66,8 +65,7 @@ def setup_opentelemetry_tracing(log_conf: LoggingConfig):
     trace.set_tracer_provider(tracer_provider)
 
     trace_exporter = OTLPSpanExporter(
-        endpoint=log_conf.OTLP_trace_endpoint.endpoint,
-        headers=log_conf.OTLP_trace_endpoint.get_headers(),
+        endpoint=log_conf.OTLP_trace.endpoint, headers=log_conf.OTLP_trace.get_headers()
     )
 
     span_processor = BatchSpanProcessor(trace_exporter)
