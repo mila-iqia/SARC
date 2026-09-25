@@ -21,8 +21,8 @@ def get_job_time_series_batched(
 
     Arguments:
         jobs: The sequence of jobs for which to fetch metrics.
-        metric: The metric or list of metrics, which must be in ``slurm_job_metric_names``.
-        max_points: The maximal number of data points to return.
+        metric: The metric or list of metrics, which must be in
+            ``SLURM_JOB_METRIC_NAMES``.
 
     Returns:
         A list of result lists corresponding positionally to each job in `jobs`.
@@ -34,7 +34,7 @@ def get_job_time_series_batched(
     if not metrics:
         raise ValueError("No metrics given")
     for m in metrics:
-        if m not in slurm_job_metric_names:
+        if m not in SLURM_JOB_METRIC_NAMES:
             raise ValueError(f"Unknown metric name: {m}")
 
     now = datetime.now(tz=UTC)
@@ -111,11 +111,6 @@ def get_job_time_series_batched(
                     results[idx].append(series_copy)
 
     return results
-
-
-def get_job_time_series_metric_names() -> dict[str, str]:
-    """Return all the metric names that relate to slurm jobs."""
-    return slurm_job_metric_names
 
 
 STATS = TypedDict(
@@ -349,41 +344,37 @@ def compute_job_statistics(
     return res
 
 
-# Dictionary of slurm metric names:
-# We both list allowed metric names as key,
-# and we map each metric to a short name,
-# intended to be used to generate short cache key
-# for get_job_time_series().
-slurm_job_metric_names = {
-    "slurm_job_core_usage": "cu",
-    "slurm_job_core_usage_total": "cut",
-    "slurm_job_fp16_gpu": "f16g",
-    "slurm_job_fp32_gpu": "f32g",
-    "slurm_job_fp64_gpu": "f64g",
-    "slurm_job_memory_active_file": "maf",
-    "slurm_job_memory_cache": "mc",
-    "slurm_job_memory_inactive_file": "mif",
-    "slurm_job_memory_limit": "ml",
-    "slurm_job_memory_mapped_file": "mmf",
-    "slurm_job_memory_max": "mm",
-    "slurm_job_memory_rss": "mr",
-    "slurm_job_memory_rss_huge": "mrh",
-    "slurm_job_memory_unevictable": "mun",
-    "slurm_job_memory_usage": "mus",
-    "slurm_job_memory_usage_gpu": "mug",
-    "slurm_job_nvlink_gpu": "ng",
-    "slurm_job_nvlink_gpu_total": "ngt",
-    "slurm_job_pcie_gpu": "pcg",
-    "slurm_job_pcie_gpu_total": "pgt",
-    "slurm_job_power_gpu": "pwg",
-    "slurm_job_process_count": "pc",
-    "slurm_job_sm_active_gpu": "sag",
-    "slurm_job_sm_occupancy_gpu": "sog",
-    "slurm_job_states": "s",
-    "slurm_job_tensor_gpu": "tg",
-    "slurm_job_threads_count": "tc",
-    "slurm_job_utilization_gpu": "ug",
-    "slurm_job_utilization_gpu_memory": "ugm",
-}
-# We check that short names are unique and cover all metrics.
-assert len(set(slurm_job_metric_names.values())) == len(slurm_job_metric_names)
+# The slurm job metric names that get_job_time_series_batched() accepts.
+SLURM_JOB_METRIC_NAMES = frozenset(
+    [
+        "slurm_job_core_usage",
+        "slurm_job_core_usage_total",
+        "slurm_job_fp16_gpu",
+        "slurm_job_fp32_gpu",
+        "slurm_job_fp64_gpu",
+        "slurm_job_memory_active_file",
+        "slurm_job_memory_cache",
+        "slurm_job_memory_inactive_file",
+        "slurm_job_memory_limit",
+        "slurm_job_memory_mapped_file",
+        "slurm_job_memory_max",
+        "slurm_job_memory_rss",
+        "slurm_job_memory_rss_huge",
+        "slurm_job_memory_unevictable",
+        "slurm_job_memory_usage",
+        "slurm_job_memory_usage_gpu",
+        "slurm_job_nvlink_gpu",
+        "slurm_job_nvlink_gpu_total",
+        "slurm_job_pcie_gpu",
+        "slurm_job_pcie_gpu_total",
+        "slurm_job_power_gpu",
+        "slurm_job_process_count",
+        "slurm_job_sm_active_gpu",
+        "slurm_job_sm_occupancy_gpu",
+        "slurm_job_states",
+        "slurm_job_tensor_gpu",
+        "slurm_job_threads_count",
+        "slurm_job_utilization_gpu",
+        "slurm_job_utilization_gpu_memory",
+    ]
+)
