@@ -233,6 +233,7 @@ JOB_STATISTICS_METRIC_NAMES = (
     "slurm_job_fp16_gpu",
     "slurm_job_fp32_gpu",
     "slurm_job_fp64_gpu",
+    "slurm_job_sm_active_gpu",
     "slurm_job_sm_occupancy_gpu",
     "slurm_job_utilization_gpu_memory",
     "slurm_job_power_gpu",
@@ -253,9 +254,23 @@ def compute_job_statistics(
     for result in prom_stats:
         metric_to_data[result["metric"]["__name__"]].append(result)
 
-    gpu_utilization = compute_metric_statistics(
-        metric_to_data["slurm_job_utilization_gpu"], normalization=_percent
-    )
+    # ``slurm_job_utilization_gpu`` historically carried SM_ACTIVE samples.
+    # The collector now renames it to ``slurm_job_sm_active_gpu`` and exposes
+    # the real device utilization under ``slurm_job_utilization_gpu``: for a
+    # job whose series already carry the new name, ``slurm_job_utilization_gpu``
+    # is a true GPU utilization, otherwise it is still the SM_ACTIVE samples.
+    if metric_to_data["slurm_job_sm_active_gpu"]:
+        gpu_sm_active = compute_metric_statistics(
+            metric_to_data["slurm_job_sm_active_gpu"], normalization=_percent
+        )
+        gpu_utilization = compute_metric_statistics(
+            metric_to_data["slurm_job_utilization_gpu"], normalization=_percent
+        )
+    else:
+        gpu_sm_active = compute_metric_statistics(
+            metric_to_data["slurm_job_utilization_gpu"], normalization=_percent
+        )
+        gpu_utilization = None
 
     gpu_utilization_fp16 = compute_metric_statistics(
         metric_to_data["slurm_job_fp16_gpu"], normalization=_percent
@@ -303,6 +318,8 @@ def compute_job_statistics(
         res["gpu_utilization"] = JobStatisticDB(
             name="gpu_utilization", **gpu_utilization
         )
+    if gpu_sm_active:
+        res["gpu_sm_active"] = JobStatisticDB(name="gpu_sm_active", **gpu_sm_active)
     if gpu_utilization_fp16:
         res["gpu_utilization_fp16"] = JobStatisticDB(
             name="gpu_utilization_fp16", **gpu_utilization_fp16
@@ -360,6 +377,7 @@ slurm_job_metric_names = {
     "slurm_job_pcie_gpu_total": "pgt",
     "slurm_job_power_gpu": "pwg",
     "slurm_job_process_count": "pc",
+    "slurm_job_sm_active_gpu": "sag",
     "slurm_job_sm_occupancy_gpu": "sog",
     "slurm_job_states": "s",
     "slurm_job_tensor_gpu": "tg",
