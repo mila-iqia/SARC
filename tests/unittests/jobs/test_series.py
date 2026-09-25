@@ -172,3 +172,36 @@ def test_compute_job_statistics_without_allocated_mem(mem, caplog):
         stats = compute_job_statistics(job, [memory_series])
     assert stats == {}
     assert f"job.allocated_mem is None or 0 for job {job.job_id}" in caplog.text
+
+
+def test_compute_job_statistics_new_gpu_metric_names():
+    # New collector: SM_ACTIVE samples moved to slurm_job_sm_active_gpu and
+    # slurm_job_utilization_gpu now carries the real device utilization.
+    job = _job()
+    series = [
+        _series(
+            [50.0, 60.0], name="slurm_job_utilization_gpu", instance="cn-c002", gpu="0"
+        ),
+        _series(
+            [10.0, 20.0], name="slurm_job_sm_active_gpu", instance="cn-c002", gpu="0"
+        ),
+    ]
+    stats = compute_job_statistics(job, series)
+    assert stats["gpu_utilization"].mean == pytest.approx(0.55)
+    assert stats["gpu_sm_active"].mean == pytest.approx(0.15)
+
+
+def test_compute_job_statistics_legacy_gpu_metric_names():
+    # Already-collected stats are recognized by the absence of
+    # slurm_job_sm_active_gpu: there, slurm_job_utilization_gpu holds the
+    # SM_ACTIVE samples, which are recorded as sm_active; no true utilization
+    # exists, so no gpu_utilization is recorded.
+    job = _job()
+    series = [
+        _series(
+            [10.0, 20.0], name="slurm_job_utilization_gpu", instance="cn-c002", gpu="0"
+        )
+    ]
+    stats = compute_job_statistics(job, series)
+    assert stats["gpu_sm_active"].mean == pytest.approx(0.15)
+    assert "gpu_utilization" not in stats
