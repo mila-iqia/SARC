@@ -7,7 +7,7 @@ import numpy as np
 
 from sarc.config import config
 from sarc.db.job import JobStatisticDB, SlurmJobDB
-from sarc.scraping.dcgm import DCGM_FP64_BLANK
+from sarc.scraping.dcgm import DCGM_FP64_BLANK, dcgm_prof_blackout
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
@@ -240,11 +240,29 @@ JOB_STATISTICS_METRIC_NAMES = (
     "slurm_job_memory_usage",
 )
 
+# Stored statistics of the DCGM PROF family, dropped together when
+# compute_job_statistics detects a blackout (dcgm.dcgm_prof_blackout):
+# they share one counter access path, so their zeros are not independent.
+_PROF_BLACKOUT_STATS = (
+    "gpu_sm_occupancy",
+    "gpu_utilization",
+    "gpu_utilization_fp16",
+    "gpu_utilization_fp32",
+    "gpu_utilization_fp64",
+    "gpu_memory",
+)
+
 
 @trace_decorator()
 def compute_job_statistics(
     job: SlurmJobDB, prom_stats: list[dict]
 ) -> dict[str, JobStatisticDB]:
+    """Compute the stored statistics of a job from its raw Prometheus series.
+
+    A detected DCGM PROF blackout (sarc.scraping.dcgm.dcgm_prof_blackout)
+    drops the whole PROF family from the result, keeping DEV power and the
+    cgroup metrics: their false zeros must not reach the database.
+    """
     # We get all required job time series with just 1 call to
     # get_job_time_series(), then split them by metric.
     metric_to_data: dict[str, list[dict]] = {
@@ -329,6 +347,22 @@ def compute_job_statistics(
         )
     if system_memory:
         res["system_memory"] = JobStatisticDB(name="system_memory", **system_memory)
+
+    # DCGM PROF blackout guard: exact-zero occupancy *and* DRAM activity on a
+    # job that drew real power means the whole PROF family is lying (false
+    # zeros from blocked hardware counters) -- store none of it, so the
+    # metrics read NULL ("no measurement") instead of asserting a false 0.
+    if dcgm_prof_blackout(
+        res["gpu_sm_occupancy"].max if "gpu_sm_occupancy" in res else None,
+        res["gpu_memory"].max if "gpu_memory" in res else None,
+        res["gpu_power"].max if "gpu_power" in res else None,
+    ):
+        dropped = [name for name in _PROF_BLACKOUT_STATS if res.pop(name, None)]
+        logger.warning(
+            f"job {job.job_id} (cluster {job.cluster.name}): DCGM PROF blackout "
+            f"(occupancy and DRAM activity maxed at 0 while gpu_power reached "
+            f"{res['gpu_power'].max:g} mW), dropping stats: {', '.join(dropped)}"
+        )
     return res
 
 

@@ -1,8 +1,9 @@
 import logging
-from datetime import UTC, datetime
+from datetime import UTC, date, datetime
 
 import pytest
 
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.models.job import SlurmState
 from sarc.scraping.dcgm import (
@@ -172,3 +173,46 @@ def test_compute_job_statistics_without_allocated_mem(mem, caplog):
         stats = compute_job_statistics(job, [memory_series])
     assert stats == {}
     assert f"job.allocated_mem is None or 0 for job {job.job_id}" in caplog.text
+
+
+def _prof_blackout_series():
+    """GPU series of a blackout job: PROF family all zeros, DEV power 200 W."""
+    return [
+        _series([0.0, 0.0], name="slurm_job_sm_occupancy_gpu"),
+        _series([0.0, 0.0], name="slurm_job_utilization_gpu"),
+        _series([0.0, 0.0], name="slurm_job_fp32_gpu"),
+        _series([0.0, 0.0], name="slurm_job_utilization_gpu_memory"),
+        _series([200_000.0, 150_000.0], name="slurm_job_power_gpu"),
+    ]
+
+
+def _job_with_cluster():
+    job = _job()
+    job.cluster = SlurmClusterDB(
+        name="raisin", domain="mila.quebec", start_date=date(2020, 1, 1)
+    )
+    return job
+
+
+def test_compute_job_statistics_drops_prof_family_on_blackout(caplog):
+    # Zero occupancy AND zero DRAM activity on a job that drew 200 W: the
+    # PROF family lies (blocked hardware counters), only DEV power survives.
+    with caplog.at_level(logging.WARNING):
+        stats = compute_job_statistics(_job_with_cluster(), _prof_blackout_series())
+    assert set(stats) == {"gpu_power"}
+    assert "DCGM PROF blackout" in caplog.text
+    assert "dropping stats: gpu_sm_occupancy" in caplog.text
+
+
+def test_compute_job_statistics_keeps_prof_family_when_dram_moved(caplog):
+    # Same job but measurable DRAM activity: the PROF family is alive, its
+    # zeros are real idle measurements and must be stored.
+    series = _prof_blackout_series()
+    for s in series:
+        if s["metric"]["__name__"] == "slurm_job_utilization_gpu_memory":
+            s["values"][1][1] = "0.05"
+    with caplog.at_level(logging.WARNING):
+        stats = compute_job_statistics(_job_with_cluster(), series)
+    assert "gpu_sm_occupancy" in stats
+    assert "gpu_memory" in stats
+    assert "DCGM PROF blackout" not in caplog.text
