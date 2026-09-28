@@ -12,7 +12,15 @@ def _dashboard_link(
     if dashboard_url is None:
         return ""
     query = urlencode(
-        {"as_user": email, "start": start.isoformat(), "end": end.isoformat()}
+        {
+            "as_user": email,
+            "start": start.isoformat(),
+            "end": end.isoformat(),
+            "utm_source": "slack",
+            "utm_medium": "notification",
+            "utm_campaign": "admin_digest_csv",
+            "utm_content": "dashboard",
+        }
     )
     return f"{dashboard_url}?{query}"
 
