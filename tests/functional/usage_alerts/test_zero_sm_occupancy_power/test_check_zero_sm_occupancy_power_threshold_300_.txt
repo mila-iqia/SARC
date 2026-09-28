@@ -1,2 +1,2 @@
-[raisin] 1 job in database has gpu_sm_occupancy.max = 0 but gpu_power.max >= 300 W (300000 mW): e.g. job_id 2 (350000 mW)
+[raisin] 1 job in database has gpu_sm_occupancy.max = 0 and gpu_memory.max = 0 but gpu_power.max >= 300 W (300000 mW): e.g. job_id 2 (350000 mW)
 [zero_sm_occupancy_power_threshold_300] FAILURE: zero_sm_occupancy_power_threshold_300
