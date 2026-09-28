@@ -216,6 +216,8 @@ def test_compute_job_statistics_keeps_prof_family_when_dram_moved(caplog):
     assert "gpu_sm_occupancy" in stats
     assert "gpu_memory" in stats
     assert "DCGM PROF blackout" not in caplog.text
+
+
 def test_compute_job_statistics_new_gpu_metric_names():
     # New collector: SM_ACTIVE samples moved to slurm_job_sm_active_gpu and
     # slurm_job_utilization_gpu now carries the real device utilization.
