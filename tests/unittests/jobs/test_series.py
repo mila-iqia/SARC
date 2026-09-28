@@ -199,9 +199,9 @@ def test_compute_job_statistics_drops_prof_family_on_blackout(caplog):
     # PROF family lies (blocked hardware counters), only DEV power survives.
     with caplog.at_level(logging.WARNING):
         stats = compute_job_statistics(_job_with_cluster(), _prof_blackout_series())
-    assert set(stats) == {"gpu_power", "gpu_sm_active"}
+    assert set(stats) == {"gpu_power"}
     assert "DCGM PROF blackout" in caplog.text
-    assert "dropping stats: gpu_sm_occupancy" in caplog.text
+    assert "dropping stats: gpu_sm_active, gpu_sm_occupancy" in caplog.text
 
 
 def test_compute_job_statistics_keeps_prof_family_when_dram_moved(caplog):

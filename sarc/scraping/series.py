@@ -239,9 +239,12 @@ JOB_STATISTICS_METRIC_NAMES = (
 # Stored statistics of the DCGM PROF family, dropped together when
 # compute_job_statistics detects a blackout (dcgm.dcgm_prof_blackout):
 # they share one counter access path, so their zeros are not independent.
+# `gpu_utilization` is absent: it is now sourced from DEV GPU_UTIL
+# (slurm-job-exporter #72), which keeps measuring even through a PROF blackout
+# (and the former SM_ACTIVE samples it carried are now under `gpu_sm_active`).
 _PROF_BLACKOUT_STATS = (
+    "gpu_sm_active",
     "gpu_sm_occupancy",
-    "gpu_utilization",
     "gpu_utilization_fp16",
     "gpu_utilization_fp32",
     "gpu_utilization_fp64",
@@ -256,8 +259,8 @@ def compute_job_statistics(
     """Compute the stored statistics of a job from its raw Prometheus series.
 
     A detected DCGM PROF blackout (sarc.scraping.dcgm.dcgm_prof_blackout)
-    drops the whole PROF family from the result, keeping DEV power and the
-    cgroup metrics: their false zeros must not reach the database.
+    drops the whole PROF family from the result, keeping DEV power/utilization
+    and the cgroup metrics: their false zeros must not reach the database.
     """
     # We get all required job time series with just 1 call to
     # get_job_time_series(), then split them by metric.
