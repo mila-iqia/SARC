@@ -252,6 +252,38 @@ _PROF_BLACKOUT_STATS = (
 )
 
 
+def gpu_activity_series(
+    metric_to_data: dict[str, list[dict]],
+) -> tuple[list[dict], list[dict]]:
+    """Split the job's GPU series into (SM_ACTIVE, true utilization) series.
+
+    What slurm_job_utilization_gpu measures depends on the slurm-job-exporter
+    version and mode, and the exporter exposes neither:
+    - < 0.5, DCGM mode: SM_ACTIVE, a DCGM profiling (PROF) field.
+    - >= 0.5, DCGM mode: the true utilization (DEV GPU_UTIL); SM_ACTIVE
+      moved to slurm_job_sm_active_gpu.
+    - NVML mode, any version: the true utilization; no PROF field at all.
+    """
+    utilization = metric_to_data["slurm_job_utilization_gpu"]
+    sm_active = metric_to_data["slurm_job_sm_active_gpu"]
+    # DCGM reads SM_OCCUPANCY and SM_ACTIVE together (one PROF counter
+    # subgroup in `dcgmi profile -l`): slurm_job_sm_occupancy_gpu is present
+    # exactly when SM_ACTIVE was readable.
+    sm_active_readable = bool(metric_to_data["slurm_job_sm_occupancy_gpu"])
+
+    if sm_active:
+        # Only exporter >= 0.5 publishes this name.
+        return sm_active, utilization
+    if sm_active_readable:
+        # SM_ACTIVE was readable but not published under its new name:
+        # exporter < 0.5, whose utilization series is SM_ACTIVE.
+        return utilization, []
+    # No SM_ACTIVE: NVML mode, or DCGM without readable PROF. In DCGM mode,
+    # exporter < 0.5 publishes no utilization without SM_ACTIVE, so any
+    # utilization here is the true one.
+    return [], utilization
+
+
 @trace_decorator()
 def compute_job_statistics(
     job: SlurmJobDB, prom_stats: list[dict]
@@ -270,23 +302,11 @@ def compute_job_statistics(
     for result in prom_stats:
         metric_to_data[result["metric"]["__name__"]].append(result)
 
-    # ``slurm_job_utilization_gpu`` historically carried SM_ACTIVE samples.
-    # The collector now renames it to ``slurm_job_sm_active_gpu`` and exposes
-    # the real device utilization under ``slurm_job_utilization_gpu``: for a
-    # job whose series already carry the new name, ``slurm_job_utilization_gpu``
-    # is a true GPU utilization, otherwise it is still the SM_ACTIVE samples.
-    if metric_to_data["slurm_job_sm_active_gpu"]:
-        gpu_sm_active = compute_metric_statistics(
-            metric_to_data["slurm_job_sm_active_gpu"], normalization=_percent
-        )
-        gpu_utilization = compute_metric_statistics(
-            metric_to_data["slurm_job_utilization_gpu"], normalization=_percent
-        )
-    else:
-        gpu_sm_active = compute_metric_statistics(
-            metric_to_data["slurm_job_utilization_gpu"], normalization=_percent
-        )
-        gpu_utilization = None
+    sm_active_series, utilization_series = gpu_activity_series(metric_to_data)
+    gpu_sm_active = compute_metric_statistics(sm_active_series, normalization=_percent)
+    gpu_utilization = compute_metric_statistics(
+        utilization_series, normalization=_percent
+    )
 
     gpu_utilization_fp16 = compute_metric_statistics(
         metric_to_data["slurm_job_fp16_gpu"], normalization=_percent
