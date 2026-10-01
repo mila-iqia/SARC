@@ -8,7 +8,8 @@ from fabric.testing.base import Command, Session
 from opentelemetry.trace import StatusCode
 from sqlmodel import select
 
-from sarc.config import UTC
+from sarc.config import UTC, config
+from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.db.support import GpuRguDB
 
@@ -545,3 +546,71 @@ def test_fetch_prometheus_skip_failed(
     # Second fetch (default): already attempted → job skipped
     assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
     assert call_count == 1  # unchanged
+
+
+def _cluster_end_time_prometheus(name: str):
+    with config.db.session() as sess:
+        cluster = sess.exec(
+            select(SlurmClusterDB).where(SlurmClusterDB.name == name)
+        ).one()
+        return cluster.end_time_prometheus
+
+
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_fetch_prometheus_end_time_without_jobs(cli_main, time_machine):
+    """A poll with nothing left to fetch still advances end_time_prometheus."""
+    orig_end_time = _cluster_end_time_prometheus("raisin")
+    assert orig_end_time is not None
+
+    now = orig_end_time + timedelta(days=3)
+    time_machine.move_to(now, tick=False)
+
+    assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
+
+    assert _cluster_end_time_prometheus("raisin") == now
+
+
+@pytest.mark.usefixtures("enabled_cache", "no_pkey")
+def test_fetch_prometheus_end_time_with_jobs(
+    test_config,
+    get_jobs,
+    jobless_read_write_db,
+    create_sacct_json,
+    remote,
+    cli_main,
+    monkeypatch,
+    time_machine,
+):
+    """A poll that returns data advances end_time_prometheus to the poll time."""
+    sacct_json_str = create_sacct_json([{}])
+    remote.expect(
+        host="raisin",
+        commands=[
+            Command(
+                cmd=_SACCT_CMD_RAISIN,
+                out=f"Welcome on raisin,\n{sacct_json_str}".encode("utf-8"),
+            )
+        ],
+    )
+
+    assert cli_main(_FETCH_JOBS_ARGS) == 0
+    assert cli_main(_PARSE_JOBS_ARGS) == 0
+    assert len(list(get_jobs())) == 1
+
+    def mock_get_job_time_series(jobs, metric, **kwargs):
+        return [
+            [{"metric": {"__name__": "slurm_job_gpu_name", "gpu_type": "test_gpu"}}]
+            for _ in jobs
+        ]
+
+    monkeypatch.setattr(
+        "sarc.scraping.series.get_job_time_series_batched", mock_get_job_time_series
+    )
+
+    orig_end_time = _cluster_end_time_prometheus("raisin")
+    now = orig_end_time + timedelta(days=1)
+    time_machine.move_to(now, tick=False)
+
+    assert cli_main(["fetch", "prometheus", "--cluster_name", "raisin"]) == 0
+
+    assert _cluster_end_time_prometheus("raisin") == now

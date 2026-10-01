@@ -14,9 +14,12 @@ from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.models.job import SlurmState
 from sarc.scraping import series
+from sarc.scraping.jobs_utils import set_auto_end_time
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
+
+AUTO_END_FIELD = "end_time_prometheus"
 
 
 @trace_decorator()
@@ -62,49 +65,53 @@ def fetch_prometheus(
         query = query.limit(max_jobs)
 
     jobs = list(sess.exec(query))
-    if not jobs:
-        logger.info("No jobs found to fetch Prometheus metrics for.")
-        return
-
     nb_jobs = 0
     fetch_date_now = datetime.now(UTC)
-    cache = Cache("prometheus")
-    with cache.create_entry(fetch_date_now) as ce:
-        for i in range(0, len(jobs), batch_size):
-            batch = jobs[i : i + batch_size]
-            batch_ids = [job.id for job in batch]
-            existing_records = {
-                rec.job_id: rec
-                for rec in sess.exec(
-                    select(JobStatisticsFetchDateDB).where(
-                        col(JobStatisticsFetchDateDB.job_id).in_(batch_ids)
-                    )
-                )
-            }
-            for job in batch:
-                assert job.id is not None
-                fetch_record = existing_records.get(job.id)
-                if fetch_record is None:
-                    sess.add(
-                        JobStatisticsFetchDateDB(
-                            job_id=job.id, fetch_date=fetch_date_now
+    if jobs:
+        cache = Cache("prometheus")
+        with cache.create_entry(fetch_date_now) as ce:
+            for i in range(0, len(jobs), batch_size):
+                batch = jobs[i : i + batch_size]
+                batch_ids = [job.id for job in batch]
+                existing_records = {
+                    rec.job_id: rec
+                    for rec in sess.exec(
+                        select(JobStatisticsFetchDateDB).where(
+                            col(JobStatisticsFetchDateDB.job_id).in_(batch_ids)
                         )
                     )
-                else:
-                    fetch_record.fetch_date = fetch_date_now
-                    fetch_record.jobstatistic_id = None
-            batched_results = series.get_job_time_series_batched(
-                jobs=batch, metric=series.JOB_STATISTICS_METRIC_NAMES
-            )
-            for job, raw_prom_data in zip(batch, batched_results):
-                if raw_prom_data == []:
-                    continue
-                nb_jobs += 1
-                ce.add_value(
-                    f"{job.cluster.name}${job.job_id}${job.submit_time.isoformat(timespec='seconds')}",
-                    json.dumps(raw_prom_data).encode("utf-8"),
+                }
+                for job in batch:
+                    assert job.id is not None
+                    fetch_record = existing_records.get(job.id)
+                    if fetch_record is None:
+                        sess.add(
+                            JobStatisticsFetchDateDB(
+                                job_id=job.id, fetch_date=fetch_date_now
+                            )
+                        )
+                    else:
+                        fetch_record.fetch_date = fetch_date_now
+                        fetch_record.jobstatistic_id = None
+                batched_results = series.get_job_time_series_batched(
+                    jobs=batch, metric=series.JOB_STATISTICS_METRIC_NAMES
                 )
-    sess.commit()
+                for job, raw_prom_data in zip(batch, batched_results):
+                    if raw_prom_data == []:
+                        continue
+                    nb_jobs += 1
+                    ce.add_value(
+                        f"{job.cluster.name}${job.job_id}${job.submit_time.isoformat(timespec='seconds')}",
+                        json.dumps(raw_prom_data).encode("utf-8"),
+                    )
+        sess.commit()
+    else:
+        logger.info("No jobs found to fetch Prometheus metrics for.")
+
+    # The cluster end time marks the last successful poll of Prometheus, even
+    # when there was no job to fetch. It is otherwise only advanced by
+    # init_insert(), which does not run as part of the fetch/parse pipeline.
+    set_auto_end_time(cluster.name, AUTO_END_FIELD, fetch_date_now)
     logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
 
 
