@@ -236,16 +236,33 @@ def test_compute_job_statistics_new_gpu_metric_names():
 
 
 def test_compute_job_statistics_legacy_gpu_metric_names():
-    # Already-collected stats are recognized by the absence of
-    # slurm_job_sm_active_gpu: there, slurm_job_utilization_gpu holds the
-    # SM_ACTIVE samples, which are recorded as sm_active; no true utilization
-    # exists, so no gpu_utilization is recorded.
+    # Old collector in DCGM mode: no slurm_job_sm_active_gpu, but sm_occupancy
+    # shows SM_ACTIVE was readable, so slurm_job_utilization_gpu holds the
+    # SM_ACTIVE samples; no true utilization exists.
     job = _job()
     series = [
         _series(
             [10.0, 20.0], name="slurm_job_utilization_gpu", instance="cn-c002", gpu="0"
-        )
+        ),
+        _series(
+            [30.0, 40.0], name="slurm_job_sm_occupancy_gpu", instance="cn-c002", gpu="0"
+        ),
     ]
     stats = compute_job_statistics(job, series)
     assert stats["gpu_sm_active"].mean == pytest.approx(0.15)
     assert "gpu_utilization" not in stats
+
+
+def test_compute_job_statistics_gpu_utilization_without_prof():
+    # No PROF metric (NVML mode, or DCGM without readable PROF): the old
+    # collector publishes no utilization without SM_ACTIVE in DCGM mode, so
+    # slurm_job_utilization_gpu is the true utilization.
+    job = _job()
+    series = [
+        _series(
+            [50.0, 60.0], name="slurm_job_utilization_gpu", instance="cn-c002", gpu="0"
+        )
+    ]
+    stats = compute_job_statistics(job, series)
+    assert stats["gpu_utilization"].mean == pytest.approx(0.55)
+    assert "gpu_sm_active" not in stats
