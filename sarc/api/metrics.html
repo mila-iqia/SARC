@@ -388,7 +388,11 @@
       (e.head||e.getElementsByTagName('head')[0]).appendChild(s);
     }(window,document,'betterstack','KvQHwrtdHybRDS8anMJLVH6z');
     betterstack('init', { environment: 'production' });
-    betterstack('user', { email: '{{ user_email }}' });
+    // admin_email, unlike is_admin, stays set during an admin's view-as preview.
+    betterstack('user', {
+      email: '{{ user_email }}',
+      is_admin: {{ (admin_email is not none) | tojson }},
+    });
   </script>
 </head>
 <body>

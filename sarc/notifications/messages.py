@@ -33,6 +33,11 @@ def _dashboard_url(base_url: str, start: date, end: date) -> str:
     return f"{base_url}?start={start:%Y-%m-%d}&end={end:%Y-%m-%d}"
 
 
+def _send_date(window_end: date) -> str:
+    """The run date (today, or ``--as-of``): every report window ends on it."""
+    return f"{window_end:%Y-%m-%d}"
+
+
 def _tree_prefix(i: int, n: int) -> str:
     if n == 1 or i == n - 1:
         return "└─"
@@ -98,6 +103,7 @@ def build_user_dm(
             suffix=f"{ncfg.rgu_unit.unit} unused",
         ),
         dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
+        send_date=_send_date(window_end),
     ).rstrip()
     return to_slack_mrkdwn(text)
 
@@ -136,6 +142,7 @@ def build_usage_report(
             suffix=f"{ncfg.rgu_unit.unit} unused",
         ),
         dashboard_url=_dashboard_url(ncfg.dashboard_url, window_start, window_end),
+        send_date=_send_date(window_end),
     ).rstrip()
     return to_slack_mrkdwn(text)
 

@@ -313,7 +313,8 @@ class UsageNotifyConfig:
     Placeholders: ``{name}``, ``{window_weeks}``, ``{window_range}``,
     ``{rgu_allocated}``, ``{user_allocated}``, ``{rgu_wasted}``,
     ``{user_wasted}``, ``{avg_utilization}``, ``{rgu_unit}``, ``{user_unit}``,
-    ``{bottom_jobs_count}``, ``{bottom_jobs_section}``, ``{dashboard_url}``."""
+    ``{bottom_jobs_count}``, ``{bottom_jobs_section}``, ``{dashboard_url}``,
+    ``{send_date}`` (run date, ``YYYY-MM-DD``)."""
 
     usage_report_template: str
     """``.format()``-able template for the neutral usage report body.
@@ -321,7 +322,7 @@ class UsageNotifyConfig:
     ``{rgu_allocated}``, ``{user_allocated}``, ``{avg_utilization}``,
     ``{rgu_unit}``, ``{top_jobs_count}``, ``{top_jobs_section}``,
     ``{bottom_jobs_count}``, ``{bottom_jobs_section}``,
-    ``{dashboard_url}``."""
+    ``{dashboard_url}``, ``{send_date}`` (run date, ``YYYY-MM-DD``)."""
 
     dashboard_url: str
     """Base link to the usage dashboard; each message appends its own
