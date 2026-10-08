@@ -58,6 +58,7 @@ _WEIGHT_PER_JOB = _RGU_PER_JOB * _BASE_ELAPSED  # = 691200, the distribution wei
 _STATS = {
     "gpu_sm_occupancy": (0.5, 0.5),
     "gpu_utilization": (0.4, 0.8),
+    "gpu_sm_active": (0.7, 0.9),
     "gpu_memory": (0.6, 0.9),
     "system_memory": (0.3, 0.5),
 }
@@ -459,6 +460,7 @@ def test_jobs_table_with_data(dash_client, dash_db):
         # Default metric is gpu_sm_occupancy, so metric_mean mirrors it.
         assert job["metric_mean"] == pytest.approx(_SM_OCC)
         assert job["gpu_utilization_mean"] == pytest.approx(0.4)
+        assert job["gpu_sm_active_mean"] == pytest.approx(0.7)
         assert job["gpu_memory_max"] == pytest.approx(0.9)
 
 
@@ -1585,6 +1587,7 @@ def test_focus_outside_the_range_is_an_empty_window(dash_client, endpoint, jobs_
     "sort_by",
     [
         "cluster",  # joins clusters into the page subquery
+        "gpu_sm_active_mean",  # joins its jobstatisticdb row into the page subquery
         "waste",  # joins a stat alias (sort_needs_stat)
         "gpu_utilization_mean",
         "gpu_sm_occupancy_mean",
@@ -1612,7 +1615,8 @@ def test_jobs_sort_columns(dash_client, sort_by):
 
 @pytest.fixture
 def ranked_db(dash_db):
-    """dash_db, with a distinct occupancy per job so a sort has something to rank."""
+    """dash_db, with a distinct occupancy per job so a sort has something to rank,
+    and SM active ranked the other way so sorting on the wrong one shows."""
     with config.db.session() as sess:
         jobs = sess.exec(
             select(SlurmJobDB)
@@ -1620,14 +1624,18 @@ def ranked_db(dash_db):
             .order_by(col(SlurmJobDB.id))
         ).all()
         for i, job in enumerate(jobs):
-            stat = sess.exec(
-                select(JobStatisticDB).where(
-                    col(JobStatisticDB.job_id) == job.id,
-                    col(JobStatisticDB.name) == "gpu_sm_occupancy",
-                )
-            ).one()
-            stat.mean = 0.1 * (i + 1)
-            sess.add(stat)
+            for name, mean in (
+                ("gpu_sm_occupancy", 0.1 * (i + 1)),
+                ("gpu_sm_active", 0.1 * (len(jobs) - i)),
+            ):
+                stat = sess.exec(
+                    select(JobStatisticDB).where(
+                        col(JobStatisticDB.job_id) == job.id,
+                        col(JobStatisticDB.name) == name,
+                    )
+                ).one()
+                stat.mean = mean
+                sess.add(stat)
         sess.commit()
     return dash_db
 
@@ -1637,11 +1645,13 @@ def _jobs_page(client, **params):
 
 
 @pytest.mark.parametrize(
-    "sort_by", ["job_id", "gpu_sm_occupancy_mean"], ids=["no_join", "stat_join"]
+    "sort_by",
+    ["job_id", "gpu_sm_occupancy_mean", "gpu_sm_active_mean"],
+    ids=["no_join", "pivot", "stat_join"],
 )
 def test_jobs_sort_dir_orders_the_page(dash_client, ranked_db, sort_by):
-    """``sort_dir`` orders the rows, both branches of the sort: a column of the
-    source alone and one behind the stat join."""
+    """``sort_dir`` orders the rows on every branch of the sort: a job_series
+    column, a pivoted statistic and one behind the stat join."""
     asc = [j[sort_by] for j in _jobs_page(dash_client, sort_by=sort_by, sort_dir="asc")]
     desc = [
         j[sort_by] for j in _jobs_page(dash_client, sort_by=sort_by, sort_dir="desc")
@@ -1651,6 +1661,26 @@ def test_jobs_sort_dir_orders_the_page(dash_client, ranked_db, sort_by):
     assert len(set(asc)) == ranked_db.n, "the fixture must rank without ties"
     assert asc == sorted(asc)
     assert desc == asc[::-1]
+
+
+def test_jobs_without_sm_active_stay_listed(dash_client, dash_db):
+    """SM active is joined from jobstatisticdb: a job without that row keeps its
+    table row, blank, and sorts last both ways."""
+    with config.db.session() as sess:
+        stat = sess.exec(
+            select(JobStatisticDB).where(col(JobStatisticDB.name) == "gpu_sm_active")
+        ).first()
+        assert stat is not None
+        sess.delete(stat)
+        sess.commit()
+
+    jobs = _jobs_page(dash_client)
+    assert len(jobs) == dash_db.n
+    assert [j["gpu_sm_active_mean"] for j in jobs].count(None) == 1
+    for sort_dir in ("asc", "desc"):
+        jobs = _jobs_page(dash_client, sort_by="gpu_sm_active_mean", sort_dir=sort_dir)
+        assert len(jobs) == dash_db.n
+        assert jobs[-1]["gpu_sm_active_mean"] is None
 
 
 def test_jobs_pagination_slices_one_order(dash_client, ranked_db):

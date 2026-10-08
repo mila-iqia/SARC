@@ -1202,12 +1202,14 @@
       return sel;
     }
 
-    // SM occupancy vs GPU utilization. Shared by the RGU-usage tile help and the
-    // dashboard-wide intro: GPU utilization is the number most people already
-    // know, so saying which one we use is only half the answer — the other half
-    // is why it isn't the other one.
+    // SM occupancy vs SM active and GPU utilization, all three in the job table.
+    // Shared by the RGU-usage tile help and the dashboard-wide intro: GPU
+    // utilization is the number most people already know, so saying which one
+    // we use is only half the answer — the other half is why it isn't the other
+    // one.
     function metricDefinitionsHtml() {
-      return `<p><strong>SM occupancy</strong>: how full the GPU was.<br/>` +
+      return `<p><strong>SM occupancy</strong>: how full the GPU's compute units (SMs) were.<br/>` +
+        `<strong>SM active</strong>: on average, how many of those SMs had any work, however little.<br/>` +
         `<strong>GPU utilization</strong>: how often the GPU ran anything at all.</p>` +
         `<p>A job can keep a GPU busy while using only a fraction of it, which is why ` +
         `<strong class="ms-help-key">SM occupancy is the reference usage metric in the dashboard.</strong></p>`;
@@ -2309,6 +2311,7 @@
           title: rguWasteTitle(unitHour), fmt: fmtRguHour },
         ]),
         { key: 'gpu_sm_occupancy_mean', label: 'SM occ',    fmt: v => v != null ? (v < 0 ? 'NaN' : usagePct(v).toFixed(1)+'%') : '—' },
+        { key: 'gpu_sm_active_mean',    label: 'SM active', fmt: v => v != null ? (v < 0 ? 'NaN' : usagePct(v).toFixed(1)+'%') : '—' },
         { key: 'gpu_utilization_mean',  label: 'GPU util',  fmt: v => v != null ? (v < 0 ? 'NaN' : usagePct(v).toFixed(1)+'%') : '—' },
         { key: 'gpu_memory_max',        label: 'Mem max',   fmt: v => v != null ? (v*100).toFixed(1)+'%' : '—', title: 'Max memory usage' },
         { key: 'gpu_type',              label: 'GPU type' },
