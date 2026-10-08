@@ -630,6 +630,7 @@
         // shown, keep the saved range and the focus that goes with it.
         const showingUrlRange = _urlRange && rangeValue() === 'custom'
           && start === _urlRange.start && end === _urlRange.end;
+        if (!showingUrlRange) _urlRange = null;
         const r = showingUrlRange ? _saved : { start, end, range: rangeValue(), focusStart, focusEnd };
         const state = {
           // Filter bar
@@ -718,8 +719,9 @@
     const _saved = loadSavedState();
 
     // The window of a link carrying ?start=&end= (notification DMs, admin CSV),
-    // shown once in place of the saved range; null when absent or invalid.
-    const _urlRange = (() => {
+    // shown in place of the saved range; null when absent or invalid, and once
+    // the user shows another range.
+    let _urlRange = (() => {
       const q = new URLSearchParams(window.location.search);
       const start = q.get('start'), end = q.get('end');
       const valid = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '')
@@ -3183,7 +3185,6 @@
     {% else %}
     tileLayout = DEFAULT_LAYOUT.map(r => [...r]);
     {% endif %}
-    syncUrl();
 
     // Restore period (after setPeriod is defined, which is above).
     if (_saved.period) setPeriod(_saved.period);
@@ -3210,6 +3211,8 @@
       if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
     }
     updateFocusLabel();
+    // Not before the range restore: its save would forget the link's window.
+    syncUrl();
 
     // Drop start/end from the address bar, so that a bookmark or a reload
     // doesn't bring the link's window back.
