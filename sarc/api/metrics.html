@@ -393,6 +393,18 @@
       email: '{{ user_email }}',
       is_admin: {{ (admin_email is not none) | tojson }},
     });
+    // Drop utm_* from the address bar once Betterstack has read them, so that a
+    // bookmark or a reload doesn't credit the campaign again. Betterstack reads
+    // them as it runs, so before 'load' (undocumented, but true of all its
+    // versions archived since 2026-02).
+    document.querySelector('script[src^="https://betterstack.net/"]').addEventListener('load', () => {
+      const url = new URL(window.location);
+      const utm = [...url.searchParams.keys()].filter(k => k.startsWith('utm_'));
+      if (utm.length) {
+        utm.forEach(k => url.searchParams.delete(k));
+        window.history.replaceState({}, '', url);
+      }
+    });
   </script>
 </head>
 <body>
