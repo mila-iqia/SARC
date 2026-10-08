@@ -612,11 +612,18 @@
 
     function saveState() {
       try {
+        const start = document.getElementById('start').value;
+        const end   = document.getElementById('end').value;
+        // A link's window is a one-off view, not a new preference: while it is
+        // shown, keep the saved range and the focus that goes with it.
+        const showingUrlRange = _urlRange && rangeValue() === 'custom'
+          && start === _urlRange.start && end === _urlRange.end;
+        const r = showingUrlRange ? _saved : { start, end, range: rangeValue(), focusStart, focusEnd };
         const state = {
           // Filter bar
-          start:       document.getElementById('start').value,
-          end:         document.getElementById('end').value,
-          range:       rangeValue(),
+          start:       r.start,
+          end:         r.end,
+          range:       r.range,
           {% if is_admin %}
           user_email: document.getElementById('user_email').value,
           {% endif %}
@@ -624,7 +631,8 @@
           clusters:    clSelected(),
           job_states:  jsSelected(),
           // Focus
-          focusStart, focusEnd,
+          focusStart:  r.focusStart,
+          focusEnd:    r.focusEnd,
           // Layout
           layout: layoutToParam(tileLayout),
           // Plot-local state
@@ -696,6 +704,16 @@
     // first read in JOBTABLE_DEFAULTS and the filter-bar restore below — so the
     // const is never accessed inside its temporal dead zone.
     const _saved = loadSavedState();
+
+    // The window of a link carrying ?start=&end= (notification DMs, admin CSV),
+    // shown once in place of the saved range; null when absent or invalid.
+    const _urlRange = (() => {
+      const q = new URLSearchParams(window.location.search);
+      const start = q.get('start'), end = q.get('end');
+      const valid = s => /^\d{4}-\d{2}-\d{2}$/.test(s || '')
+        && !isNaN(new Date(s)) && isoDate(new Date(s)) === s;
+      return valid(start) && valid(end) && start < end ? { start, end } : null;
+    })();
 
     function pLayout(extra) {
       return { autosize: true, margin: { l: 60, r: 20, t: 40, b: 60 }, ...extra };
@@ -3165,15 +3183,30 @@
     // from today right here, which is the whole point); absent that, a saved
     // literal start/end without a mode implies Custom (preserves a legacy
     // fixed range as-is instead of silently replacing it with the default);
-    // absent both, fall back to the server-injected default.
-    if (_saved.start) startInput.value = _saved.start;
-    if (_saved.end)   endInput.value   = _saved.end;
-    setRangeMode(_saved.range || ((_saved.start && _saved.end) ? 'custom' : rangePanel.dataset.default));
-
-    // Restore focus state.
-    if (_saved.focusStart) focusStart = _saved.focusStart;
-    if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
+    // absent both, fall back to the server-injected default. A link's window
+    // (_urlRange) wins over all of these, and voids the saved focus, which
+    // belongs to the saved range.
+    if (_urlRange) {
+      startInput.value = _urlRange.start;
+      endInput.value   = _urlRange.end;
+      setRangeMode('custom');
+    } else {
+      if (_saved.start) startInput.value = _saved.start;
+      if (_saved.end)   endInput.value   = _saved.end;
+      setRangeMode(_saved.range || ((_saved.start && _saved.end) ? 'custom' : rangePanel.dataset.default));
+      if (_saved.focusStart) focusStart = _saved.focusStart;
+      if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
+    }
     updateFocusLabel();
+
+    // Drop start/end from the address bar, so that a bookmark or a reload
+    // doesn't bring the link's window back.
+    const _cleanUrl = new URL(window.location);
+    if (_cleanUrl.searchParams.has('start') || _cleanUrl.searchParams.has('end')) {
+      _cleanUrl.searchParams.delete('start');
+      _cleanUrl.searchParams.delete('end');
+      window.history.replaceState({}, '', _cleanUrl);
+    }
 
     // Dashboard-wide help: the "?" on the title line, and the same text as a
     // modal on arrival. Nothing here waits for chart data — the intro must be
