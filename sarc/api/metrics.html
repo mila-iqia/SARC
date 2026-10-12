@@ -3207,6 +3207,8 @@
       if (_saved.start) startInput.value = _saved.start;
       if (_saved.end)   endInput.value   = _saved.end;
       setRangeMode(_saved.range || ((_saved.start && _saved.end) ? 'custom' : rangePanel.dataset.default));
+
+      // Restore focus state.
       if (_saved.focusStart) focusStart = _saved.focusStart;
       if (_saved.focusEnd)   focusEnd   = _saved.focusEnd;
     }
