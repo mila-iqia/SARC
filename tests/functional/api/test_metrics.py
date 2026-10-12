@@ -1796,7 +1796,7 @@ def test_homepage_betterstack_user_is_admin(app, email, params, is_admin):
     """Betterstack gets the real role, so admins' visits can be left out of the
     stats -- including an admin previewing a user's view."""
     html = app.client(email).get("/dash/metrics", params=params).text
-    assert re.search(rf"email: '{re.escape(email)}',\s*is_admin: {is_admin},", html)
+    assert re.search(rf'email: "{re.escape(email)}",\s*is_admin: {is_admin},', html)
 
 
 _STORAGE_KEY_RE = re.compile(r'const STORAGE_KEY = ("[^"]+")')

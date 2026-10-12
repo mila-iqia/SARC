@@ -390,7 +390,7 @@
     betterstack('init', { environment: 'production' });
     // admin_email, unlike is_admin, stays set during an admin's view-as preview.
     betterstack('user', {
-      email: '{{ user_email }}',
+      email: {{ user_email | tojson }},
       is_admin: {{ (admin_email is not none) | tojson }},
     });
     // Drop utm_* from the address bar once Betterstack has read them, so that a
