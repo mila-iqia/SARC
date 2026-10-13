@@ -82,7 +82,12 @@ sarc:
           h100: H100-SXM5-80GB
   logging:
     log_level: INFO # The default log level
-    OTLP_endpoint: https://localhost/otlp_reciever # Optional OTLP endpoint to send the logs to
+    OTLP_log: # This key is optional
+      endpoint: https://localhost/otlp_reciever # OTLP endpoint to send to
+      token: abcde # SENSITIVE: optional for if the endpoint requires it
+    OTLP_trace: # This key is optional
+      endpoint: https://localhost/otlp_reciever # OTLP endpoint to send to
+      token: abcde # SENSITIVE: optional for if the endpoint requires it
     service_name: sarc-dev # service name used for OTLP, must be set to enable OTLP
     slack: # Optional config to get messages about jobs on slack
       description: SARC-prod # used to distinguish multiple instances if the message the same channel
