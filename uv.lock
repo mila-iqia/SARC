@@ -2404,7 +2404,7 @@ dev = [
     { name = "sphinx", specifier = ">=9.1,<10" },
     { name = "sphinx-rtd-theme", specifier = ">=3.0.2,<4" },
     { name = "sphinxcontrib-mermaid", specifier = ">=2.0.2" },
-    { name = "sphinxcontrib-openapi", specifier = ">=0.9.0,<0.10.0" },
+    { name = "sphinxcontrib-openapi", specifier = ">=0.10.0,<0.11.0" },
     { name = "tabulate", specifier = ">=0.10,<0.11" },
     { name = "time-machine", specifier = ">=3.2.0" },
     { name = "tox", specifier = ">=4.25.0,<5" },
@@ -2622,7 +2622,7 @@ wheels = [
 
 [[package]]
 name = "sphinxcontrib-openapi"
-version = "0.9.0"
+version = "0.10.0"
 source = { registry = "https://pypi.org/simple" }
 dependencies = [
     { name = "deepmerge" },
@@ -2633,9 +2633,9 @@ dependencies = [
     { name = "sphinx-mdinclude" },
     { name = "sphinxcontrib-httpdomain" },
 ]
-sdist = { url = "https://files.pythonhosted.org/packages/9c/d6/bec7b89e981cc5ee18ccc5dd966257203bae8ceb893bfa7cc7e44f0df2e0/sphinxcontrib_openapi-0.9.0.tar.gz", hash = "sha256:c3c445a13c99706d8837b21b78e1caa8be5eb16b8f83a297a1fdf19f1c31d487", size = 95302, upload-time = "2026-02-10T18:41:24.543Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/8f/3c/869ac4df0440814d65ad1ebca27d758cf6e2a2639a4babc60ca710e29231/sphinxcontrib_openapi-0.10.0.tar.gz", hash = "sha256:beec8bf4ece8f28fb1b378e60914b92fed6e38009a60d915ed2cd0c023a54f6d", size = 101379, upload-time = "2026-10-11T13:46:46.655Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/32/3a/7c5ec79cee2d9505ef9079fc55cdc866e38aa68241982bf103604013f5c0/sphinxcontrib_openapi-0.9.0-py3-none-any.whl", hash = "sha256:19037dc091e741b2f84e9c17ff201f70f2ac5c192c883e055bb2d96e9facfbdf", size = 34626, upload-time = "2026-02-10T18:41:23.234Z" },
+    { url = "https://files.pythonhosted.org/packages/72/9a/7438cfde2baa37132ab39b2d1d7ac3440baa44983bfc07c5df2637b16a64/sphinxcontrib_openapi-0.10.0-py3-none-any.whl", hash = "sha256:378624ec4e84aae7c1c5441d3c84295081972069e5a8188e84b2274e577fc9c5", size = 35656, upload-time = "2026-10-11T13:46:45.659Z" },
 ]
 
 [[package]]
