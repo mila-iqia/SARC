@@ -7,7 +7,7 @@ import numpy as np
 
 from sarc.config import config
 from sarc.db.job import JobStatisticDB, SlurmJobDB
-from sarc.scraping.dcgm import DCGM_FP64_BLANK
+from sarc.scraping.dcgm import DCGM_FP64_BLANK, dcgm_prof_blackout
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
@@ -21,8 +21,8 @@ def get_job_time_series_batched(
 
     Arguments:
         jobs: The sequence of jobs for which to fetch metrics.
-        metric: The metric or list of metrics, which must be in ``slurm_job_metric_names``.
-        max_points: The maximal number of data points to return.
+        metric: The metric or list of metrics, which must be in
+            ``SLURM_JOB_METRIC_NAMES``.
 
     Returns:
         A list of result lists corresponding positionally to each job in `jobs`.
@@ -34,7 +34,7 @@ def get_job_time_series_batched(
     if not metrics:
         raise ValueError("No metrics given")
     for m in metrics:
-        if m not in slurm_job_metric_names:
+        if m not in SLURM_JOB_METRIC_NAMES:
             raise ValueError(f"Unknown metric name: {m}")
 
     now = datetime.now(tz=UTC)
@@ -111,11 +111,6 @@ def get_job_time_series_batched(
                     results[idx].append(series_copy)
 
     return results
-
-
-def get_job_time_series_metric_names() -> dict[str, str]:
-    """Return all the metric names that relate to slurm jobs."""
-    return slurm_job_metric_names
 
 
 STATS = TypedDict(
@@ -233,6 +228,7 @@ JOB_STATISTICS_METRIC_NAMES = (
     "slurm_job_fp16_gpu",
     "slurm_job_fp32_gpu",
     "slurm_job_fp64_gpu",
+    "slurm_job_sm_active_gpu",
     "slurm_job_sm_occupancy_gpu",
     "slurm_job_utilization_gpu_memory",
     "slurm_job_power_gpu",
@@ -240,11 +236,64 @@ JOB_STATISTICS_METRIC_NAMES = (
     "slurm_job_memory_usage",
 )
 
+# Stored statistics of the DCGM PROF family, dropped together when
+# compute_job_statistics detects a blackout (dcgm.dcgm_prof_blackout):
+# they share one counter access path, so their zeros are not independent.
+# `gpu_utilization` is absent: it is now sourced from DEV GPU_UTIL
+# (slurm-job-exporter #72), which keeps measuring even through a PROF blackout
+# (and the former SM_ACTIVE samples it carried are now under `gpu_sm_active`).
+_PROF_BLACKOUT_STATS = (
+    "gpu_sm_active",
+    "gpu_sm_occupancy",
+    "gpu_utilization_fp16",
+    "gpu_utilization_fp32",
+    "gpu_utilization_fp64",
+    "gpu_memory",
+)
+
+
+def gpu_activity_series(
+    metric_to_data: dict[str, list[dict]],
+) -> tuple[list[dict], list[dict]]:
+    """Split the job's GPU series into (SM_ACTIVE, true utilization) series.
+
+    What slurm_job_utilization_gpu measures depends on the slurm-job-exporter
+    version and mode, and the exporter exposes neither:
+    - < 0.5, DCGM mode: SM_ACTIVE, a DCGM profiling (PROF) field.
+    - >= 0.5, DCGM mode: the true utilization (DEV GPU_UTIL); SM_ACTIVE
+      moved to slurm_job_sm_active_gpu.
+    - NVML mode, any version: the true utilization; no PROF field at all.
+    """
+    utilization = metric_to_data["slurm_job_utilization_gpu"]
+    sm_active = metric_to_data["slurm_job_sm_active_gpu"]
+    # DCGM reads SM_OCCUPANCY and SM_ACTIVE together (one PROF counter
+    # subgroup in `dcgmi profile -l`): slurm_job_sm_occupancy_gpu is present
+    # exactly when SM_ACTIVE was readable.
+    sm_active_readable = bool(metric_to_data["slurm_job_sm_occupancy_gpu"])
+
+    if sm_active:
+        # Only exporter >= 0.5 publishes this name.
+        return sm_active, utilization
+    if sm_active_readable:
+        # SM_ACTIVE was readable but not published under its new name:
+        # exporter < 0.5, whose utilization series is SM_ACTIVE.
+        return utilization, []
+    # No SM_ACTIVE: NVML mode, or DCGM without readable PROF. In DCGM mode,
+    # exporter < 0.5 publishes no utilization without SM_ACTIVE, so any
+    # utilization here is the true one.
+    return [], utilization
+
 
 @trace_decorator()
 def compute_job_statistics(
     job: SlurmJobDB, prom_stats: list[dict]
 ) -> dict[str, JobStatisticDB]:
+    """Compute the stored statistics of a job from its raw Prometheus series.
+
+    A detected DCGM PROF blackout (sarc.scraping.dcgm.dcgm_prof_blackout)
+    drops the whole PROF family from the result, keeping DEV power/utilization
+    and the cgroup metrics: their false zeros must not reach the database.
+    """
     # We get all required job time series with just 1 call to
     # get_job_time_series(), then split them by metric.
     metric_to_data: dict[str, list[dict]] = {
@@ -253,8 +302,10 @@ def compute_job_statistics(
     for result in prom_stats:
         metric_to_data[result["metric"]["__name__"]].append(result)
 
+    sm_active_series, utilization_series = gpu_activity_series(metric_to_data)
+    gpu_sm_active = compute_metric_statistics(sm_active_series, normalization=_percent)
     gpu_utilization = compute_metric_statistics(
-        metric_to_data["slurm_job_utilization_gpu"], normalization=_percent
+        utilization_series, normalization=_percent
     )
 
     gpu_utilization_fp16 = compute_metric_statistics(
@@ -303,6 +354,8 @@ def compute_job_statistics(
         res["gpu_utilization"] = JobStatisticDB(
             name="gpu_utilization", **gpu_utilization
         )
+    if gpu_sm_active:
+        res["gpu_sm_active"] = JobStatisticDB(name="gpu_sm_active", **gpu_sm_active)
     if gpu_utilization_fp16:
         res["gpu_utilization_fp16"] = JobStatisticDB(
             name="gpu_utilization_fp16", **gpu_utilization_fp16
@@ -329,43 +382,56 @@ def compute_job_statistics(
         )
     if system_memory:
         res["system_memory"] = JobStatisticDB(name="system_memory", **system_memory)
+
+    # DCGM PROF blackout guard: exact-zero occupancy *and* DRAM activity on a
+    # job that drew real power means the whole PROF family is lying (false
+    # zeros from blocked hardware counters) -- store none of it, so the
+    # metrics read NULL ("no measurement") instead of asserting a false 0.
+    if dcgm_prof_blackout(
+        res["gpu_sm_occupancy"].max if "gpu_sm_occupancy" in res else None,
+        res["gpu_memory"].max if "gpu_memory" in res else None,
+        res["gpu_power"].max if "gpu_power" in res else None,
+    ):
+        dropped = [name for name in _PROF_BLACKOUT_STATS if res.pop(name, None)]
+        logger.warning(
+            f"job {job.job_id} (cluster {job.cluster.name}): DCGM PROF blackout "
+            f"(occupancy and DRAM activity maxed at 0 while gpu_power reached "
+            f"{res['gpu_power'].max:g} mW), dropping stats: {', '.join(dropped)}"
+        )
     return res
 
 
-# Dictionary of slurm metric names:
-# We both list allowed metric names as key,
-# and we map each metric to a short name,
-# intended to be used to generate short cache key
-# for get_job_time_series().
-slurm_job_metric_names = {
-    "slurm_job_core_usage": "cu",
-    "slurm_job_core_usage_total": "cut",
-    "slurm_job_fp16_gpu": "f16g",
-    "slurm_job_fp32_gpu": "f32g",
-    "slurm_job_fp64_gpu": "f64g",
-    "slurm_job_memory_active_file": "maf",
-    "slurm_job_memory_cache": "mc",
-    "slurm_job_memory_inactive_file": "mif",
-    "slurm_job_memory_limit": "ml",
-    "slurm_job_memory_mapped_file": "mmf",
-    "slurm_job_memory_max": "mm",
-    "slurm_job_memory_rss": "mr",
-    "slurm_job_memory_rss_huge": "mrh",
-    "slurm_job_memory_unevictable": "mun",
-    "slurm_job_memory_usage": "mus",
-    "slurm_job_memory_usage_gpu": "mug",
-    "slurm_job_nvlink_gpu": "ng",
-    "slurm_job_nvlink_gpu_total": "ngt",
-    "slurm_job_pcie_gpu": "pcg",
-    "slurm_job_pcie_gpu_total": "pgt",
-    "slurm_job_power_gpu": "pwg",
-    "slurm_job_process_count": "pc",
-    "slurm_job_sm_occupancy_gpu": "sog",
-    "slurm_job_states": "s",
-    "slurm_job_tensor_gpu": "tg",
-    "slurm_job_threads_count": "tc",
-    "slurm_job_utilization_gpu": "ug",
-    "slurm_job_utilization_gpu_memory": "ugm",
-}
-# We check that short names are unique and cover all metrics.
-assert len(set(slurm_job_metric_names.values())) == len(slurm_job_metric_names)
+# The slurm job metric names that get_job_time_series_batched() accepts.
+SLURM_JOB_METRIC_NAMES = frozenset(
+    [
+        "slurm_job_core_usage",
+        "slurm_job_core_usage_total",
+        "slurm_job_fp16_gpu",
+        "slurm_job_fp32_gpu",
+        "slurm_job_fp64_gpu",
+        "slurm_job_memory_active_file",
+        "slurm_job_memory_cache",
+        "slurm_job_memory_inactive_file",
+        "slurm_job_memory_limit",
+        "slurm_job_memory_mapped_file",
+        "slurm_job_memory_max",
+        "slurm_job_memory_rss",
+        "slurm_job_memory_rss_huge",
+        "slurm_job_memory_unevictable",
+        "slurm_job_memory_usage",
+        "slurm_job_memory_usage_gpu",
+        "slurm_job_nvlink_gpu",
+        "slurm_job_nvlink_gpu_total",
+        "slurm_job_pcie_gpu",
+        "slurm_job_pcie_gpu_total",
+        "slurm_job_power_gpu",
+        "slurm_job_process_count",
+        "slurm_job_sm_active_gpu",
+        "slurm_job_sm_occupancy_gpu",
+        "slurm_job_states",
+        "slurm_job_tensor_gpu",
+        "slurm_job_threads_count",
+        "slurm_job_utilization_gpu",
+        "slurm_job_utilization_gpu_memory",
+    ]
+)

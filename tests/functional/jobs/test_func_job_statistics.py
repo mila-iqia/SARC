@@ -34,6 +34,7 @@ def generate_fake_timeseries(
         "slurm_job_fp16_gpu": (0, 100, {"gpu": 3}),
         "slurm_job_fp32_gpu": (0, 100, {"gpu": 3}),
         "slurm_job_fp64_gpu": (0, 100, {"gpu": 3}),
+        "slurm_job_sm_active_gpu": (0, 100, {"gpu": 3}),
         "slurm_job_sm_occupancy_gpu": (0, 100, {"gpu": 3}),
         "slurm_job_utilization_gpu_memory": (0, 100, {"gpu": 3}),
         "slurm_job_core_usage": (1e9, 1e9 * job.elapsed_time, {"core": 7}),

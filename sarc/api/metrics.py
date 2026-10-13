@@ -19,13 +19,14 @@ from sqlalchemy import (
     text,
     true,
 )
+from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import Grouping
 from sqlmodel import Session, and_, case, col, func, select
 
 from sarc.api.v0 import Requestor, requestor
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import SlurmJobDB
+from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.db.job_series import DASH_STATS, JobSeriesTable
 from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
@@ -1546,11 +1547,18 @@ def metrics_jobs(
     # old targeted jobstatisticdb LEFT join returned.
     metric_mean_raw = _dash_stat_col(_USAGE_METRIC_NAME)
 
+    # SM active has no job_series pivot: its jobstatisticdb row is joined instead.
+    sm_active = aliased(JobStatisticDB)
+    sm_active_on = and_(
+        col(sm_active.job_id) == col(JobSeriesTable.job_db_id),
+        col(sm_active.name) == "gpu_sm_active",
+    )
+
     # Sortable columns -> ORDER BY expression. Raw (unlabelled) so they compose
     # with nulls_last/asc/desc cleanly. `nodes` is an array and is not sortable,
-    # so it is intentionally absent. Everything but "cluster" and "user" ranks
-    # on job_series columns (index-only in the covering scan); those two name
-    # columns live in clusters/users and pull their join into the page query
+    # so it is intentionally absent. Everything but the `sort_needs_join` keys
+    # ranks on job_series columns (index-only in the covering scan); those live
+    # in clusters/users/jobstatisticdb and pull their join into the page query
     # when sorted on -- they stay sortable, just on the slow path.
     sortable = {
         "cluster": col(SlurmClusterDB.name),
@@ -1570,9 +1578,17 @@ def metrics_jobs(
         "waste": rgu_hours_raw * (1 - metric_mean_raw),
         "gpu_utilization_mean": _dash_stat_col("gpu_utilization"),
         "gpu_sm_occupancy_mean": _dash_stat_col("gpu_sm_occupancy"),
+        "gpu_sm_active_mean": col(sm_active.mean),
         "gpu_memory_max": _dash_stat_col("gpu_memory", "max"),
     }
-    sort_needs_join = {"cluster": SlurmClusterDB, "user": UserDB}
+    sort_needs_join = {
+        "cluster": (
+            SlurmClusterDB,
+            col(JobSeriesTable.cluster_id) == col(SlurmClusterDB.id),
+        ),
+        "user": (UserDB, col(JobSeriesTable.sarc_user_id) == col(UserDB.id)),
+        "gpu_sm_active_mean": (sm_active, sm_active_on),
+    }
     sort_expr = sortable.get(sort_by, rgu_hours_raw)
     ordered = sort_expr.asc() if sort_dir == "asc" else sort_expr.desc()
     # nulls_last only for keys nullable in the result set: the metric stats and
@@ -1586,6 +1602,7 @@ def metrics_jobs(
         "waste",
         "gpu_utilization_mean",
         "gpu_sm_occupancy_mean",
+        "gpu_sm_active_mean",
         "gpu_memory_max",
     }
     if sort_by in nullable_sorts:
@@ -1619,8 +1636,8 @@ def metrics_jobs(
         total = int(sess.exec(count_q).one())
 
     # PAGE: the page's job ids only. The scan/sort runs here on job_series alone
-    # (+ clusters/users when sorted on their names). With no window count it
-    # parallelises, and a small offset top-N heapsorts instead of sorting the
+    # (+ the sort key's own table, see `sort_needs_join`). With no window count
+    # it parallelises, and a small offset top-N heapsorts instead of sorting the
     # whole set.
     page_q = _apply_dash_base(
         select(col(JobSeriesTable.job_db_id).label("jid")),
@@ -1630,22 +1647,15 @@ def metrics_jobs(
         scope_user_id=scope_user_id,
     )
     if sort_by in sort_needs_join:
-        page_q = page_q.join(
-            sort_needs_join[sort_by],
-            (
-                col(JobSeriesTable.cluster_id) == col(SlurmClusterDB.id)
-                if sort_by == "cluster"
-                else col(JobSeriesTable.sarc_user_id) == col(UserDB.id)
-            ),
-            isouter=True,
-        )
+        page_q = page_q.join(*sort_needs_join[sort_by], isouter=True)
     page = (
         page_q.where(*base_filters).order_by(*order_by).offset(offset).limit(limit)
     ).subquery()
 
     # FINAL: display columns, fetched only for the page's rows (joined back on
     # the job id): job_series holds the numbers and stats, slurm_jobs the node
-    # list, clusters/users the names. The total comes from the separate count.
+    # list, clusters/users the names, jobstatisticdb SM active. The total comes
+    # from the separate count.
     query = _apply_dash_base(
         select(  # ty:ignore[no-matching-overload]
             col(SlurmClusterDB.name).label("cluster_name"),
@@ -1667,6 +1677,7 @@ def metrics_jobs(
             metric_mean_raw.label("metric_mean"),
             _dash_stat_col("gpu_utilization").label("gpu_utilization_mean"),
             _dash_stat_col("gpu_sm_occupancy").label("gpu_sm_occupancy_mean"),
+            col(sm_active.mean).label("gpu_sm_active_mean"),
             _dash_stat_col("gpu_memory", "max").label("gpu_memory_max"),
         ),
         cluster_ids,
@@ -1685,6 +1696,7 @@ def metrics_jobs(
             isouter=True,
         )
         .join(UserDB, col(UserDB.id) == col(JobSeriesTable.sarc_user_id), isouter=True)
+        .join(sm_active, sm_active_on, isouter=True)
         .order_by(*order_by)
     )
 
@@ -1724,6 +1736,9 @@ def metrics_jobs(
                 ),
                 "gpu_sm_occupancy_mean": _nan_to_none(
                     row.gpu_sm_occupancy_mean, replace_with=-1
+                ),
+                "gpu_sm_active_mean": _nan_to_none(
+                    row.gpu_sm_active_mean, replace_with=-1
                 ),
                 "gpu_memory_max": _nan_to_none(row.gpu_memory_max),
             }

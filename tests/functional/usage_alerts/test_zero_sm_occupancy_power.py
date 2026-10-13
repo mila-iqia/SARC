@@ -53,39 +53,51 @@ def _seed_stats(sess):
     """
     raisin = _jobs_of(sess, "raisin")
     fromage = _jobs_of(sess, "fromage")
-    assert len(raisin) >= 6
+    assert len(raisin) >= 7
     recent = MOCK_TIME - timedelta(hours=2)
     old = MOCK_TIME - timedelta(days=8)
 
-    # Anomaly, inside the default 7-day window: 250 W at zero occupancy.
+    # Anomaly, inside the default 7-day window: 250 W at zero occupancy and memory.
     raisin[0].submit_time = recent
     _add_stat(sess, raisin[0], "gpu_sm_occupancy", 0.0)
+    _add_stat(sess, raisin[0], "gpu_memory", 0.0)
     _add_stat(sess, raisin[0], "gpu_power", 250_000.0)
 
-    # Anomaly, outside the default 7-day window: 350 W at zero occupancy.
+    # Anomaly, outside the default 7-day window: 350 W at zero occupancy and memory.
     raisin[1].submit_time = old
     _add_stat(sess, raisin[1], "gpu_sm_occupancy", 0.0)
+    _add_stat(sess, raisin[1], "gpu_memory", 0.0)
     _add_stat(sess, raisin[1], "gpu_power", 350_000.0)
 
-    # Zero occupancy, but under the 100 W floor.
+    # Zero occupancy and memory, but under the 100 W floor.
     raisin[2].submit_time = recent
     _add_stat(sess, raisin[2], "gpu_sm_occupancy", 0.0)
+    _add_stat(sess, raisin[2], "gpu_memory", 0.0)
     _add_stat(sess, raisin[2], "gpu_power", 99_000.0)
 
-    # High power, but a nonzero occupancy max.
+    # High power and zero memory, but a nonzero occupancy max.
     raisin[3].submit_time = recent
     _add_stat(sess, raisin[3], "gpu_sm_occupancy", 0.25)
+    _add_stat(sess, raisin[3], "gpu_memory", 0.0)
     _add_stat(sess, raisin[3], "gpu_power", 200_000.0)
 
-    # Only one of the two statistics each: the anomaly needs both.
+    # Missing one of the three statistics each: the anomaly needs all three.
     raisin[4].submit_time = recent
     _add_stat(sess, raisin[4], "gpu_sm_occupancy", 0.0)
     raisin[5].submit_time = recent
+    _add_stat(sess, raisin[5], "gpu_sm_occupancy", 0.0)
     _add_stat(sess, raisin[5], "gpu_power", 200_000.0)
+
+    # Resting job, not a blackout: high power but measurable DRAM activity.
+    raisin[6].submit_time = recent
+    _add_stat(sess, raisin[6], "gpu_sm_occupancy", 0.0)
+    _add_stat(sess, raisin[6], "gpu_memory", 0.05)
+    _add_stat(sess, raisin[6], "gpu_power", 200_000.0)
 
     # fromage's anomaly sits exactly on the default 100 W threshold (>=).
     fromage[0].submit_time = recent
     _add_stat(sess, fromage[0], "gpu_sm_occupancy", 0.0)
+    _add_stat(sess, fromage[0], "gpu_memory", 0.0)
     _add_stat(sess, fromage[0], "gpu_power", 100_000.0)
 
     sess.commit()
@@ -148,13 +160,13 @@ def test_examples_are_the_newest_of_their_group(caplog, cli_main):
 @time_machine.travel(MOCK_TIME, tick=False)
 @pytest.mark.usefixtures("read_write_db", "health_config")
 def test_near_misses_are_ignored(caplog, cli_main):
-    """Under the power floor, above zero occupancy, or missing one statistic: none is an anomaly.
+    """Under the power floor, above zero occupancy, resting with DRAM activity, or missing one statistic: none is an anomaly.
 
     raisin's two anomalies are the only jobs the full-window check may name.
     """
     with config.db.session() as sess:
         # Captured before seeding: the seed rewrites submit times, hence the order.
-        near_miss_ids = {job.job_id for job in _jobs_of(sess, "raisin")[2:6]}
+        near_miss_ids = {job.job_id for job in _jobs_of(sess, "raisin")[2:7]}
         _seed_stats(sess)
     caplog.clear()
     assert cli_main(["health", "run", "--check", "zero_sm_occupancy_power_all"]) == 0

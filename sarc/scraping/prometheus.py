@@ -14,9 +14,12 @@ from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.models.job import SlurmState
 from sarc.scraping import series
+from sarc.scraping.jobs_utils import set_auto_end_time
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
+
+AUTO_END_FIELD = "end_time_prometheus"
 
 
 @trace_decorator()
@@ -62,12 +65,15 @@ def fetch_prometheus(
         query = query.limit(max_jobs)
 
     jobs = list(sess.exec(query))
+    fetch_date_now = datetime.now(UTC)
     if not jobs:
         logger.info("No jobs found to fetch Prometheus metrics for.")
+        # The cluster end time marks the last successful poll of Prometheus,
+        # even when there was no job to fetch.
+        set_auto_end_time(cluster.name, AUTO_END_FIELD, fetch_date_now)
         return
 
     nb_jobs = 0
-    fetch_date_now = datetime.now(UTC)
     cache = Cache("prometheus")
     with cache.create_entry(fetch_date_now) as ce:
         for i in range(0, len(jobs), batch_size):
@@ -105,6 +111,7 @@ def fetch_prometheus(
                     json.dumps(raw_prom_data).encode("utf-8"),
                 )
     sess.commit()
+    set_auto_end_time(cluster.name, AUTO_END_FIELD, fetch_date_now)
     logger.info(f"Fetched Prometheus metrics for {nb_jobs} jobs.")
 
 

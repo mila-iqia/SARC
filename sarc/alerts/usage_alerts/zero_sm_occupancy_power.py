@@ -1,6 +1,7 @@
 import logging
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
+from typing import Any
 
 from sqlalchemy.dialects.postgresql import aggregate_order_by
 from sqlalchemy.orm import aliased
@@ -9,33 +10,36 @@ from sqlmodel import and_, col, func, select
 from sarc.alerts.common import CheckResult, HealthCheck
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
+from sarc.scraping.dcgm import DEFAULT_MIN_POWER_MW, dcgm_prof_blackout_conditions
 
 logger = logging.getLogger(__name__)
 
 OCCUPANCY_STAT = "gpu_sm_occupancy"
+MEMORY_STAT = "gpu_memory"
 POWER_STAT = "gpu_power"
 
-# `slurm_job_power_gpu` is exposed in mW by the exporter
-# (github.com/guilbaults/slurm-job-exporter) and sarc stores it untouched,
-# so the stored statistics are mW too.
+# The stored power statistics are mW (see sarc.scraping.dcgm.DEFAULT_MIN_POWER_MW).
 WATTS_PER_MW = 1000.0
+DEFAULT_MIN_POWER_WATTS = DEFAULT_MIN_POWER_MW / WATTS_PER_MW
 
 
 def check_zero_sm_occupancy_power(
     time_interval: timedelta | None = timedelta(days=7),
-    min_power_watts: float = 100.0,
+    min_power_watts: float = DEFAULT_MIN_POWER_WATTS,
     report_limit: int = 5,
     cluster_names: list[str] | None = None,
 ) -> bool:
     """
-    Check that no job drew significant GPU power while its SM occupancy measured zero.
-    Log an alert per cluster with jobs whose `gpu_sm_occupancy` max is 0 while their
-    `gpu_power` max is at least `min_power_watts`: a GPU burning watts without any
-    SM activity is most likely a broken SM occupancy measurement.
+    Check that no job drew significant GPU power while its whole DCGM PROF family measured zero.
+    Log an alert per cluster with jobs whose `gpu_sm_occupancy` AND `gpu_memory`
+    maxes are 0 while their `gpu_power` max is at least `min_power_watts`: a GPU
+    burning watts with no SM activity and no DRAM activity is a DCGM PROF-family
+    blackout (the profiling counters report false zeros while DEV power keeps
+    measuring), the rule of `sarc.scraping.dcgm.dcgm_prof_blackout`.
 
-    Zero is trustworthy on both sides: the stats pipeline drops DCGM BLANK/NaN
-    samples before computing the statistics, so a stored 0 occupancy means real
-    zero samples (a fully filtered series would read NULL, not 0).
+    A resting job with a power spike is no longer reported: resting jobs with a
+    live CUDA context usually keep measurable DRAM activity, and a truly idle
+    GPU does not burn `min_power_watts`.
 
     Parameters
     ----------
@@ -46,7 +50,8 @@ def check_zero_sm_occupancy_power(
         If None, all jobs are checked.
     min_power_watts: float
         Alert from this per-GPU power draw up, in watts (compared against the
-        mW-stored `gpu_power.max`). Default is 100.
+        mW-stored `gpu_power.max`). Default is 100
+        (`sarc.scraping.dcgm.DEFAULT_MIN_POWER_MW`).
     report_limit: int
         How many example jobs to name per alert, newest first. Default is 5.
     cluster_names: list
@@ -87,11 +92,16 @@ def check_zero_sm_occupancy_power(
     window = f"submitted since {start}" if start is not None else "in database"
     min_power_mw = min_power_watts * WATTS_PER_MW
 
-    # The two statistics of a job, as separate joins: one row per (job, name).
+    # The three statistics of a job, as separate joins: one row per (job, name).
     occupancy = aliased(JobStatisticDB)
+    memory = aliased(JobStatisticDB)
     power = aliased(JobStatisticDB)
 
-    conditions = [col(occupancy.max) == 0, col(power.max) >= min_power_mw]
+    # list[Any]: ty reads SQLModel's Mapped comparisons as bool, so the
+    # window/cluster conditions appended below do not type as ColumnElement.
+    conditions: list[Any] = dcgm_prof_blackout_conditions(
+        col(occupancy.max), col(memory.max), col(power.max), min_power_mw=min_power_mw
+    )
     if start is not None:
         conditions.append(SlurmJobDB.submit_time >= start)
     if cluster_names:
@@ -127,6 +137,13 @@ def check_zero_sm_occupancy_power(
                 ),
             )
             .join(
+                memory,
+                and_(
+                    col(memory.job_id) == col(SlurmJobDB.id),
+                    col(memory.name) == MEMORY_STAT,
+                ),
+            )
+            .join(
                 power,
                 and_(
                     col(power.job_id) == col(SlurmJobDB.id),
@@ -142,7 +159,8 @@ def check_zero_sm_occupancy_power(
     for cluster_name, jobs, examples in groups:
         logger.error(
             f"[{cluster_name}] {jobs} job{'s' if jobs > 1 else ''} {window} "
-            f"{'have' if jobs > 1 else 'has'} gpu_sm_occupancy.max = 0 but "
+            f"{'have' if jobs > 1 else 'has'} gpu_sm_occupancy.max = 0 and "
+            f"gpu_memory.max = 0 but "
             f"gpu_power.max >= {min_power_watts:g} W ({min_power_mw:g} mW): "
             f"e.g. job_id {'; '.join(examples)}"
         )
@@ -155,7 +173,7 @@ class ZeroSmOccupancyPowerCheck(HealthCheck):
     """Health check for GPU jobs drawing power with zero SM occupancy."""
 
     time_interval: timedelta | None = timedelta(days=7)
-    min_power_watts: float = 100.0
+    min_power_watts: float = DEFAULT_MIN_POWER_WATTS
     report_limit: int = 5
     cluster_names: list[str] | None = None
 

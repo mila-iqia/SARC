@@ -63,7 +63,8 @@ It also feeds PowerBI.
 ## Clusters
 
 `clusters` also carries the scraping watermarks `end_time_sacct` and
-`end_time_prometheus`, which `init_insert()` syncs from the cache.
+`end_time_prometheus`. `sarc fetch jobs` and `sarc fetch prometheus` advance
+them on each run; `init_insert()` resyncs them from the cache.
 
 `gpubillingdb` and `nodegpumappingdb` are `since`-stamped JSONB snapshots
 rather than normalized rows: each is a whole mapping as it stood at a date.

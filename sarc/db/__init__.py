@@ -44,6 +44,10 @@ def sync_cluster_end_times(sess: Session) -> None:
     entry exists for a given cluster. Prometheus search is skipped for clusters
     without a prometheus_url to avoid scanning a potentially large cache for
     nothing.
+
+    Both fields are also advanced incrementally by their own scrapers
+    (set_auto_end_time in sarc/scraping/jobs.py and in
+    sarc/scraping/prometheus.py); this scan is the repair / backfill path.
     """
     from datetime import UTC, datetime
 

@@ -64,7 +64,11 @@ def parse_csv_line(d: dict, sess: Session, csv_date: date | None):
     if d["ccri"] == "":
         return
     creds = Credentials()
-    if d["activation_status"] in ["activated", "recently_renewed"]:
+    if d["activation_status"] in [
+        "activated",
+        "recently_renewed",
+        "recently_activated",
+    ]:
         creds.insert(
             d["username"],
             start=datetime.strptime(d["member_since"], "%Y-%m-%d %H:%M:%S %z"),

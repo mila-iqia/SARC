@@ -59,11 +59,14 @@ class JobStatisticsFetchDateDB(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     job_id: int = Field(foreign_key="slurm_jobs.id", nullable=False, ondelete="CASCADE")
     fetch_date: datetime_utc = datetime_utc_field()
+    # Indexed: ON DELETE SET NULL looks this column up once per deleted
+    # jobstatisticdb row; without an index, each lookup scans the whole table.
     jobstatistic_id: int | None = Field(
         default=None,
         foreign_key="jobstatisticdb.id",
         nullable=True,
         ondelete="SET NULL",
+        index=True,
     )
 
 
