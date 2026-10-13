@@ -99,6 +99,10 @@ Like the `Pairs` list, you can load/save the ignore list.
 
 # Apply matching file to SARC
 
+> [!warning]
+> Once applied, the change is irreversible. Since one of the two versions of the user is deleted, and all his jobs are updated to the other version of the user, the information to revert change is lost.
+> So, please be careful in the process and do not merge users if you're not 100% sure.
+
 At this point you get a `usermatch.json` file.
 
 This file must replace previous `sarc-config/patches/id_matches/mapping.json` file, from the **private** repository [sarc-config](https://github.com/mila-iqia/sarc-config/tree/main/patches/id_matches).
