@@ -1786,6 +1786,19 @@ def test_homepage_view_as_unknown_is_soft_error(app):
     assert 'onclick="viewAsUser()"' in resp.text  # still the admin entry control
 
 
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize(
+    ("email", "params", "is_admin"),
+    [(_ADMIN, {}, "true"), (_ADMIN, {"as_user": _USER}, "true"), (_USER, {}, "false")],
+    ids=["admin", "admin_view_as", "user"],
+)
+def test_homepage_betterstack_user_is_admin(app, email, params, is_admin):
+    """Betterstack gets the real role, so admins' visits can be left out of the
+    stats -- including an admin previewing a user's view."""
+    html = app.client(email).get("/dash/metrics", params=params).text
+    assert re.search(rf'email: "{re.escape(email)}",\s*is_admin: {is_admin},', html)
+
+
 _STORAGE_KEY_RE = re.compile(r'const STORAGE_KEY = ("[^"]+")')
 
 

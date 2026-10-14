@@ -24,7 +24,7 @@ bottom_jobs_count:{bottom_jobs_count}
 ```
 {bottom_jobs_section}
 ```
-Track your usage over time: {dashboard_url}
+Track your usage over time: {dashboard_url}&utm_campaign=underusage_report_{send_date}
 """
 
 
@@ -39,7 +39,7 @@ bottom_jobs_count:{bottom_jobs_count}
 ```
 {bottom_jobs_section}
 ```
-Track your usage over time: {dashboard_url}
+Track your usage over time: {dashboard_url}&utm_campaign=usage_report_{send_date}
 """
 
 
