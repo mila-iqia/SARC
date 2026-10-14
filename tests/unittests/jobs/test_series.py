@@ -12,17 +12,18 @@ from sarc.scraping.dcgm import (
     DCGM_FP64_NOT_PERMISSIONED,
     DCGM_FP64_NOT_SUPPORTED,
 )
+from sarc.scraping.gpu_util_x100 import FIXED_SINCE, X100_SINCE
 from sarc.scraping.series import compute_job_statistics, compute_metric_statistics
 from tests.db.factory import base_job
 
 T0 = int(datetime(2023, 1, 1, tzinfo=UTC).timestamp())
 
 
-def _series(values, delta=30, name="some_metric", **labels):
+def _series(values, delta=30, name="some_metric", start=T0, **labels):
     """One raw Prometheus series as returned by custom_query."""
     return {
         "metric": {"__name__": name, **labels},
-        "values": [[T0 + i * delta, str(v)] for i, v in enumerate(values)],
+        "values": [[start + i * delta, str(v)] for i, v in enumerate(values)],
     }
 
 
@@ -266,3 +267,44 @@ def test_compute_job_statistics_gpu_utilization_without_prof():
     stats = compute_job_statistics(job, series)
     assert stats["gpu_utilization"].mean == pytest.approx(0.55)
     assert "gpu_sm_active" not in stats
+
+
+def test_compute_job_statistics_rescales_exporter_0_5_0_utilization():
+    # slurm-job-exporter 0.5.0 sent the utilization x100.
+    start = X100_SINCE + 86400
+    series = [
+        _series(
+            [4000, 6000],
+            name="slurm_job_utilization_gpu",
+            start=start,
+            instance="cn-c002",
+            gpu="0",
+        ),
+        _series(
+            [30.0, 40.0],
+            name="slurm_job_sm_active_gpu",
+            start=start,
+            instance="cn-c002",
+            gpu="0",
+        ),
+    ]
+    stats = compute_job_statistics(_job(), series)
+    assert stats["gpu_utilization"].mean == pytest.approx(0.5)
+    assert stats["gpu_sm_active"].mean == pytest.approx(0.35)
+
+
+def test_compute_job_statistics_drops_undecided_utilization(caplog):
+    # After the fix, without PROF: a 100 may be 1 % (0.5.0) or 100 % (0.5.1).
+    series = [
+        _series(
+            [100, 0],
+            name="slurm_job_utilization_gpu",
+            start=FIXED_SINCE + 86400,
+            instance="cn-c002",
+            gpu="0",
+        )
+    ]
+    with caplog.at_level(logging.WARNING):
+        stats = compute_job_statistics(_job_with_cluster(), series)
+    assert "gpu_utilization" not in stats
+    assert "gpu_utilization samples at 100 may be 1 %" in caplog.text
