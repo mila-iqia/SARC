@@ -11,6 +11,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
+from sarc.scraping.gpu_accounting import parse_gpu_accounting
 from sarc.scraping.gpu_fixes import fix_gpu_types
 from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
@@ -24,6 +25,7 @@ from sarc.scraping.jobs_utils import (
 from sarc.traces import using_trace
 
 logger = logging.getLogger(__name__)
+STEPS_SUFFIX = "_with_steps"
 
 
 def fetch_jobs(
@@ -87,6 +89,8 @@ def fetch_jobs(
                     key = f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
 
                     raw_data = fetch_raw(cluster_config, time_from, time_to)
+                    if cluster_config.sacct_gpu_accounting:
+                        key += STEPS_SUFFIX
                     yield (key, raw_data)
 
                     if auto_interval is not None:
@@ -269,3 +273,8 @@ def parse_cache_entry(
             )
         bulk_upsert_jobs(sess, jobs_to_upsert)
         jobs_to_upsert = []
+        if clusters_cfg[cluster_name].sacct_gpu_accounting and key.endswith(
+            STEPS_SUFFIX
+        ):
+            assert cluster.id is not None
+            parse_gpu_accounting(sess, value, cluster.id, clusters_cfg[cluster_name])

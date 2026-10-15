@@ -43,7 +43,10 @@ def fetch_prometheus(
         return
     has_statistics = (
         select(JobStatisticDB.job_id)
-        .where(JobStatisticDB.job_id == SlurmJobDB.id)
+        .where(
+            JobStatisticDB.job_id == SlurmJobDB.id,
+            ~col(JobStatisticDB.name).startswith("sacct_gpu_", autoescape=True),
+        )
         .exists()
     )
     query = select(SlurmJobDB).where(
