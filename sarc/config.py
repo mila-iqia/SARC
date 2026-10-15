@@ -77,6 +77,8 @@ class ClusterConfig:
     prometheus_check_ssl: bool = True
     name: str | None = None
     sacct_bin: str = "sacct"
+    # Capture sampled GPU accounting separately from DCGM time-series statistics.
+    sacct_gpu_accounting: bool = False
     ignore_tz_utc: bool = False
     accounts: list[str] | None = None
     diskusage: list[DiskUsageConfig] | None = None

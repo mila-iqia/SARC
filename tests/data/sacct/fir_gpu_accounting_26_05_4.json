@@ -1,0 +1,127 @@
+{
+  "meta": {
+    "slurm": {
+      "version": {
+        "major": "26",
+        "micro": "4",
+        "minor": "05"
+      }
+    }
+  },
+  "jobs": [
+    {
+      "job_id": 1,
+      "tres": {
+        "allocated": [
+          {
+            "type": "cpu",
+            "name": "",
+            "id": 1,
+            "count": 12
+          },
+          {
+            "type": "mem",
+            "name": "",
+            "id": 2,
+            "count": 245760
+          },
+          {
+            "type": "node",
+            "name": "",
+            "id": 4,
+            "count": 1
+          },
+          {
+            "type": "billing",
+            "name": "",
+            "id": 5,
+            "count": 12200
+          },
+          {
+            "type": "gres",
+            "name": "gpu",
+            "id": 1001,
+            "count": 1
+          },
+          {
+            "type": "gres",
+            "name": "gpu:h100",
+            "id": 1002,
+            "count": 1
+          }
+        ]
+      },
+      "steps": [
+        {
+          "step": {
+            "name": "batch"
+          },
+          "tasks": {
+            "count": 1
+          },
+          "tres": {
+            "requested": {
+              "max": [
+                {
+                  "type": "gres",
+                  "name": "gpumem",
+                  "id": 1006,
+                  "count": 10924064768
+                },
+                {
+                  "type": "gres",
+                  "name": "gpuutil",
+                  "id": 1007,
+                  "count": 100
+                }
+              ],
+              "average": [
+                {
+                  "type": "gres",
+                  "name": "gpumem",
+                  "id": 1006,
+                  "count": 10924064768
+                },
+                {
+                  "type": "gres",
+                  "name": "gpuutil",
+                  "id": 1007,
+                  "count": 100
+                }
+              ],
+              "total": [
+                {
+                  "type": "gres",
+                  "name": "gpumem",
+                  "id": 1006,
+                  "count": 10924064768
+                },
+                {
+                  "type": "gres",
+                  "name": "gpuutil",
+                  "id": 1007,
+                  "count": 100
+                }
+              ]
+            }
+          }
+        },
+        {
+          "step": {
+            "name": "extern"
+          },
+          "tasks": {
+            "count": 1
+          },
+          "tres": {
+            "requested": {
+              "max": [],
+              "average": [],
+              "total": []
+            }
+          }
+        }
+      ]
+    }
+  ]
+}
