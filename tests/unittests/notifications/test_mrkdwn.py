@@ -44,6 +44,24 @@ def test_heading_becomes_bold_not_hash():
     assert to_slack_mrkdwn("# Title") == "*Title*"
 
 
+def test_literal_ampersand_in_text_is_not_escaped():
+    # mistune >= 3.4 escapes literal & in text tokens for Markdown
+    # round-tripping; Slack renders the backslash literally, so it must not.
+    assert to_slack_mrkdwn("Dig deeper, & bookmark it!") == "Dig deeper, & bookmark it!"
+
+
+def test_ampersands_in_link_text_are_not_escaped():
+    md = "[R&D dashboard](https://example.com/d?start=1&end=2)"
+    assert to_slack_mrkdwn(md) == "<https://example.com/d?start=1&end=2|R&D dashboard>"
+
+
+def test_ampersands_in_bare_url_text_are_not_escaped():
+    assert (
+        to_slack_mrkdwn("https://example.com/d?start=1&end=2")
+        == "https://example.com/d?start=1&end=2"
+    )
+
+
 def test_reference_style_link_raises():
     with pytest.raises(NotImplementedError, match="Reference-style links"):
         to_slack_mrkdwn("[docs][1]\n\n[1]: https://example.com\n")

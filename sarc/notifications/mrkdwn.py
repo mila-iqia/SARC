@@ -13,13 +13,26 @@ class SlackMrkdwnRenderer(MarkdownRenderer):
     e.g. a fenced code block), so only the constructs Slack actually spells
     differently need overriding.
 
-    Literal `&`, `<`, `>` are deliberately passed through un-escaped rather
+    Literal `&`, `<`, `>`, `!` are deliberately passed through un-escaped rather
     than converted to HTML entities: verified empirically to render as-is in
     Slack, and escaping would corrupt the `<url|text>` / `<url>` link syntax
     this renderer itself emits.
     """
 
     NAME = "slack_mrkdwn"
+
+    def text(self, token, state):  # noqa: ARG002
+        # Since mistune 3.4 the base MarkdownRenderer escapes literal &, <, >,
+        # ! and \ in text tokens so the output re-parses as Markdown. Slack
+        # has no backslash escapes and renders them literally, so undo that:
+        # emit text unchanged, per the un-escaping policy in the class
+        # docstring. Keep only the escapes that protect real mrkdwn syntax,
+        # matching pre-3.4 behavior: a lone run of * / _ (bold) and backticks
+        # (code span).
+        raw = cast(str, token["raw"])
+        if raw and all(c in "*_" for c in raw):
+            return "".join("\\" + c for c in raw)
+        return raw.replace("`", "\\`")
 
     def emphasis(self, token, state):
         # The base renderer normalizes emphasis to single "*", which would
