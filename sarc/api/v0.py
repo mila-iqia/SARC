@@ -115,7 +115,7 @@ def requestor(
 
 
 def validate_cluster(sess: Session, cluster: str | None):
-    cluster_names = sess.exec(select(SlurmClusterDB.name)).all()
+    cluster_names = sess.exec(select(col(SlurmClusterDB.name))).all()
     if cluster is not None and cluster not in cluster_names:
         raise HTTPException(
             status_code=status.HTTP_404_NOT_FOUND, detail=f"No such cluster '{cluster}'"
