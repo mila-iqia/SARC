@@ -1,4 +1,4 @@
-import httpx
+import httpx2
 import pytest
 
 from sarc.api.v0 import _EXTRA_FIELDS, _SERIES_OPTIONAL_COLS
@@ -87,7 +87,7 @@ def test_get_jobs_with_datetime_filters(sarc_client):
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_jobs_invalid_cluster(sarc_client):
-    with pytest.raises(httpx.HTTPStatusError) as exc:
+    with pytest.raises(httpx2.HTTPStatusError) as exc:
         list(sarc_client.get_jobs(cluster_name="invalid_cluster"))
     assert exc.value.response.status_code == 404
 
@@ -138,7 +138,7 @@ def test_get_job_by_id(sarc_client):
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_job_by_id_not_found(sarc_client):
-    with pytest.raises(httpx.HTTPStatusError) as exc:
+    with pytest.raises(httpx2.HTTPStatusError) as exc:
         sarc_client.get_job(999_999)
     assert exc.value.response.status_code == 404
 
@@ -247,7 +247,7 @@ def test_get_user_by_id(sarc_client):
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_user_by_id_not_found(sarc_client):
-    with pytest.raises(httpx.HTTPStatusError) as exc:
+    with pytest.raises(httpx2.HTTPStatusError) as exc:
         sarc_client.get_user_by_id(999_999)
     assert exc.value.response.status_code == 404
 
@@ -261,7 +261,7 @@ def test_get_user_by_email(sarc_client):
 
 @pytest.mark.usefixtures("read_only_db")
 def test_get_user_by_email_not_found(sarc_client):
-    with pytest.raises(httpx.HTTPStatusError) as exc:
+    with pytest.raises(httpx2.HTTPStatusError) as exc:
         sarc_client.get_user_by_email("nobody@nowhere.example")
     assert exc.value.response.status_code == 404
 
