@@ -156,34 +156,14 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     return results.stdout.encode("utf-8")
 
 
-# The flags sacct prints in place of the base state, in the order of Slurm's
-# job_state_string(); EXPEDITING is left out, SlurmState does not know it.
-_STATE_FLAGS = (
-    "COMPLETING",
-    "STAGE_OUT",
-    "CONFIGURING",
-    "RESIZING",
-    "REQUEUED",
-    "REQUEUE_FED",
-    "REQUEUE_HOLD",
-    "SPECIAL_EXIT",
-    "STOPPED",
-    "REVOKED",
-    "RESV_DEL_HOLD",
-    "SIGNALING",
-)
-
-
 def _state_from_list(states: list[str]) -> str:
     """The state sacct prints as text for a JSON state list.
 
-    The list holds the base state first, then the flags: a requeued run is
-    ["PENDING", "REQUEUED"], and its state is REQUEUED.
+    slurmdbd stores at most one flag, alone on a PENDING base
+    (as_mysql_job_complete), and the list puts it after the base state: a
+    requeued run is ["PENDING", "REQUEUED"], and its state is REQUEUED.
     """
-    for flag in _STATE_FLAGS:
-        if flag in states:
-            return flag
-    return states[0]
+    return states[-1]
 
 
 def _warn_if_closed_pending(
