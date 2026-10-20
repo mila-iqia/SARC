@@ -2,7 +2,6 @@ from types import SimpleNamespace
 from typing import Self
 
 from iguane.fom import RAWDATA, fom_ugr
-from sqlalchemy import text
 from sqlalchemy.dialects.postgresql import JSONB
 from sqlalchemy.orm import attribute_keyed_dict, relationship
 from sqlmodel import BIGINT, Field, Index, Session, UniqueConstraint, select
@@ -19,15 +18,7 @@ class JobStatisticDB(SQLModel, table=True):
     """Statistics for a timeseries."""
 
     __table_args__ = (
-        # /dash joins filter by name then read mean/max: name-first so `name = X`
-        # scans only that name's rows, INCLUDE (mean, max) makes the join index-only.
-        Index(
-            "ix_jobstatisticdb_name_job_covering",
-            "name",
-            "job_id",
-            postgresql_include=["mean", "max"],
-            unique=True,
-        ),
+        Index("ix_jobstatisticdb_name_job", "name", "job_id", unique=True),
     )
 
     id: int | None = Field(default=None, primary_key=True)
@@ -107,68 +98,6 @@ class SlurmJobDB(SQLModel, table=True):
             "job_id",
             unique=True,
             postgresql_include=["id"],
-        ),
-        # Covering index for any query based on submit_time
-        # (dashboard, Prometheus scraping, etc.). Covering so that a scan
-        # over a submit range gets what it filters and groups on without
-        # reading the table; displaying a job's other columns still does.
-        Index(
-            "ix_slurm_jobs_submit",
-            "submit_time",
-            postgresql_include=[
-                "id",
-                "harmonized_gpu_type",
-                "allocated_gpu_type",
-                "allocated_gres_gpu",
-                "elapsed_time",
-                "cluster_id",
-                "cluster_user",
-                "sarc_user_id",  # used by view when joining users and member_type
-                "start_time",  # with time_limit and job_state, what the
-                "time_limit",  # time-limit heatmaps read beyond the above
-                "job_state",
-            ],
-        ),
-        # "Which jobs were running during a period" is `end > lo AND start < hi`,
-        # two scalar comparisons over one indexed expression. Covering, so the
-        # window never reaches the heap; and a btree scan parallelizes, which no
-        # GiST scan does.
-        #
-        # Partial because every /dash plot is about GPU jobs (_gpu_only in
-        # sarc/api/metrics.py). Its predicate must stay the one the
-        # endpoints write, or the planner cannot prove the index applies.
-        Index(
-            "ix_slurm_jobs_end_gpu",
-            text("slurm_job_end(start_time, elapsed_time)"),
-            postgresql_include=[
-                "start_time",  # with elapsed_time: the expression's own inputs,
-                "elapsed_time",  # which an index-only scan must be able to return
-                "id",
-                "harmonized_gpu_type",
-                "allocated_gres_gpu",
-                "cluster_id",
-                "cluster_user",
-                "sarc_user_id",  # used by view when joining users and member_type
-                "job_state",
-            ],
-            postgresql_where=text(
-                "allocated_gres_gpu > 0 AND harmonized_gpu_type IS NOT NULL"
-            ),
-        ),
-        # Statistics-only: never scanned (ix_slurm_jobs_end_gpu above is always
-        # cheaper for that). Its sole purpose is to give ANALYZE something to
-        # collect a histogram on for this expression outside of a WHERE clause --
-        # a partial index's own expression stats aren't used by the planner to
-        # estimate a scan of *itself*, so without this, every /dash query sees
-        # the same fixed, wrong row estimate for `slurm_job_end(...) > x`
-        # regardless of x. That flat estimate pushes the planner toward hash/merge
-        # joins that scan a whole jobstatisticdb metric partition even when the
-        # requested window only touches a few thousand jobs. Non-partial and
-        # INCLUDE-less on purpose: the planner only needs to find a matching,
-        # always-applicable index to borrow real statistics from.
-        Index(
-            "ix_slurm_jobs_end_gpu_stats",
-            text("slurm_job_end(start_time, elapsed_time)"),
         ),
     )
 

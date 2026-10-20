@@ -458,32 +458,12 @@ class JobSeriesTable(SQLModel, table=True):
         Index(
             "ix_job_series_end",
             text("slurm_job_end(start_time, elapsed_time)"),
-            postgresql_include=COVERING,
             postgresql_where=text(ELIGIBILITY),
         ),
         Index(
             "ix_job_series_user",
             "sarc_user_id",
             text("slurm_job_end(start_time, elapsed_time)"),
-            postgresql_include=[c for c in COVERING if c != "sarc_user_id"],
-            postgresql_where=text(ELIGIBILITY),
-        ),
-        # Submission-window queries: submitted-job counts and the time-limit
-        # heatmaps select on submit_time and read no statistics (time_limit is
-        # the one extra they need).
-        Index(
-            "ix_job_series_submit",
-            "submit_time",
-            postgresql_include=[
-                "job_db_id",
-                "start_time",
-                "elapsed_time",
-                "time_limit",
-                "allocated_rgu_drac",
-                "cluster_id",
-                "sarc_user_id",
-                "job_state",
-            ],
             postgresql_where=text(ELIGIBILITY),
         ),
         # Statistics twin of ix_job_series_end (see docstring): non-partial,
