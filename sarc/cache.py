@@ -1,9 +1,7 @@
-from __future__ import annotations
-
 import contextlib
 import io
 import logging
-from collections.abc import Iterable, Iterator
+from collections.abc import Generator, Iterable, Iterator
 from datetime import UTC, datetime, time, timedelta
 from pathlib import Path
 from zipfile import ZIP_LZMA, ZipFile
@@ -98,7 +96,7 @@ class Cache:
         return cdir / f"{d.year:04}" / f"{d.month:02}" / f"{d.day:02}"
 
     @contextlib.contextmanager
-    def create_entry(self, at_time: datetime) -> Iterator[CacheEntry]:
+    def create_entry(self, at_time: datetime) -> Generator[CacheEntry]:
         """Create a writable CacheEntry for the specified time.
 
         This is a context manager so use like this:

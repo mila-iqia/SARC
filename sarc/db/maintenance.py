@@ -19,7 +19,7 @@ stats — lag further and further behind the data.
 
 import logging
 import time
-from collections.abc import Iterator
+from collections.abc import Generator
 from contextlib import contextmanager
 
 from sqlalchemy import Connection, text
@@ -34,7 +34,7 @@ _VACUUM_BUFFER_SHARE = 4
 
 
 @contextmanager
-def maintenance_connection() -> Iterator[Connection]:
+def maintenance_connection() -> Generator[Connection]:
     """A connection that VACUUM/ANALYZE may run on (no transaction)."""
     conn = config.db.engine.connect().execution_options(isolation_level="AUTOCOMMIT")
     try:

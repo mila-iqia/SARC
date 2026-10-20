@@ -622,7 +622,7 @@ class JobSeriesDB(SQLModel, table=True):
         col(JobSeriesTable.gpu_sm_occupancy_mean).label("usage_metric"),
         member_type_subq,
         supervisors_subq,
-    )  # ty: ignore[no-matching-overload]
+    )
 
     # job identification
     job_db_id: int = Field(primary_key=True)

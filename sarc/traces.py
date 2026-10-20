@@ -1,8 +1,9 @@
 import functools
 import inspect
 import logging
+from collections.abc import Generator
 from contextlib import contextmanager
-from typing import Callable, Iterator
+from typing import Callable
 
 from opentelemetry.trace import Span, Status, StatusCode, get_tracer
 
@@ -16,7 +17,7 @@ def using_trace(
     tracer_name: str,
     span_name: str,
     exception_types: tuple[type[BaseException], ...] = (Exception,),
-) -> Iterator[Span]:  # pylint: disable=dangerous-default-value
+) -> Generator[Span]:  # pylint: disable=dangerous-default-value
     """
     Context manager to manage traces & span, and catch exceptions (in span) without breaking the whole program execution.
 
