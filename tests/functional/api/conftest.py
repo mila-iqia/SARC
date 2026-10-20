@@ -1,7 +1,7 @@
 import socket
 
 import gifnoc
-import httpx
+import httpx2
 import pytest
 from easy_oauth.testing.utils import OAuthMock
 from fastapi import FastAPI
@@ -59,7 +59,7 @@ def app(oauth_mock, oauth_port):
 
 class ModifiedTestClient(TestClient):
     def __init__(self, app, oauth_mock):
-        self.normal = httpx.Client()
+        self.normal = httpx2.Client()
         self.oauth_mock = oauth_mock
         self.token = None
         super().__init__(app, follow_redirects=False)
@@ -74,8 +74,8 @@ class ModifiedTestClient(TestClient):
         self.token = self.get_token(email)
         self.headers["Authorization"] = f"Bearer {self.token}"
 
-    def request(self, method: str, url: httpx.URL | str, **kwargs):
-        url = httpx.URL(url)
+    def request(self, method: str, url: httpx2.URL | str, **kwargs):
+        url = httpx2.URL(url)
         if url.scheme:
             result = self.normal.request(method, url, **kwargs)
         else:
