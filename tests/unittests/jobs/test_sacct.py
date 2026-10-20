@@ -198,6 +198,62 @@ def test_convert_gres_gpu():
     assert job["reservation"] is None
 
 
+@pytest.mark.parametrize(
+    "states,expected",
+    [
+        (["PENDING", "REQUEUED"], "REQUEUED"),
+        (["PENDING", "RESIZING"], "RESIZING"),
+        (["COMPLETED"], "COMPLETED"),
+        (["PENDING"], "PENDING"),
+    ],
+)
+def test_convert_state_list(states, expected):
+    # sacct --json lists the base state first, then the flags: a requeued run
+    # is ["PENDING", "REQUEUED"], and the flag is its state.
+    entry = {
+        "job_id": 123,
+        "nodes": "node123",
+        "name": "test_job",
+        "user": "toto",
+        "group": "toto_group",
+        "account": "toto_account",
+        "state": {"current": states, "reason": "None"},
+        "tres": {"allocated": [], "requested": []},
+        "exit_code": {
+            "status": ["SUCCESS"],
+            "return_code": {"set": True, "infinite": False, "number": 0},
+            "signal": {
+                "id": {"set": False, "infinite": False, "number": 0},
+                "name": "",
+            },
+        },
+        "array": {
+            "job_id": 0,
+            "task_id": {"set": False, "infinite": False, "number": 0},
+        },
+        "partition": "partition123",
+        "constraints": "",
+        "priority": {"set": True, "infinite": False, "number": 489206},
+        "qos": "normal",
+        "reservation": {"id": 0, "name": "", "requested": ""},
+        "working_directory": "/home/toto/my_job_name",
+        "time": {
+            "elapsed": 259223,
+            "eligible": 1747064484,
+            "end": 1751866893,
+            "start": 1751607670,
+            "submission": 1747064484,
+            "limit": {"set": True, "infinite": False, "number": 4320},
+        },
+        "cluster": "test",
+        "flags": [],
+    }
+
+    job = _convert_json_job(entry, "test", {"major": "25", "micro": "8", "minor": "11"})
+    assert job is not None
+    assert job["job_state"] == expected
+
+
 def test_convert_version_supported():
     version_supported = {"major": "24", "micro": "1", "minor": "11"}
     version_unsupported = {"major": "124", "micro": "1", "minor": "11"}
@@ -395,6 +451,53 @@ def test_convert_fast_basic():
     assert job["JOB_ALTERED"] is True
     assert job["latest_scraped_start"] == scraped_start
     assert job["latest_scraped_end"] == scraped_end
+
+
+@pytest.mark.parametrize(
+    "states,expected,warns",
+    [
+        (["PENDING", "REQUEUED"], "REQUEUED", False),
+        (["COMPLETED"], "COMPLETED", False),
+        (["PENDING"], "PENDING", True),
+    ],
+)
+def test_convert_fast_state_list(states, expected, warns, caplog):
+    # A closed run: only a bare PENDING state is worth a warning.
+    entry = {
+        "job_id": 123456,
+        "array_job_id": 0,
+        "array_task_id": None,
+        "name": "my_job_name",
+        "user": "toto",
+        "group": "toto_group",
+        "account": "toto_account",
+        "state": states,
+        "exitcode_return_code": 0,
+        "exitcode_signal": None,
+        "time_elapsed": 259223,
+        "time_end": 1751866893,
+        "time_start": 1751607670,
+        "time_submit": 1747064484,
+        "time_timelimit": 4320,
+        "nodes": "node123",
+        "partition": "partition123",
+        "constraints": "",
+        "priority": 489206,
+        "qos": "normal",
+        "work_dir": "/home/toto/my_job_name",
+        "submit_line": "sbatch my_job_name.sh",
+        "flags": [],
+        "cluster": "test",
+    }
+
+    scraped_start = datetime(2025, 5, 12, tzinfo=UTC)
+    scraped_end = datetime(2025, 7, 7, tzinfo=UTC)
+
+    caplog.clear()
+    job = _convert_json_fast(entry, "test", scraped_start, scraped_end)
+    assert job["job_state"] == expected
+    warned = any("bare PENDING" in record.message for record in caplog.records)
+    assert warned is warns
 
 
 def test_convert_fast_array_job_id_zero():

@@ -156,6 +156,26 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     return results.stdout.encode("utf-8")
 
 
+def _state_from_list(states: list[str]) -> str:
+    """The state sacct prints as text for a JSON state list.
+
+    slurmdbd stores at most one flag, alone on a PENDING base
+    (as_mysql_job_complete), and the list puts it after the base state: a
+    requeued run is ["PENDING", "REQUEUED"], and its state is REQUEUED.
+    """
+    return states[-1]
+
+
+def _warn_if_closed_pending(
+    cluster: str, job_id: int, state: str, end_time: datetime | None
+) -> None:
+    """Slurm never closes a run with a bare PENDING state."""
+    if state == "PENDING" and end_time is not None:
+        logger.warning(
+            "Job %s on %s: closed run with a bare PENDING state", job_id, cluster
+        )
+
+
 @trace_decorator()
 def _convert_json_job(
     entry: dict,
@@ -241,6 +261,12 @@ def _convert_json_job(
         ):
             raise JobConversionError(f"Unsupported slurm version: {version}")
 
+    if v_before_23_11:
+        job_state = entry["state"]["current"]
+    else:
+        job_state = _state_from_list(entry["state"]["current"])
+    _warn_if_closed_pending(cluster, entry["job_id"], job_state, end_time)
+
     return dict(
         cluster_name=cluster,
         job_id=entry["job_id"],
@@ -254,11 +280,7 @@ def _convert_json_job(
         cluster_user=entry["user"],
         group=entry["group"],
         account=entry["account"],
-        job_state=(
-            entry["state"]["current"]
-            if v_before_23_11
-            else entry["state"]["current"][0]
-        ),
+        job_state=job_state,
         exit_code=(
             entry["exit_code"]["return_code"]
             if v_before_23_11
@@ -341,6 +363,10 @@ def _convert_json_fast(
             cluster_name,
         )
 
+    job_state = _state_from_list(entry["state"])
+    end_time = parse_in_timezone(entry["time_end"])
+    _warn_if_closed_pending(cluster_name, entry["job_id"], job_state, end_time)
+
     return dict(
         cluster_name=cluster_name,
         job_id=entry["job_id"],
@@ -350,13 +376,13 @@ def _convert_json_fast(
         cluster_user=entry["user"],
         group=entry["group"],
         account=entry["account"],
-        job_state=entry["state"][0],
+        job_state=job_state,
         exit_code=entry["exitcode_return_code"],
         signal=entry["exitcode_signal"],
         time_limit=(tlimit := entry["time_timelimit"]) and tlimit * 60,
         submit_time=parse_in_timezone(entry["time_submit"]),
         start_time=parse_in_timezone(entry["time_start"]),
-        end_time=parse_in_timezone(entry["time_end"]),
+        end_time=end_time,
         elapsed_time=entry["time_elapsed"],
         partition=entry["partition"],
         nodes=(
