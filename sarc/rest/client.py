@@ -5,7 +5,7 @@ from datetime import datetime
 from pathlib import Path
 from typing import Any, Literal
 
-import httpx
+import httpx2
 from serieux import deserialize
 from serieux.features.encrypt import EncryptionKey, Secret
 from serieux.formats import FileSource
@@ -30,7 +30,7 @@ class SarcClient:
     timeout: int = 120
 
     # Optional httpx.Client instance to use for requests
-    session: httpx.Client | None = None
+    session: httpx2.Client | None = None
 
     # How many results to get in one go
     block_size: int = 100
@@ -68,7 +68,7 @@ class SarcClient:
         if self.token is not None:
             headers["Authorization"] = f"Bearer {self.token}"
         url = self.base_url.rstrip("/") + "/" + path.lstrip("/")
-        getter = self.session.get if self.session is not None else httpx.get
+        getter = self.session.get if self.session is not None else httpx2.get
         response = getter(url, params=params, headers=headers, timeout=self.timeout)
         response.raise_for_status()
         return response.json()
