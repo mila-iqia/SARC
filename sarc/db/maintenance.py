@@ -68,7 +68,7 @@ def vacuum_database() -> None:
                 text(
                     "SELECT setting::bigint FROM pg_settings WHERE name = 'shared_buffers'"
                 )
-            ).scalar()
+            ).scalar_one()
             limit_kb = max(int(sb_pages * 8 / _VACUUM_BUFFER_SHARE), 128)  # 8 kB pages
             conn.execute(
                 text(f"SET vacuum_buffer_usage_limit = {limit_kb}")  # size in kB
