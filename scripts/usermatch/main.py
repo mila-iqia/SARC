@@ -18,6 +18,7 @@ from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
 from sqlmodel import select
+from tqdm import tqdm
 
 from sarc.config import config
 from sarc.db.users import UserDB
@@ -795,7 +796,7 @@ def load_users() -> list[dict]:
                 "email": u.email,
                 "matching_ids": dict(u.matching_ids),
             }
-            for u in db_users
+            for u in tqdm(db_users, desc="Loading users", unit="user")
         ]
 
 
