@@ -7,9 +7,18 @@ from sqlmodel import select
 
 from sarc.db.target_share import TargetShareDB, insert_target_shares
 
+# Real allocations.csv shape: the reader picks its five columns by name and
+# ignores the rest, so the fixtures carry the neighbouring columns too.
+HEADER = (
+    "start,       end,         cluster_name, resource_name,  group_name,"
+    "     cpu_year, gpu_year, rgu_year, project_size\n"
+)
+# A one-year period prorates rgu_year at 365 * 24 = 8760 h.
+HOURS = 365 * 24
+
 
 def write_csv(tmp_path, content):
-    path = tmp_path / "target_shares.csv"
+    path = tmp_path / "allocations.csv"
     path.write_text(content)
     return path
 
@@ -17,11 +26,14 @@ def write_csv(tmp_path, content):
 def configured_csv(tmp_path):
     return write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-04-01,2026-04-01,fromage,rrg-bonhomme-ad_gpu,100000\n"
-        "2026-04-01,2027-04-01,fromage,rrg-bonhomme-ad_gpu,110000\n"
-        "2025-04-01,2026-04-01,fromage,def-bonhomme_gpu,5000\n"
-        "2025-04-01,2026-04-01,patate,rrg-bonhomme-ad_cpu,40000\n",
+        HEADER
+        + "2025-04-01,  2026-04-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       100000,\n"
+        "2026-04-01,  2027-04-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       110000,\n"
+        "2025-04-01,  2026-04-01,  fromage,    fromage-gpu,    def-bonhomme_gpu,    ,         2,        5000,\n"
+        "2025-04-01,  2026-04-01,  patate,     patate-gpu,     rrg-bonhomme-ad_cpu, ,         3,        40000,\n"
+        # cpu and storage rows carry no rgu_year: skipped, not budgeted.
+        "2025-04-01,  2026-04-01,  fromage,    fromage-compute,rrg-bonhomme-ad,     873,\n"
+        "2025-04-01,  2026-04-01,  fromage,    fromage-storage,rrg-bonhomme-ad,     ,         ,         ,         150TB,\n",
     )
 
 
@@ -49,23 +61,36 @@ def test_insert_target_shares(tmp_path, empty_read_write_db):
         insert_target_shares()
 
     # Consecutive years [2025-04-01, 2026-04-01) + [2026-04-01, 2027-04-01)
-    # coexist: the half-open periods only touch, they do not overlap.
+    # coexist: the half-open periods only touch, they do not overlap. The cpu
+    # and storage rows are absent: no rgu_year, no budget.
     assert table_rows(empty_read_write_db) == [
-        (fromage_id, "def-bonhomme_gpu", date(2025, 4, 1), date(2026, 4, 1), 5000.0),
-        (patate_id, "rrg-bonhomme-ad_cpu", date(2025, 4, 1), date(2026, 4, 1), 40000.0),
+        (
+            fromage_id,
+            "def-bonhomme_gpu",
+            date(2025, 4, 1),
+            date(2026, 4, 1),
+            5000 * HOURS,
+        ),
+        (
+            patate_id,
+            "rrg-bonhomme-ad_cpu",
+            date(2025, 4, 1),
+            date(2026, 4, 1),
+            40000 * HOURS,
+        ),
         (
             fromage_id,
             "rrg-bonhomme-ad_gpu",
             date(2025, 4, 1),
             date(2026, 4, 1),
-            100000.0,
+            100000 * HOURS,
         ),
         (
             fromage_id,
             "rrg-bonhomme-ad_gpu",
             date(2026, 4, 1),
             date(2027, 4, 1),
-            110000.0,
+            110000 * HOURS,
         ),
     ]
 
@@ -78,24 +103,43 @@ def test_full_refresh(tmp_path, empty_read_write_db):
 
     replacement = write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-04-01,2026-04-01,fromage,rrg-bonhomme-ad_gpu,99999\n",
+        HEADER
+        + "2025-04-01,  2026-04-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       99999,\n",
     )
     with gifnoc.overlay({"sarc.target_shares": str(replacement)}):
         insert_target_shares()
 
     rows = table_rows(empty_read_write_db)
     assert len(rows) == 1
-    assert rows[0][4] == 99999.0
+    assert rows[0][4] == 99999 * HOURS
 
 
-def test_config_unset_is_noop(tmp_path, empty_read_write_db):
+def test_missing_column_rejected(tmp_path, empty_read_write_db):
+    bad = write_csv(
+        tmp_path,
+        "start,end,cluster_name,resource_name,cpu_year\n"
+        "2025-04-01,2026-04-01,fromage,fromage-gpu,10\n",
+    )
+    with gifnoc.overlay({"sarc.target_shares": str(bad)}), raises(ValueError) as e:
+        insert_target_shares()
+    assert "missing column" in str(e.value)
+
+
+def test_config_null_is_noop(tmp_path, empty_read_write_db):
     write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-04-01,2026-04-01,fromage,rrg-bonhomme-ad_gpu,100\n",
+        HEADER
+        + "2025-04-01,  2026-04-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       100,\n",
     )
-    insert_target_shares()  # config.target_shares is None in the test config
+    insert_target_shares()  # config.target_shares is null in the test config
+    assert table_rows(empty_read_write_db) == []
+
+
+def test_missing_file_is_noop(empty_read_write_db):
+    # A configured path that is absent (relative default, wrong deploy) warns
+    # and leaves the table alone rather than failing the deploy.
+    with gifnoc.overlay({"sarc.target_shares": "/nowhere/allocations.csv"}):
+        insert_target_shares()
     assert table_rows(empty_read_write_db) == []
 
 
@@ -106,9 +150,9 @@ def test_overlap_in_csv_rejected(tmp_path, empty_read_write_db):
 
     bad = write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-09-01,2026-09-01,fromage,rrg-bonhomme-ad_gpu,100000\n"
-        "2026-01-01,2027-01-01,fromage,rrg-bonhomme-ad_gpu,110000\n",
+        HEADER
+        + "2025-09-01,  2026-09-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       100000,\n"
+        "2026-01-01,  2027-01-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       110000,\n",
     )
     with gifnoc.overlay({"sarc.target_shares": str(bad)}), raises(ValueError) as e:
         insert_target_shares()
@@ -117,25 +161,39 @@ def test_overlap_in_csv_rejected(tmp_path, empty_read_write_db):
     assert table_rows(empty_read_write_db) == before
 
 
-def test_unknown_cluster_rejected(tmp_path, empty_read_write_db):
-    bad = write_csv(
+def test_unknown_cluster_skipped(tmp_path, empty_read_write_db):
+    """A budget for a cluster SARC does not know is skipped, not fatal: the
+    allocations.csv also lists not-yet-instrumented clusters."""
+    from sarc.db.cluster import SlurmClusterDB
+
+    patate_id = empty_read_write_db.exec(
+        select(SlurmClusterDB.id).where(SlurmClusterDB.name == "patate")
+    ).one()
+    csv = write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-04-01,2026-04-01,patate,rrg-bonhomme-ad_gpu,100000\n"
-        "2025-04-01,2026-04-01,nowhere,rrg-bonhomme-ad_gpu,100000\n",
+        HEADER
+        + "2025-04-01,  2026-04-01,  patate,     patate-gpu,     rrg-bonhomme-ad_gpu, ,         10,       100000,\n"
+        "2025-04-01,  2026-04-01,  nowhere,    nowhere-gpu,    rrg-bonhomme-ad_gpu, ,         10,       100000,\n",
     )
-    with gifnoc.overlay({"sarc.target_shares": str(bad)}), raises(ValueError) as e:
+    with gifnoc.overlay({"sarc.target_shares": str(csv)}):
         insert_target_shares()
-    assert "nowhere" in str(e.value)
-    # Partial import rolled back: the first row is not in either.
-    assert table_rows(empty_read_write_db) == []
+    # The known-cluster row lands, the unknown-cluster row is skipped.
+    assert table_rows(empty_read_write_db) == [
+        (
+            patate_id,
+            "rrg-bonhomme-ad_gpu",
+            date(2025, 4, 1),
+            date(2026, 4, 1),
+            100000 * HOURS,
+        )
+    ]
 
 
 def test_invalid_row_rejected(tmp_path, empty_read_write_db):
     bad = write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-04-01,2026-04-01,fromage,rrg-bonhomme-ad_gpu,cent mille\n",
+        HEADER
+        + "2025-04-01,  2026-04-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       cent mille,\n",
     )
     with gifnoc.overlay({"sarc.target_shares": str(bad)}), raises(ValueError):
         insert_target_shares()
@@ -177,11 +235,11 @@ def test_db_exclusion_constraint_rejects_overlap(tmp_path, empty_read_write_db):
 
 
 def test_empty_allocation_is_whole_cluster(tmp_path, empty_read_write_db):
-    """A blank allocation column imports as NULL and covers every account."""
+    """A blank group_name column imports as NULL and covers every account."""
     csv = write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2026-04-01,2027-04-01,patate,,15202488\n",
+        HEADER
+        + "2026-04-01,  2027-04-01,  patate,     patate,         ,                    ,         10,       1000,\n",
     )
     with gifnoc.overlay({"sarc.target_shares": str(csv)}):
         insert_target_shares()
@@ -190,7 +248,7 @@ def test_empty_allocation_is_whole_cluster(tmp_path, empty_read_write_db):
     assert [
         row.allocation for row in empty_read_write_db.exec(select(TargetShareDB))
     ] == [None]
-    assert rows[0][4] == 15202488.0
+    assert rows[0][4] == 1000 * HOURS
 
 
 def test_cluster_wide_row_conflicts_with_concrete_allocation(
@@ -199,9 +257,9 @@ def test_cluster_wide_row_conflicts_with_concrete_allocation(
     """An all-accounts budget overlaps any account budget of that cluster."""
     csv = write_csv(
         tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2026-04-01,2027-04-01,fromage,rrg-bonhomme-ad_gpu,100000\n"
-        "2026-04-01,2027-04-01,fromage,,15202488\n",
+        HEADER
+        + "2026-04-01,  2027-04-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad_gpu, ,         10,       100000,\n"
+        "2026-04-01,  2027-04-01,  fromage,    fromage,        ,                    ,         10,       150000,\n",
     )
     with gifnoc.overlay({"sarc.target_shares": str(csv)}), raises(ValueError) as e:
         insert_target_shares()

@@ -1,7 +1,8 @@
 """Target shares: annual compute budgets (RGU-hours) declared per cluster/account.
 
-The `target_shares` table is the full materialization of a CSV declared in the
-`sarc.target_shares` config key. `insert_target_shares()` deletes and re-inserts
+The `target_shares` table is the materialization of the allocations CSV named
+by the `sarc.target_shares` config key (default `data/allocations.csv`, same
+format as the code's data file). `insert_target_shares()` deletes and re-inserts
 every row at each import, so surrogate ids churn: consumers must join on the
 natural key (cluster_id, allocation, period) and never persist `id`. If a future
 table ever references `id`, this full-refresh strategy must be replaced by a
@@ -67,15 +68,17 @@ class TargetShareDB(SQLModel, table=True):
     cluster_id: int = Field(foreign_key="clusters.id", index=True)
     cluster: SlurmClusterDB = Relationship(passive_deletes="all")
 
-    # Slurm accounting account the budget covers, spelled exactly as in
-    # `slurm_jobs.account` (exact match, no prefix rule). NULL covers the
-    # whole cluster: budgets negotiated at cluster level (PAICE shares)
-    # have no single account — one per chair — to name.
+    # Budget target: the allocations CSV group_name (e.g. rrg-bengioy-ad or
+    # mila). How it maps onto slurm_jobs.account — bare group vs the _gpu /
+    # _cpu leaf accounts — is left to each consumer, still to be decided.
+    # NULL covers the whole cluster: budgets negotiated at cluster level
+    # (PAICE shares) have no single group to name.
     allocation: str | None
     # Budget period, end exclusive.
     start: Annotated[date, BeforeValidator(validate_date)]
     end: Annotated[date, BeforeValidator(validate_date)]
-    # Allocated compute, in RGU-hours — same unit as the iguane job costs.
+    # Allocated compute, in RGU-hours — same unit as the iguane job costs:
+    # the CSV's annual rgu_year rate prorated over the row's period.
     rgu_hours: float
     # Time of the import that produced this row; identical for every row
     # since each import is a full refresh.
@@ -89,14 +92,15 @@ class TargetShareRow(SQLModel):
     end: Annotated[date, BeforeValidator(validate_date)]
     cluster_name: str
     allocation: Annotated[str | None, BeforeValidator(empty_allocation_as_none)]
-    rgu_hours: float
+    # Annual rate, as the allocations.csv rgu_year column.
+    rgu_year: float
 
-    @field_validator("rgu_hours")
+    @field_validator("rgu_year")
     @classmethod
-    def positive_budget(cls, rgu_hours: float) -> float:
-        if rgu_hours <= 0:
-            raise ValueError(f"rgu_hours must be positive, got {rgu_hours}")
-        return rgu_hours
+    def positive_rate(cls, rgu_year: float) -> float:
+        if rgu_year <= 0:
+            raise ValueError(f"rgu_year must be positive, got {rgu_year}")
+        return rgu_year
 
     @field_validator("end")
     @classmethod
@@ -108,22 +112,38 @@ class TargetShareRow(SQLModel):
 
 
 def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
-    """Parse and validate the target shares CSV, raising on any bad row."""
+    """Parse and validate the allocations CSV, raising on any bad row.
+
+    Reads only the target-share columns; rows without an rgu_year (cpu,
+    storage, and the pre-RGU gpu_year rows) describe no RGU budget and are
+    skipped here.
+    """
     from pydantic import ValidationError
 
+    required = ["start", "end", "cluster_name", "group_name", "rgu_year"]
     rows: list[TargetShareRow] = []
     with path.open(newline="") as csv_file:
-        reader = csv.DictReader(csv_file, skipinitialspace=True, restkey="garbage")
+        reader = csv.DictReader(csv_file, skipinitialspace=True)
+        fieldnames = reader.fieldnames or []
+        missing = [name for name in required if name not in fieldnames]
+        if missing:
+            raise ValueError(f"{path}: missing column(s): {', '.join(missing)}")
         for line_nb, row in enumerate(reader, start=2):  # header is line 1
-            if row.pop("garbage", None) is not None:
-                raise ValueError(
-                    f"{path}:{line_nb}: too many columns: {row} (expected "
-                    "start, end, cluster_name, allocation, rgu_hours)"
-                )
-            if all(not value.strip() for value in row.values()):
+            row.pop(None, None)  # fields past the header's last column
+            if all(not (value or "").strip() for value in row.values()):
                 continue  # fully empty row
+            rgu_year = (row.get("rgu_year") or "").strip()
+            if not rgu_year:
+                continue  # a cpu, storage or gpu_year row: no RGU budget
+            values = {
+                "start": row["start"],
+                "end": row["end"],
+                "cluster_name": row["cluster_name"],
+                "allocation": row.get("group_name"),
+                "rgu_year": rgu_year,
+            }
             try:
-                rows.append(TargetShareRow.model_validate(row))
+                rows.append(TargetShareRow.model_validate(values))
             except ValidationError as e:
                 raise ValueError(f"{path}:{line_nb}: invalid row {row}") from e
     return rows
@@ -176,17 +196,21 @@ def _resolve_cluster_ids(
     for row in rows:
         cluster_id = db_clusters.get(row.cluster_name)
         if cluster_id is None:
-            raise ValueError(
-                f"target share cluster {row.cluster_name!r} not found in the "
-                "database (seeded by insert_clusters)"
+            # Budgets of not-yet-instrumented clusters stay in the CSV until
+            # insert_clusters learns them; the import must not fail on them.
+            logger.warning(
+                f"skipping target share for unknown cluster {row.cluster_name!r}"
             )
+            continue
         shares.append(
             TargetShareDB(
                 cluster_id=cluster_id,
                 allocation=row.allocation,
                 start=row.start,
                 end=row.end,
-                rgu_hours=row.rgu_hours,
+                # Prorate the annual rate over the row's period: rgu_year
+                # x (days / 365) x 8760 h/year, and 8760 / 365 is exactly 24.
+                rgu_hours=row.rgu_year * (row.end - row.start).days * 24,
                 timestamp=timestamp,
             )
         )
@@ -194,19 +218,24 @@ def _resolve_cluster_ids(
 
 
 def insert_target_shares() -> None:
-    """Full-refresh `target_shares` from the CSV in the `sarc.target_shares` config.
+    """Full-refresh `target_shares` from the allocations CSV of the config.
 
-    No-op when the config key is unset. All rows are validated first, then the
-    table is emptied and refilled in a single transaction: readers see either
-    the previous set or the new one, never a partial or empty table, and rows
-    deleted from the CSV disappear here — merge-by-key semantics could not.
-    Raises on any invalid row: a silently dropped budget would skew every
-    report built on it, so a failed deploy is the wanted outcome. Runs after
-    insert_clusters, which seeds the clusters resolved here.
+    No-op when the config key is null or the file is missing. All rows are
+    validated first, then the table is emptied and refilled in a single
+    transaction: readers see either the previous set or the new one, never a
+    partial or empty table, and rows deleted from the CSV disappear here —
+    merge-by-key semantics could not. Raises on any invalid row: a silently
+    dropped budget would skew every report built on it, so a failed deploy is
+    the wanted outcome. Rows whose cluster the database does not know are
+    skipped instead, see _resolve_cluster_ids. Runs after insert_clusters,
+    which seeds the clusters resolved here.
     """
     from sarc.config import config
 
     if config.target_shares is None:
+        return
+    if not config.target_shares.is_file():
+        logger.warning(f"target shares file {config.target_shares} not found")
         return
 
     rows = read_target_shares_csv(config.target_shares)
