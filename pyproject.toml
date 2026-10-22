@@ -23,7 +23,7 @@ dependencies = [
     "gifnoc>=0.6,<0.7",
     "serieux>=0.3.6,<0.4",
     "watchdog>=6,<7",
-    "python-dateutil>=2.9.0.post0,<3",
+    "python-dateutil>=3,<4",
     "opentelemetry-exporter-otlp>=1.23.0,<2",
     "iguane",
     "filelock>=3.18.0",
