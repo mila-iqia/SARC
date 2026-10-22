@@ -8,6 +8,12 @@ sarc:
       # unless host is a GCP instance name in which case it will use the
       # default service account for the machine
   patches: "patches" # this is the path to the patches directory
+  target_shares: "target_shares.csv" # Optional CSV of target shares (annual compute
+  # budgets, in RGU-hours, per cluster and slurm account). Imported — full
+  # refresh — into the target_shares table by `python -m sarc.db`.
+  # Columns: start, end (end exclusive), cluster_name, allocation (exact slurm
+  # account name, e.g. rrg-bengioy-ad_gpu), rgu_hours.
+  # Omit the key to disable the import.
   server: # API server config
     auth: # If null, disables authentification for the API
       # easy-oauth config, see https://pypi.org/project/easy-oauth/

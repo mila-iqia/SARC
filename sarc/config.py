@@ -485,6 +485,11 @@ class Config:
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
     notifications: UsageNotifyConfig | None = None
+    target_shares: Path | None = None
+    """Path to a CSV declaring the target shares (annual compute budgets in
+    RGU-hours per cluster/account), imported into the `target_shares` table by
+    `init_insert()`. Columns: start, end, cluster_name, allocation, rgu_hours.
+    Unset disables the import."""
 
     def __post_init__(self):
         for name, cluster in self.clusters.items():
