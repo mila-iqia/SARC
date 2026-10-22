@@ -15,14 +15,36 @@ logger = logging.getLogger(__name__)
 
 @trace_decorator()
 def get_job_time_series_batched(
-    jobs: Sequence[SlurmJobDB], metric: str | Sequence[str]
+    jobs: Sequence[SlurmJobDB],
+    metric: str | Sequence[str],
+    max_points: int = 100,
+    min_interval: int = 30,
+    bucket_ratio: float = 4.0,
 ) -> list[list]:
-    """Fetch job metrics for a sequence of jobs in a single batched Prometheus query.
+    """Fetch job metrics for a sequence of jobs in batched Prometheus queries.
+
+    One batched query imposes one subquery step on all its jobs, and the
+    step that caps a long job at ``max_points`` points would starve the
+    batch's short jobs. Jobs are instead grouped by *runtime*: each group
+    is fetched with a subquery step of its shortest runtime divided by
+    ``max_points``, bounding every job of the group near ``max_points``
+    points per series (within ``bucket_ratio`` of it). A group's time
+    window only has to cover its jobs, so jobs that ran far apart still
+    batch together. Jobs whose runtime cannot exceed ``max_points``
+    points at the raw ``min_interval`` sampling are not downsampled and
+    share one raw query.
 
     Arguments:
         jobs: The sequence of jobs for which to fetch metrics.
         metric: The metric or list of metrics, which must be in
             ``SLURM_JOB_METRIC_NAMES``.
+        max_points: Target number of points per series for the longest
+            job of a group.
+        min_interval: The minimal reporting interval, in seconds: a step
+            of no more than the raw sampling interval would only repeat
+            samples and skew the statistics.
+        bucket_ratio: Maximal max/min runtime ratio within a downsampled
+            group.
 
     Returns:
         A list of result lists corresponding positionally to each job in `jobs`.
@@ -36,79 +58,127 @@ def get_job_time_series_batched(
     for m in metrics:
         if m not in SLURM_JOB_METRIC_NAMES:
             raise ValueError(f"Unknown metric name: {m}")
+    if max_points < 1 or min_interval < 1:
+        raise ValueError("max_points and min_interval must be positive")
 
     now = datetime.now(tz=UTC)
-    job_map: dict[str, list[int]] = defaultdict(list)
     results: list[list] = [[] for _ in jobs]
 
-    min_start: datetime | None = None
-    max_end: datetime | None = None
-
-    # Collect valid job IDs and determine global bounding time window
+    # Runtime and time bounds of every fetchable job, keyed by position in `jobs`.
+    durations: dict[int, int] = {}
+    spans: dict[int, tuple[datetime, datetime]] = {}
     for idx, job in enumerate(jobs):
         if job.job_state != "RUNNING" and not job.elapsed_time:
             continue
         if job.start_time is None or job.end_time is None:
             continue
 
-        str_job_id = str(job.job_id)
-        job_map[str_job_id].append(idx)
+        durations[idx] = max(1, int((job.end_time - job.start_time).total_seconds()))
+        spans[idx] = (job.start_time, job.end_time)
 
-        min_start = (
-            job.start_time if min_start is None else min(min_start, job.start_time)
-        )
-        max_end = job.end_time if max_end is None else max(max_end, job.end_time)
-
-    if not job_map or min_start is None or max_end is None:
+    if not durations:
         return results
 
-    global_duration = max(1, int((max_end - min_start).total_seconds()))
-    global_offset = max(0, int((now - max_end).total_seconds()))
-    offset_string = f" offset {global_offset}s" if global_offset > 0 else ""
+    # A job id resuming after preemption appears several times with possibly
+    # different runtimes, and can thus land in several groups: a series for
+    # that id is only attributable to one job run without time filtering.
+    run_counts: dict[str, int] = defaultdict(int)
+    for idx in durations:
+        run_counts[str(jobs[idx].job_id)] += 1
 
-    str_job_ids = "|".join(job_map.keys())
+    raw_cut = max_points * min_interval
+    groups: list[tuple[list[int], int | None]] = [
+        ([idx for idx in durations if durations[idx] <= raw_cut], None)
+    ]
+    # Group the longer jobs by ascending runtime so the step imposed by the
+    # shortest job of a group leaves at most bucket_ratio * max_points
+    # points to its longest jobs.
+    long_idxs = sorted(
+        (idx for idx in durations if durations[idx] > raw_cut),
+        key=durations.__getitem__,
+    )
+    start = 0
+    while start < len(long_idxs):
+        min_duration = durations[long_idxs[start]]
+        end = start + 1
+        while (
+            end < len(long_idxs)
+            and durations[long_idxs[end]] <= min_duration * bucket_ratio
+        ):
+            end += 1
+        # Ceil division: min_duration > raw_cut, so the step stays above
+        # the raw sampling interval and samples are never repeated.
+        groups.append((long_idxs[start:end], -(-min_duration // max_points)))
+        start = end
+
     if len(metrics) == 1:
         prefix = metrics[0]
-        label_exprs = [f'slurmjobid=~"^{str_job_ids}$"']
+        metric_label_exprs: list[str] = []
     else:
         prefix = ""
-        label_exprs = [
-            f'__name__=~"^({"|".join(metrics)})$"',
-            f'slurmjobid=~"^{str_job_ids}$"',
-        ]
-
-    selector = prefix + "{" + ", ".join(label_exprs) + "}"
-    combined_query = f"({selector}[{global_duration}s]{offset_string})"
-
-    logger.debug(f"batched prometheus query: {combined_query}")
+        metric_label_exprs = [f'__name__=~"^({"|".join(metrics)})$"']
 
     cluster_name = jobs[0].cluster.name
-    raw_results = config.clusters[cluster_name].prometheus.custom_query(combined_query)
 
-    # Map returned series back to jobs & filter values to exact job time windows
-    for series_data in raw_results:
-        job_id = series_data.get("metric", {}).get("slurmjobid")
-        if not job_id or job_id not in job_map:
+    for idxs, step in groups:
+        if not idxs:
             continue
 
-        if len(job_map[job_id]) == 1:
-            idx = job_map[job_id][0]
-            results[idx].append(series_data)
-        else:
-            series_values = series_data.get("values", [])
-            for idx in job_map[job_id]:
-                job = jobs[idx]
-                start_ts = job.start_time.timestamp()  # ty:ignore[unresolved-attribute]
-                end_ts = job.end_time.timestamp()  # ty:ignore[unresolved-attribute]
+        job_map: dict[str, list[int]] = defaultdict(list)
+        min_start: datetime | None = None
+        max_end: datetime | None = None
+        for idx in idxs:
+            job = jobs[idx]
+            job_map[str(job.job_id)].append(idx)
+            start_time, end_time = spans[idx]
+            min_start = start_time if min_start is None else min(min_start, start_time)
+            max_end = end_time if max_end is None else max(max_end, end_time)
 
-                # Filter points belonging strictly to this job run
-                filtered_values = [
-                    pt for pt in series_values if start_ts <= pt[0] <= end_ts
-                ]
-                if filtered_values:
-                    series_copy = dict(series_data)
-                    series_copy["values"] = filtered_values
-                    results[idx].append(series_copy)
+        if min_start is None or max_end is None:  # keep ty happy: idxs is not empty
+            continue
+
+        # The group's bounding time window
+        group_duration = max(1, int((max_end - min_start).total_seconds()))
+        group_offset = max(0, int((now - max_end).total_seconds()))
+        offset_string = f" offset {group_offset}s" if group_offset > 0 else ""
+        step_string = f":{step}s" if step is not None else ""
+
+        str_job_ids = "|".join(job_map.keys())
+        label_exprs = metric_label_exprs + [f'slurmjobid=~"^{str_job_ids}$"']
+        selector = prefix + "{" + ", ".join(label_exprs) + "}"
+        combined_query = f"({selector}[{group_duration}s{step_string}]{offset_string})"
+
+        logger.debug(f"batched prometheus query: {combined_query}")
+
+        raw_results = config.clusters[cluster_name].prometheus.custom_query(
+            combined_query
+        )
+
+        # Map returned series back to jobs & filter values to exact job time windows
+        for series_data in raw_results:
+            job_id = series_data.get("metric", {}).get("slurmjobid")
+            if not job_id or job_id not in job_map:
+                continue
+
+            if len(job_map[job_id]) == 1 and run_counts[job_id] == 1:
+                # The only run of this id: every point is its job's.
+                idx = job_map[job_id][0]
+                results[idx].append(series_data)
+            else:
+                series_values = series_data.get("values", [])
+                for idx in job_map[job_id]:
+                    job = jobs[idx]
+                    start_ts = job.start_time.timestamp()  # ty:ignore[unresolved-attribute]
+                    end_ts = job.end_time.timestamp()  # ty:ignore[unresolved-attribute]
+
+                    # Filter points belonging strictly to this job run
+                    filtered_values = [
+                        pt for pt in series_values if start_ts <= pt[0] <= end_ts
+                    ]
+                    if filtered_values:
+                        series_copy = dict(series_data)
+                        series_copy["values"] = filtered_values
+                        results[idx].append(series_copy)
 
     return results
 
@@ -294,8 +364,8 @@ def compute_job_statistics(
     drops the whole PROF family from the result, keeping DEV power/utilization
     and the cgroup metrics: their false zeros must not reach the database.
     """
-    # We get all required job time series with just 1 call to
-    # get_job_time_series(), then split them by metric.
+    # We get all required job time series with a few batched calls to
+    # get_job_time_series_batched(), then split them by metric.
     metric_to_data: dict[str, list[dict]] = {
         metric: [] for metric in JOB_STATISTICS_METRIC_NAMES
     }

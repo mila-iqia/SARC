@@ -65,6 +65,49 @@ def test_get_job_time_series_data(job, prom_custom_query_mock, file_regression):
     file_regression.check(prom_custom_query_mock.call_args[0][0])
 
 
+bucket_parameters = [
+    # raw_cut is max_points * min_interval = 3000s: 600 < raw_cut, then the
+    # two longer jobs are one bucket each (3_000_000 > 4 * 7200).
+    {"job_id": 11, "duration": 600},
+    {"job_id": 12, "duration": 7200},
+    {"job_id": 13, "duration": 3_000_000},
+]
+
+
+@pytest.mark.time_machine(utc_test_time, tick=False)
+def test_duration_buckets(prom_custom_query_mock, read_write_db):
+    """Mixed runtimes are fetched one query per duration bucket, each query
+    subquery-sampled at its shortest job's duration / max_points."""
+    job_factory = JobFactory(clusters=[], users=[])
+    jobs = []
+    for params in bucket_parameters:
+        start_time = utc_test_time - timedelta(seconds=params["duration"])
+        job = job_factory.create_job(
+            job_id=params["job_id"],
+            submit_time=start_time,
+            start_time=start_time,
+            end_time=utc_test_time,
+            cluster_id=1,
+            sarc_user_id=1,
+        )
+        read_write_db.add(job)
+        jobs.append(job)
+    read_write_db.flush()
+
+    assert get_job_time_series_batched(jobs, "slurm_job_core_usage") == [[], [], []], (
+        "custom_query was not mocked properly"
+    )
+
+    queries = [call.args[0] for call in prom_custom_query_mock.call_args_list]
+    # The short job keeps raw resolution, the others are downsampled to
+    # ceil(bucket_min_duration / max_points) steps.
+    assert queries == [
+        '(slurm_job_core_usage{slurmjobid=~"^11$"}[600s])',
+        '(slurm_job_core_usage{slurmjobid=~"^12$"}[7200s:72s])',
+        '(slurm_job_core_usage{slurmjobid=~"^13$"}[3000000s:30000s])',
+    ]
+
+
 no_duration_parameters = {
     "end_time_with_start_none": {
         "job_state": "CANCELLED",
