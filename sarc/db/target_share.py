@@ -28,6 +28,13 @@ from .sqlmodel import SQLModel, datetime_utc_field
 logger = logging.getLogger(__name__)
 
 
+def empty_allocation_as_none(value: object) -> object:
+    """A blank CSV allocation field means the whole-cluster budget (NULL)."""
+    if isinstance(value, str) and not value.strip():
+        return None
+    return value
+
+
 class TargetShareDB(SQLModel, table=True):
     __tablename__ = "target_shares"
     __table_args__ = (
@@ -35,9 +42,14 @@ class TargetShareDB(SQLModel, table=True):
         # overlap. The period is half-open, [start, end), so consecutive
         # budget years touching at a boundary date are legal — same
         # convention as allocations.csv. Requires the btree_gist extension.
+        # coalesce() keeps NULL allocations (whole-cluster budgets) from
+        # silently escaping the constraint: a gist exclusion predicate with
+        # a NULL operand is never true. A NULL vs. concrete-allocation
+        # overlap is not expressible here; the import check in
+        # _check_no_overlap rejects it instead.
         ExcludeConstraint(
             ("cluster_id", "="),
-            ("allocation", "="),
+            (func.coalesce(literal_column('"allocation"'), ""), "="),
             (
                 func.daterange(
                     literal_column('"start"'), literal_column('"end"'), "[)"
@@ -56,8 +68,10 @@ class TargetShareDB(SQLModel, table=True):
     cluster: SlurmClusterDB = Relationship(passive_deletes="all")
 
     # Slurm accounting account the budget covers, spelled exactly as in
-    # `slurm_jobs.account` (exact match, no prefix rule).
-    allocation: str
+    # `slurm_jobs.account` (exact match, no prefix rule). NULL covers the
+    # whole cluster: budgets negotiated at cluster level (PAICE shares)
+    # have no single account — one per chair — to name.
+    allocation: str | None
     # Budget period, end exclusive.
     start: Annotated[date, BeforeValidator(validate_date)]
     end: Annotated[date, BeforeValidator(validate_date)]
@@ -74,7 +88,7 @@ class TargetShareRow(SQLModel):
     start: Annotated[date, BeforeValidator(validate_date)]
     end: Annotated[date, BeforeValidator(validate_date)]
     cluster_name: str
-    allocation: str
+    allocation: Annotated[str | None, BeforeValidator(empty_allocation_as_none)]
     rgu_hours: float
 
     @field_validator("rgu_hours")
@@ -115,23 +129,38 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
     return rows
 
 
-def _check_no_overlap(rows: list[TargetShareRow]) -> None:
-    """Reject rows whose (cluster, allocation) periods overlap within the CSV.
+def _rows_conflict(first: TargetShareRow, second: TargetShareRow) -> bool:
+    """True when two rows budget the same accounts over overlapping periods.
 
-    The DB exclusion constraint would catch it at flush; checking here gives
-    the offending pair instead of a constraint violation traceback.
+    A NULL-allocation row covers every account of its cluster, so it
+    conflicts with any other row of that cluster, concrete allocations
+    included.
+    """
+    if first.cluster_name != second.cluster_name:
+        return False
+    if first.start >= second.end or second.start >= first.end:
+        return False
+    if first.allocation is None or second.allocation is None:
+        return True
+    return first.allocation == second.allocation
+
+
+def _check_no_overlap(rows: list[TargetShareRow]) -> None:
+    """Reject rows whose covered accounts and periods overlap within the CSV.
+
+    The DB exclusion constraint catches same-allocation (and NULL/NULL)
+    overlaps at flush; checking here rejects NULL vs. concrete overlaps the
+    constraint cannot express, and names the offending pair instead of
+    raising a constraint violation traceback.
     """
     for i, first in enumerate(rows):
         for second in rows[i + 1 :]:
-            if (
-                first.cluster_name == second.cluster_name
-                and first.allocation == second.allocation
-                and first.start < second.end
-                and second.start < first.end
-            ):
+            if _rows_conflict(first, second):
                 raise ValueError(
-                    f"overlapping target shares for {first.cluster_name}/"
-                    f"{first.allocation}: [{first.start}, {first.end}) and "
+                    f"overlapping target shares for {first.cluster_name}: "
+                    f"{first.allocation or 'all accounts'} "
+                    f"[{first.start}, {first.end}) and "
+                    f"{second.allocation or 'all accounts'} "
                     f"[{second.start}, {second.end})"
                 )
 

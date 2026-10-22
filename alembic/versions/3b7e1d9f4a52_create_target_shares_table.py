@@ -28,7 +28,7 @@ def upgrade() -> None:
         "target_shares",
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("cluster_id", sa.Integer(), nullable=False),
-        sa.Column("allocation", sa.String(), nullable=False),
+        sa.Column("allocation", sa.String(), nullable=True),
         sa.Column("start", sa.Date(), nullable=False),
         sa.Column("end", sa.Date(), nullable=False),
         sa.Column("rgu_hours", sa.Float(), nullable=False),
@@ -48,10 +48,13 @@ def upgrade() -> None:
     )
     # Target-share periods must not overlap (see TargetShareDB):
     # same cluster and allocation, half-open periods [start, end).
+    # coalesce() so NULL allocations (whole-cluster budgets) conflict
+    # with each other; a gist exclusion predicate with a NULL operand
+    # is never true.
     op.execute(
         "ALTER TABLE target_shares ADD CONSTRAINT target_shares_no_overlap "
         "EXCLUDE USING gist ("
-        "cluster_id WITH =, allocation WITH =, "
+        "cluster_id WITH =, coalesce(allocation, '') WITH =, "
         'daterange("start", "end", \'[)\') WITH &&)'
     )
     # ### end Alembic commands ###
