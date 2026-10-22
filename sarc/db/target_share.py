@@ -136,23 +136,6 @@ def _check_no_overlap(rows: list[TargetShareRow]) -> None:
                 )
 
 
-def _check_allocations(rows: list[TargetShareRow]) -> None:
-    """Every allocation must be a configured account of its cluster, when the
-    cluster has an explicit `accounts` list (a typo there would otherwise make
-    the budget silently match no job)."""
-    from sarc.config import config
-
-    for row in rows:
-        cluster = config.clusters.get(row.cluster_name)
-        if cluster is None or not cluster.accounts:
-            continue  # accounts == None: the cluster scrapes all accounts
-        if row.allocation not in cluster.accounts:
-            raise ValueError(
-                f"target share allocation {row.allocation!r} is not in the "
-                f"accounts of cluster {row.cluster_name!r}: {cluster.accounts}"
-            )
-
-
 def _resolve_cluster_ids(
     sess: Session, rows: list[TargetShareRow]
 ) -> list[TargetShareDB]:
@@ -199,7 +182,6 @@ def insert_target_shares() -> None:
 
     rows = read_target_shares_csv(config.target_shares)
     _check_no_overlap(rows)
-    _check_allocations(rows)
 
     with config.db.session() as sess:
         shares = _resolve_cluster_ids(sess, rows)

@@ -131,32 +131,6 @@ def test_unknown_cluster_rejected(tmp_path, empty_read_write_db):
     assert table_rows(empty_read_write_db) == []
 
 
-def test_allocation_not_a_configured_account_rejected(tmp_path, empty_read_write_db):
-    bad = write_csv(
-        tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-04-01,2026-04-01,fromage,rrg-bengioy-ad_gpu,100000\n",
-    )
-    with gifnoc.overlay({"sarc.target_shares": str(bad)}), raises(ValueError) as e:
-        insert_target_shares()
-    assert "rrg-bengioy-ad_gpu" in str(e.value)
-    assert table_rows(empty_read_write_db) == []
-
-
-def test_cluster_without_accounts_list_accepts_any_allocation(
-    tmp_path, empty_read_write_db
-):
-    """`local` has accounts: null — every allocation is accepted."""
-    csv = write_csv(
-        tmp_path,
-        "start,end,cluster_name,allocation,rgu_hours\n"
-        "2025-04-01,2026-04-01,local,rrg-importante_gpu,100000\n",
-    )
-    with gifnoc.overlay({"sarc.target_shares": str(csv)}):
-        insert_target_shares()
-    assert len(table_rows(empty_read_write_db)) == 1
-
-
 def test_invalid_row_rejected(tmp_path, empty_read_write_db):
     bad = write_csv(
         tmp_path,
