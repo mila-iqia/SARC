@@ -10,7 +10,6 @@ from .sqlmodel import SQLModel
 def get_meta():
     # We need to import those to register the tables
     from . import (  # noqa: F401
-        allocation,
         cluster,
         diskusage,
         healthcheck,

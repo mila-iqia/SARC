@@ -3,7 +3,6 @@ from datetime import UTC, datetime
 import pytest
 from sqlmodel import select
 
-from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB
 from sarc.db.job import SlurmJobDB
@@ -18,7 +17,6 @@ from sarc.db.users import CredentialsDB, MatchingID, MemberTypeDB, SupervisorsDB
         UserDB,
         SlurmClusterDB,
         GPUBillingDB,
-        AllocationDB,
         # These next two are implicitely tested by the DiskUsageDB dump
         # DiskUsageUserDB,
         # DiskUsageGroupDB,

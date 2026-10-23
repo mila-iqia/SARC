@@ -166,7 +166,6 @@ class DbConfiguration:
 
     def _fill(self, db):
         from .db.factory import (
-            create_allocations,
             create_diskusages,
             create_gpu_billings,
             create_jobs,
@@ -183,9 +182,6 @@ class DbConfiguration:
 
             billings = create_gpu_billings(clusters=clusters)
             sess.add_all(billings)
-
-            allocations = create_allocations(clusters=clusters)
-            sess.add_all(allocations)
 
             create_diskusages(sess=sess, clusters=clusters)
 

@@ -7,7 +7,6 @@ from sarc.config import config
 from sarc.db.maintenance import vacuum_database
 from sarc.patch import declare_patch
 
-from .allocations import ParseAllocations
 from .diskusage import ParseDiskUsage
 from .jobs import ParseJobs
 from .prometheus import ParsePrometheus
@@ -23,18 +22,12 @@ def patch_db(sess: Session) -> None:
 @dataclass
 class Parse:
     command: (
-        ParseUsers
-        | ParseDiskUsage
-        | ParseSlurmConfig
-        | ParseAllocations
-        | ParseJobs
-        | ParsePrometheus
+        ParseUsers | ParseDiskUsage | ParseSlurmConfig | ParseJobs | ParsePrometheus
     ) = subparsers(
         {
             "users": ParseUsers,
             "diskusage": ParseDiskUsage,
             "slurmconfig": ParseSlurmConfig,
-            "allocations": ParseAllocations,
             "jobs": ParseJobs,
             "prometheus": ParsePrometheus,
         }

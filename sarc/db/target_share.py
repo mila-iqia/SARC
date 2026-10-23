@@ -22,11 +22,23 @@ from sqlmodel import Field, Relationship, Session, delete, select
 
 from sarc.validators import datetime_utc
 
-from .allocation import validate_date
 from .cluster import SlurmClusterDB
 from .sqlmodel import SQLModel, datetime_utc_field
 
 logger = logging.getLogger(__name__)
+
+
+def validate_date(value: str | date | datetime) -> date:
+    if isinstance(value, str):
+        if "T" in value:
+            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()
+
+        return datetime.strptime(value, "%Y-%m-%d").date()
+
+    if isinstance(value, datetime):
+        return value.date()
+
+    return value
 
 
 def empty_allocation_as_none(value: object) -> object:

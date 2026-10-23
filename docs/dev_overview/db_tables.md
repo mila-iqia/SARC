@@ -79,13 +79,15 @@ A three-level tree: `diskusage_reports` (one per cluster and timestamp) →
 constraint: the `(cluster_id, timestamp)` index is not unique and `sarc parse
 diskusage` plainly inserts, so re-parsing a window duplicates its reports.
 
-## Allocations
+## Target shares
 
-`allocationdb` holds DRAC allocations, one row per cluster, resource, group and
-allocation period: `start`/`end` are part of what identifies a row, so a renewed
-allocation lands as a new row rather than an update. It is fed by hand —
-`sarc fetch allocations --file <csv>` then `sarc parse allocations` — and
-nothing in SARC reads it back yet.
+`target_shares` holds the compute budgets of `data/allocations.csv`: one row per
+cluster, allocation and period, a NULL allocation meaning the whole cluster.
+`rgu_year` is the CSV value as-is, an average count of RGUs; rows without one
+(CPU, storage) are not imported. `init_insert()` empties and refills the table
+on every run, so its ids churn: join on the natural key, never keep an `id`. A
+GiST exclusion constraint forbids two overlapping periods for the same cluster
+and allocation.
 
 ## Run state
 
