@@ -5,6 +5,7 @@ from pytest import raises
 from sqlalchemy.exc import ProgrammingError
 from sqlmodel import select
 
+from sarc.db import init_insert
 from sarc.db.target_share import TargetShareDB, insert_target_shares
 
 # Real allocations.csv shape: the reader picks its five columns by name and
@@ -67,6 +68,14 @@ def test_insert_target_shares(tmp_path, empty_read_write_db):
         (fromage_id, "rrg-bonhomme-ad_gpu", date(2025, 4, 1), date(2026, 4, 1), 100000),
         (fromage_id, "rrg-bonhomme-ad_gpu", date(2026, 4, 1), date(2027, 4, 1), 110000),
     ]
+
+
+def test_init_insert_imports_target_shares(tmp_path, empty_read_write_db):
+    """init_insert, the deploy path, runs the import; the other tests call
+    insert_target_shares directly."""
+    with gifnoc.overlay({"sarc.target_shares": str(configured_csv(tmp_path))}):
+        init_insert()
+    assert len(table_rows(empty_read_write_db)) == 4
 
 
 def test_full_refresh(tmp_path, empty_read_write_db):
