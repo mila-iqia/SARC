@@ -11,7 +11,7 @@ sync on the natural key.
 
 import csv
 import logging
-from datetime import UTC, date, datetime
+from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated
 
@@ -20,10 +20,8 @@ from sqlalchemy import CheckConstraint, func, literal_column
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlmodel import Field, Relationship, Session, delete, select
 
-from sarc.validators import datetime_utc
-
 from .cluster import SlurmClusterDB
-from .sqlmodel import SQLModel, datetime_utc_field
+from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
 
@@ -94,9 +92,6 @@ class TargetShareDB(SQLModel, table=True):
     # x hours of overlap with [start, end). Open question for rows not
     # spanning a year: rgu_year may be the period's RGU-year total, not a rate.
     rgu_year: float
-    # Time of the import that produced this row; identical for every row
-    # since each import is a full refresh.
-    timestamp: datetime_utc = datetime_utc_field()
 
 
 class TargetShareRow(SQLModel):
@@ -205,7 +200,6 @@ def _resolve_cluster_ids(
     db_clusters = {
         cluster.name: cluster.id for cluster in sess.exec(select(SlurmClusterDB)).all()
     }
-    timestamp = datetime.now(UTC)
     shares: list[TargetShareDB] = []
     for row in rows:
         cluster_id = db_clusters.get(row.cluster_name)
@@ -223,7 +217,6 @@ def _resolve_cluster_ids(
                 start=row.start,
                 end=row.end,
                 rgu_year=row.rgu_year,
-                timestamp=timestamp,
             )
         )
     return shares

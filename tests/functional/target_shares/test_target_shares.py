@@ -192,7 +192,6 @@ def test_db_exclusion_constraint_rejects_overlap(tmp_path, empty_read_write_db):
                 start="2025-04-01",
                 end="2026-04-01",
                 rgu_year=100000,
-                timestamp="2026-04-01T00:00:00+00:00",
             ),
             TargetShareDB(
                 cluster_id=fromage_id,
@@ -200,7 +199,6 @@ def test_db_exclusion_constraint_rejects_overlap(tmp_path, empty_read_write_db):
                 start="2025-09-01",
                 end="2026-09-01",
                 rgu_year=110000,
-                timestamp="2026-04-01T00:00:00+00:00",
             ),
         ]
     )
@@ -260,7 +258,6 @@ def test_db_constraint_rejects_two_cluster_wide_rows(tmp_path, empty_read_write_
                 start="2025-04-01",
                 end="2026-04-01",
                 rgu_year=100000,
-                timestamp="2026-04-01T00:00:00+00:00",
             ),
             TargetShareDB(
                 cluster_id=fromage_id,
@@ -268,7 +265,6 @@ def test_db_constraint_rejects_two_cluster_wide_rows(tmp_path, empty_read_write_
                 start="2025-09-01",
                 end="2026-09-01",
                 rgu_year=110000,
-                timestamp="2026-04-01T00:00:00+00:00",
             ),
         ]
     )

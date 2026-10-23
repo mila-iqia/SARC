@@ -10,7 +10,6 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 
-import sarc.db.sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -32,9 +31,6 @@ def upgrade() -> None:
         sa.Column("start", sa.Date(), nullable=False),
         sa.Column("end", sa.Date(), nullable=False),
         sa.Column("rgu_year", sa.Float(), nullable=False),
-        sa.Column(
-            "timestamp", sarc.db.sqlmodel.UTCDateTime(timezone=True), nullable=False
-        ),
         sa.ForeignKeyConstraint(["cluster_id"], ["clusters.id"]),
         sa.PrimaryKeyConstraint("id"),
         # "end" is a reserved word: it must be quoted in the raw SQL.
