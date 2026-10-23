@@ -1,4 +1,4 @@
-"""Target shares: annual compute budgets (RGU-hours) declared per cluster/account.
+"""Target shares: annual compute budgets (RGU-years) declared per cluster/account.
 
 The `target_shares` table is the materialization of the allocations CSV named
 by the `sarc.target_shares` config key (default `data/allocations.csv`, same
@@ -77,9 +77,11 @@ class TargetShareDB(SQLModel, table=True):
     # Budget period, end exclusive.
     start: Annotated[date, BeforeValidator(validate_date)]
     end: Annotated[date, BeforeValidator(validate_date)]
-    # Allocated compute, in RGU-hours — same unit as the iguane job costs:
-    # the CSV's annual rgu_year rate prorated over the row's period.
-    rgu_hours: float
+    # Allocated compute, the CSV's rgu_year column stored raw: RGU-years per
+    # year, i.e. an average count of RGUs. RGU-hours over a window = rgu_year
+    # x hours of overlap with [start, end). Open question for rows not
+    # spanning a year: rgu_year may be the period's RGU-year total, not a rate.
+    rgu_year: float
     # Time of the import that produced this row; identical for every row
     # since each import is a full refresh.
     timestamp: datetime_utc = datetime_utc_field()
@@ -208,9 +210,7 @@ def _resolve_cluster_ids(
                 allocation=row.allocation,
                 start=row.start,
                 end=row.end,
-                # Prorate the annual rate over the row's period: rgu_year
-                # x (days / 365) x 8760 h/year, and 8760 / 365 is exactly 24.
-                rgu_hours=row.rgu_year * (row.end - row.start).days * 24,
+                rgu_year=row.rgu_year,
                 timestamp=timestamp,
             )
         )

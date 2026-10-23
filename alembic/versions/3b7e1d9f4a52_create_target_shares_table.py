@@ -31,7 +31,7 @@ def upgrade() -> None:
         sa.Column("allocation", sa.String(), nullable=True),
         sa.Column("start", sa.Date(), nullable=False),
         sa.Column("end", sa.Date(), nullable=False),
-        sa.Column("rgu_hours", sa.Float(), nullable=False),
+        sa.Column("rgu_year", sa.Float(), nullable=False),
         sa.Column(
             "timestamp", sarc.db.sqlmodel.UTCDateTime(timezone=True), nullable=False
         ),

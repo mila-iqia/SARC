@@ -14,7 +14,8 @@ sarc:
   # start, end (end exclusive), cluster_name, group_name and rgu_year columns
   # only; a blank group_name budgets the whole cluster. Rows without rgu_year
   # (cpu, storage) and rows naming a cluster the database does not know are
-  # skipped. The stored RGU-hours is rgu_year prorated over the row period.
+  # skipped. The table stores the annual rgu_year rate; consumers convert it
+  # to RGU-hours when comparing against job consumption.
   # Set to null to disable the import.
   server: # API server config
     auth: # If null, disables authentification for the API

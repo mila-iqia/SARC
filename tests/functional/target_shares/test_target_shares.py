@@ -13,8 +13,6 @@ HEADER = (
     "start,       end,         cluster_name, resource_name,  group_name,"
     "     cpu_year, gpu_year, rgu_year, project_size\n"
 )
-# A one-year period prorates rgu_year at 365 * 24 = 8760 h.
-HOURS = 365 * 24
 
 
 def write_csv(tmp_path, content):
@@ -40,7 +38,7 @@ def configured_csv(tmp_path):
 def table_rows(sess):
     return sorted(
         (
-            (row.cluster_id, row.allocation, row.start, row.end, row.rgu_hours)
+            (row.cluster_id, row.allocation, row.start, row.end, row.rgu_year)
             for row in sess.exec(select(TargetShareDB)).all()
         ),
         key=lambda t: (t[1] or "", t[2]),
@@ -64,34 +62,10 @@ def test_insert_target_shares(tmp_path, empty_read_write_db):
     # coexist: the half-open periods only touch, they do not overlap. The cpu
     # and storage rows are absent: no rgu_year, no budget.
     assert table_rows(empty_read_write_db) == [
-        (
-            fromage_id,
-            "def-bonhomme_gpu",
-            date(2025, 4, 1),
-            date(2026, 4, 1),
-            5000 * HOURS,
-        ),
-        (
-            patate_id,
-            "rrg-bonhomme-ad_cpu",
-            date(2025, 4, 1),
-            date(2026, 4, 1),
-            40000 * HOURS,
-        ),
-        (
-            fromage_id,
-            "rrg-bonhomme-ad_gpu",
-            date(2025, 4, 1),
-            date(2026, 4, 1),
-            100000 * HOURS,
-        ),
-        (
-            fromage_id,
-            "rrg-bonhomme-ad_gpu",
-            date(2026, 4, 1),
-            date(2027, 4, 1),
-            110000 * HOURS,
-        ),
+        (fromage_id, "def-bonhomme_gpu", date(2025, 4, 1), date(2026, 4, 1), 5000),
+        (patate_id, "rrg-bonhomme-ad_cpu", date(2025, 4, 1), date(2026, 4, 1), 40000),
+        (fromage_id, "rrg-bonhomme-ad_gpu", date(2025, 4, 1), date(2026, 4, 1), 100000),
+        (fromage_id, "rrg-bonhomme-ad_gpu", date(2026, 4, 1), date(2027, 4, 1), 110000),
     ]
 
 
@@ -111,7 +85,7 @@ def test_full_refresh(tmp_path, empty_read_write_db):
 
     rows = table_rows(empty_read_write_db)
     assert len(rows) == 1
-    assert rows[0][4] == 99999 * HOURS
+    assert rows[0][4] == 99999
 
 
 def test_missing_column_rejected(tmp_path, empty_read_write_db):
@@ -179,13 +153,7 @@ def test_unknown_cluster_skipped(tmp_path, empty_read_write_db):
         insert_target_shares()
     # The known-cluster row lands, the unknown-cluster row is skipped.
     assert table_rows(empty_read_write_db) == [
-        (
-            patate_id,
-            "rrg-bonhomme-ad_gpu",
-            date(2025, 4, 1),
-            date(2026, 4, 1),
-            100000 * HOURS,
-        )
+        (patate_id, "rrg-bonhomme-ad_gpu", date(2025, 4, 1), date(2026, 4, 1), 100000)
     ]
 
 
@@ -214,7 +182,7 @@ def test_db_exclusion_constraint_rejects_overlap(tmp_path, empty_read_write_db):
                 allocation="rrg-bonhomme-ad_gpu",
                 start="2025-04-01",
                 end="2026-04-01",
-                rgu_hours=100000,
+                rgu_year=100000,
                 timestamp="2026-04-01T00:00:00+00:00",
             ),
             TargetShareDB(
@@ -222,7 +190,7 @@ def test_db_exclusion_constraint_rejects_overlap(tmp_path, empty_read_write_db):
                 allocation="rrg-bonhomme-ad_gpu",
                 start="2025-09-01",
                 end="2026-09-01",
-                rgu_hours=110000,
+                rgu_year=110000,
                 timestamp="2026-04-01T00:00:00+00:00",
             ),
         ]
@@ -248,7 +216,7 @@ def test_empty_allocation_is_whole_cluster(tmp_path, empty_read_write_db):
     assert [
         row.allocation for row in empty_read_write_db.exec(select(TargetShareDB))
     ] == [None]
-    assert rows[0][4] == 1000 * HOURS
+    assert rows[0][4] == 1000
 
 
 def test_cluster_wide_row_conflicts_with_concrete_allocation(
@@ -282,7 +250,7 @@ def test_db_constraint_rejects_two_cluster_wide_rows(tmp_path, empty_read_write_
                 allocation=None,
                 start="2025-04-01",
                 end="2026-04-01",
-                rgu_hours=100000,
+                rgu_year=100000,
                 timestamp="2026-04-01T00:00:00+00:00",
             ),
             TargetShareDB(
@@ -290,7 +258,7 @@ def test_db_constraint_rejects_two_cluster_wide_rows(tmp_path, empty_read_write_
                 allocation=None,
                 start="2025-09-01",
                 end="2026-09-01",
-                rgu_hours=110000,
+                rgu_year=110000,
                 timestamp="2026-04-01T00:00:00+00:00",
             ),
         ]
