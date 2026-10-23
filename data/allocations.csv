@@ -71,7 +71,7 @@ start,       end,         cluster_name, resource_name,  group_name,     cpu_year
 2026-04-07,  2027-04-01,  rorqual,      rorqual-gpu,    rrg-bengioy-ad, ,         ,         1172.48,  ,          ,          ,             ,               ,
 2026-04-07,  2027-04-01,  rorqual,      rorqual-storage,rrg-bengioy-ad, ,         ,         ,         ,          ,          275TB,        5e6,            100TB,
 2026-04-07,  2027-04-01,  trillium,     trillium-compute,rrg-bengioy-ad, 788,     ,         ,         ,          ,          ,             ,               ,
-2026-04-07,  2027-04-01,  trillium,     trillium-gpu,   rrg-bengioy-ad, ,         ,         374.88,   ,          ,          ,             ,               ,
+2026-04-07,  2027-04-01,  grillium,   trillium-gpu,   rrg-bengioy-ad, ,         ,         374.88,   ,          ,          ,             ,               ,
 2026-04-07,  2027-04-01,  trillium,     trillium-storage,rrg-bengioy-ad, ,        ,         ,         ,          ,          100TB,        ,               ,
 
 2026-04-01,  2027-04-01,  mila,       mila,          mila,          ,         ,         6140.83,  ,          ,          ,             ,               ,
