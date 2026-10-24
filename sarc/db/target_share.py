@@ -21,7 +21,7 @@ from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlmodel import Field, Relationship, Session, col, delete, select
 
 from .cluster import SlurmClusterDB
-from .job_series import JobSeriesTable
+from .job_series import ELIGIBILITY_CLAUSES, JobSeriesTable, overlap_hours, ran_between
 from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
@@ -298,9 +298,9 @@ def target_share_report(
     """Compare GPU consumption against the target shares over ``[begin, end)``.
 
     A job contributes ``allocated_rgu_drac x hours`` for the hours its run
-    (``[start_time, start_time + elapsed_time]``, the /dash span) spends
-    inside the budget period *and* the window, on jobs of the budget's
-    cluster attributed to it by the account rule documented on
+    (the shared ``job_span`` one, ``[start_time, start_time + elapsed_time]``)
+    spends inside the budget period *and* the window, on jobs of the
+    budget's cluster attributed to it by the account rule documented on
     TargetShareDB.allocation. The target is prorated over the same
     intersection: ``rgu_year`` is a rate of RGUs, so the prorated target is
     ``rgu_year x hours`` of it. Budgets not intersecting the window are
@@ -319,20 +319,10 @@ def target_share_report(
     budget_end = _utc_day_epoch(col(TargetShareDB.end))
     in_window = and_(budget_start < end_s, budget_end > begin_s)
 
-    # The /dash GPU population, running within the window: the eligibility
-    # conjuncts are what the partial covering indexes are for, and
-    # slurm_job_end(...) keeps the window predicate on the indexed form.
-    run_start = func.extract("epoch", col(JobSeriesTable.start_time))
-    run_end = run_start + col(JobSeriesTable.elapsed_time)
-    job_wheres = [
-        col(JobSeriesTable.allocated_gres_gpu) > 0,
-        col(JobSeriesTable.gpu_type_rgu_drac).is_not(None),
-        func.slurm_job_end(
-            col(JobSeriesTable.start_time), col(JobSeriesTable.elapsed_time)
-        )
-        > func.to_timestamp(begin_s),
-        col(JobSeriesTable.start_time) < func.to_timestamp(end_s),
-    ]
+    # The shared GPU population, running within the window; the subquery
+    # keeps start_time/elapsed_time so overlap_hours can be spelled over
+    # jobs.c in both queries below.
+    job_wheres = [*ELIGIBILITY_CLAUSES, ran_between(JobSeriesTable, begin_s, end_s)]
     if cluster_name is not None:
         job_wheres.append(
             col(JobSeriesTable.cluster_id).in_(
@@ -346,8 +336,8 @@ def target_share_report(
             col(JobSeriesTable.cluster_id).label("cluster_id"),
             col(JobSeriesTable.account).label("account"),
             col(JobSeriesTable.allocated_rgu_drac).label("rgu"),
-            run_start.label("run_start"),
-            run_end.label("run_end"),
+            col(JobSeriesTable.start_time),
+            col(JobSeriesTable.elapsed_time),
         )
         .where(*job_wheres)
         .subquery()
@@ -358,10 +348,9 @@ def target_share_report(
         jobs.c.account == col(TargetShareDB.allocation),
         jobs.c.account == func.concat(col(TargetShareDB.allocation), "_gpu"),
     )
-    hours_in_budget = (
-        func.least(jobs.c.run_end, budget_end, end_s)
-        - func.greatest(jobs.c.run_start, budget_start, begin_s)
-    ) / 3600.0
+    hours_in_budget = overlap_hours(
+        jobs.c, (begin_s, end_s), (budget_start, budget_end)
+    )
     prorated_target = (
         col(TargetShareDB.rgu_year)
         * (func.least(budget_end, end_s) - func.greatest(budget_start, begin_s))
@@ -409,9 +398,7 @@ def target_share_report(
         attributed[budget.cluster_name] = (
             attributed.get(budget.cluster_name, 0.0) + budget.consumed_rgu_hours
         )
-    window_hours = (
-        func.least(jobs.c.run_end, end_s) - func.greatest(jobs.c.run_start, begin_s)
-    ) / 3600.0
+    window_hours = overlap_hours(jobs.c, (begin_s, end_s))
     totals = sess.exec(
         select(
             jobs.c.cluster_id,
