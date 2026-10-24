@@ -27,18 +27,16 @@ from sarc.api.v0 import Requestor, requestor
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
-from sarc.db.job_series import DASH_STATS, JobSeriesTable
+from sarc.db.job_series import (
+    DASH_STATS,
+    ELIGIBILITY_CLAUSES,
+    JobSeriesTable,
+    job_span,
+    overlap_hours,
+    ran_between,
+)
 from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
-
-# The /dash GPU population: the job_series table covers every job, so every
-# panel narrows to the subset with a computable RGU -- exactly the predicate
-# the GPU-partial covering indexes (ix_job_series_end/user/submit) carry, so
-# the planner can prove the index applies.
-DASH_ELIGIBILITY = (
-    col(JobSeriesTable.allocated_gres_gpu) > 0,
-    col(JobSeriesTable.gpu_type_rgu_drac).is_not(None),
-)
 
 
 def _scope(req: Requestor) -> int | Literal["admin"]:
@@ -279,57 +277,8 @@ def _apply_focus(
 # Pro-rating: attributing a job's usage to the time it was actually running
 # --------------------------------------------------------------------------- #
 #
-# A job is charged to the periods it ran in, in proportion to the time it spent
-# in each, rather than wholly to the period it was submitted in: a bar reads as
-# "RGU.h spent in this week", not "RGU.h eventually spent by the jobs submitted
-# this week". Two consequences: a job submitted before the window but running
-# inside it now counts, and a bar no longer sums the jobs it is drawn from --
-# only the slice of each that lands in the window. Every endpoint selects
-# through the same ``_ran_between`` predicate.
-
-
-def _job_end(cols):
-    """The instant the job's run stopped, through the indexed SQL function."""
-    return func.slurm_job_end(cols.start_time, cols.elapsed_time)
-
-
-def _job_span(cols):
-    """A job's run as epoch seconds: ``[start, start + elapsed)``.
-
-    Anchored on ``elapsed_time``, not ``end_time``, so the slices add back up to
-    the view's cost columns, which are all built from elapsed.
-    """
-    start = func.extract("epoch", cols.start_time)
-    return start, start + cols.elapsed_time
-
-
-def _ran_between(cols, lo, hi):
-    """SQL predicate: the job was running at some point within ``[lo, hi)``.
-
-    Bounds are epoch seconds -- either Python floats for a fixed window, or the
-    bucket bounds of ``_bucket_table``.
-
-    Two comparisons over ``ix_slurm_jobs_end_gpu``, which indexes the end (see
-    ``slurm_job_end`` in sarc/db/job.py); any other spelling reads every row.
-    The degenerate cases are the function's NULL: a job that never started, and
-    a run of no length. Half-open on both sides, so a run closing exactly on
-    ``lo`` is out, and one opening exactly on ``hi`` too.
-    """
-    return and_(
-        _job_end(cols) > func.to_timestamp(lo), cols.start_time < func.to_timestamp(hi)
-    )
-
-
-def _overlap_hours(cols, lo, hi):
-    """SQL expression: hours of the job's run that fall inside ``[lo, hi)``.
-
-    Guard it or it lies: ``least``/``greatest`` ignore NULL, so a job that
-    never started would take the full width of ``[lo, hi)``, and one running
-    outside the bounds a negative width -- nothing clamps either. The window is
-    guarded by ``_ran_between``, each bucket by ``_bucket_table``.
-    """
-    start, end = _job_span(cols)
-    return (func.least(end, hi) - func.greatest(start, lo)) / 3600.0
+# The primitives live in sarc.db.job_series (job_span, ran_between,
+# overlap_hours), shared with target_share_report.
 
 
 def _bucket_bounds(
@@ -386,15 +335,17 @@ def _bucket_table(
     expands to no bucket at all, which is what it should get.
 
     The overlap is spelled here in epoch seconds rather than through
-    ``_ran_between``, which would re-derive an end this search already holds.
+    ``ran_between``, which would re-derive an end this search already holds.
     The two must stay in step: a job with no start yields nothing, one with no
     length is excluded (``elapsed_time > 0``), and the bounds are half-open.
 
-    This picks the buckets, *not* the jobs: pair it with ``_ran_between`` over
+    This picks the buckets, *not* the jobs: pair it with ``ran_between`` over
     the whole window, which is the half an index can answer.
     """
     starts, ends = _bucket_bounds(begin_dt, finish_dt, period)
-    run_start, run_end = _job_span(cols)
+    run_start, run_end = job_span(
+        start_time=cols.start_time, elapsed_time=cols.elapsed_time
+    )
     # width_bucket numbers from 1, so position - 1 is the caller's index.
     pos = func.generate_series(
         func.width_bucket(run_start, starts), func.width_bucket(run_end, starts)
@@ -458,13 +409,13 @@ def _uniform_bucket_table(cols, plan: tuple[float, float, int], lo, hi):
     a uniform grid the bucket index of an instant is one floor/ceil, so a run
     expands to ``generate_series(floor(start), ceil(end) - 1)`` clamped to
     ``[0, n-1]``. Bucket bounds come back as arithmetic on the grid
-    (clipped to the window at both ends), so ``_overlap_hours`` reads the same
+    (clipped to the window at both ends), so ``overlap_hours`` reads the same
     three column names either way. Semantics match ``_bucket_table`` exactly:
     half-open on both ends, a run with no start or no length expands to no
     bucket, and the clamps are what the window predicate already guarantees.
     """
     anchor, step, n = plan
-    start, end = _job_span(cols)
+    start, end = job_span(start_time=cols.start_time, elapsed_time=cols.elapsed_time)
     k = func.generate_series(
         func.greatest(func.floor((start - anchor) / step), 0).cast(Integer),
         func.least(func.ceil((end - anchor) / step) - 1, n - 1).cast(Integer),
@@ -604,7 +555,7 @@ def _apply_dash_base(
     common filters.
 
     The GPU/RGU population the old ``_gpu_only`` predicate carved out is the
-    table's ``DASH_ELIGIBILITY`` subset (and the predicate the GPU-partial
+    table's ``ELIGIBILITY_CLAUSES`` subset (and the predicate the GPU-partial
     covering indexes are keyed on); ``allocated_rgu_drac`` is the per-job RGU
     rate, trigger-maintained where the view computed it via gpurgudb. The
     statistics ride in the scan's own columns (``_dash_stat_col``), not in
@@ -615,7 +566,7 @@ def _apply_dash_base(
     its own.
     """
     return _apply_job_filters(
-        query.select_from(JobSeriesTable).where(*DASH_ELIGIBILITY),
+        query.select_from(JobSeriesTable).where(*ELIGIBILITY_CLAUSES),
         JobSeriesTable,
         cluster_ids,
         user_ids,
@@ -753,16 +704,14 @@ def metrics_job_counts(
             # The window filter, which the bucket LATERAL does not do: it splits
             # the jobs it is handed, it does not choose them.
             .where(
-                _ran_between(
-                    JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp()
-                )
+                ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
             )
         )
 
-    # DASH_ELIGIBILITY, like every other /dash query: job_series covers all
+    # ELIGIBILITY_CLAUSES, like every other /dash query: job_series covers all
     # jobs, and the counts panels read the same GPU population as the rest.
     query = _apply_job_filters(
-        query.where(*DASH_ELIGIBILITY),
+        query.where(*ELIGIBILITY_CLAUSES),
         JobSeriesTable,
         cluster_ids,
         user_ids,
@@ -871,7 +820,7 @@ def metrics_job_times_vs_limit(
     )
     # start_time spelled out: no STRICT slurm_job_end to imply it here.
     base_filters = [
-        *DASH_ELIGIBILITY,
+        *ELIGIBILITY_CLAUSES,
         col(JobSeriesTable.submit_time) >= begin_dt,
         col(JobSeriesTable.submit_time) < finish_dt,
         col(JobSeriesTable.time_limit).is_not(None),
@@ -983,7 +932,7 @@ def metrics_metric_distribution(
     m1 = _dash_stat_col(_USAGE_METRIC_NAME)
     weight = (
         col(JobSeriesTable.allocated_rgu_drac)
-        * _overlap_hours(JobSeriesTable, *window)
+        * overlap_hours(JobSeriesTable, window)
         * 3600.0
     )
     bin_width = 1.0 / _DENSITY_BINS
@@ -997,7 +946,7 @@ def metrics_metric_distribution(
             job_states,
             scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
-        .where(_ran_between(JobSeriesTable, *window), _valid_metric_filter(m1))
+        .where(ran_between(JobSeriesTable, *window), _valid_metric_filter(m1))
         .group_by("bin")
         .order_by("bin")
     )
@@ -1059,7 +1008,7 @@ def metrics_metric_comparison(
             scope_user_id=_scope_or_view_as(sess, req, as_user),
         )
         .where(
-            _ran_between(JobSeriesTable, *window),
+            ran_between(JobSeriesTable, *window),
             _valid_metric_filter(m1),
             _valid_metric_filter(m2),
         )
@@ -1128,13 +1077,13 @@ def metrics_rgu_usage(
     if _no_buckets(begin_dt, finish_dt):
         return []
 
-    # Per bucket: allocated = RGU rate x hours landing inside (_overlap_hours);
+    # Per bucket: allocated = RGU rate x hours landing inside (overlap_hours);
     # used = the same scaled by the usage-metric mean. The view's *_waste columns
     # were frozen whole-job and pro-rating here is per-bucket -- but the pivoted
     # job_series column gives the same per-job value, so no stat join is needed.
     buckets = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
-    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesTable, buckets.c.bucket_start, buckets.c.bucket_end
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * overlap_hours(
+        JobSeriesTable, (buckets.c.bucket_start, buckets.c.bucket_end)
     )
     # One column, always: the usage metric drives both the bars
     # (used/unmeasured/wasted) and metric_means below -- the dashboard plots
@@ -1173,9 +1122,7 @@ def metrics_rgu_usage(
     # as "over the jobs running in this bucket".
     query = (
         query.join(buckets, true())
-        .where(
-            _ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
-        )
+        .where(ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp()))
         .group_by(buckets.c.bucket_index)
         .order_by(buckets.c.bucket_index)
     )
@@ -1244,8 +1191,8 @@ def metrics_rgu_by_cluster(
     # name: group by the indexed cluster_id and map the handful of ids back to
     # names here (clusters is a tiny table; joining it would widen the scan).
     bucket_table = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
-    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesTable, bucket_table.c.bucket_start, bucket_table.c.bucket_end
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * overlap_hours(
+        JobSeriesTable, (bucket_table.c.bucket_start, bucket_table.c.bucket_end)
     )
     query = _apply_dash_base(
         select(
@@ -1260,9 +1207,7 @@ def metrics_rgu_by_cluster(
     )
     query = (
         query.join(bucket_table, true())
-        .where(
-            _ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
-        )
+        .where(ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp()))
         .group_by(bucket_table.c.bucket_index, "cluster_id")
         .order_by(bucket_table.c.bucket_index)
     )
@@ -1340,8 +1285,8 @@ def metrics_metric_trend(
     # stat; here their NULL values contribute to neither summand of the weighted
     # mean -- the same rows out, without the join.)
     bucket_table = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
-    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesTable, bucket_table.c.bucket_start, bucket_table.c.bucket_end
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * overlap_hours(
+        JobSeriesTable, (bucket_table.c.bucket_start, bucket_table.c.bucket_end)
     )
     m_mean = _dash_stat_col(_USAGE_METRIC_NAME)
     m_max = _dash_stat_col(_USAGE_METRIC_NAME, "max")
@@ -1357,7 +1302,7 @@ def metrics_metric_trend(
     ).join(bucket_table, true())
     query = (
         query.where(
-            _ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
+            ran_between(JobSeriesTable, begin_dt.timestamp(), finish_dt.timestamp())
         )
         .group_by(bucket_table.c.bucket_index)
         .order_by(bucket_table.c.bucket_index)
@@ -1421,8 +1366,8 @@ def metrics_rgu_by_user(
     # sarc_user_id -- the indexed column -- and the handful of ids' emails are
     # looked up after the aggregation: joining users over the whole window to
     # group by email string cost more than this second tiny query.
-    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * _overlap_hours(
-        JobSeriesTable, *window
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * overlap_hours(
+        JobSeriesTable, window
     )
     m_mean = _dash_stat_col(_USAGE_METRIC_NAME)
     # Split used vs unmeasured on whether the metric is a real value (not
@@ -1453,7 +1398,7 @@ def metrics_rgu_by_user(
         scope_user_id=_scope_or_view_as(sess, req, as_user),
     )
     query = (
-        query.where(_ran_between(JobSeriesTable, *window))
+        query.where(ran_between(JobSeriesTable, *window))
         .group_by("user_id")
         .order_by(rgu_requested_sum.desc())
     )
@@ -1535,13 +1480,13 @@ def metrics_jobs(
     # emails) back onto just that page of rows. See the perf note in docs / the
     # /metrics/jobs investigation.
     # Pro-rated like the plots; the rgu_hours and waste sorts rank on it too.
-    overlap_hours = _overlap_hours(JobSeriesTable, *window)
-    rgu_hours_raw = col(JobSeriesTable.allocated_rgu_drac) * overlap_hours
+    in_window = overlap_hours(JobSeriesTable, window)
+    rgu_hours_raw = col(JobSeriesTable.allocated_rgu_drac) * in_window
     # The same slice in seconds, to show beside the whole elapsed_time. Sorting
     # "Elapsed" ranks on this, not on the column: every other number in the row
     # is this slice, so ordering by the whole run would rank by a quantity the
     # table does not otherwise use.
-    elapsed_in_window = overlap_hours * 3600.0
+    elapsed_in_window = in_window * 3600.0
 
     # The usage metric's mean, a pivoted job_series column -- the same value the
     # old targeted jobstatisticdb LEFT join returned.
@@ -1609,9 +1554,9 @@ def metrics_jobs(
         ordered = nulls_last(ordered)
     order_by = (ordered, col(JobSeriesTable.job_db_id))
 
-    # Window only; DASH_ELIGIBILITY rides in via _apply_dash_base. "Ran in
+    # Window only; ELIGIBILITY_CLAUSES rides in via _apply_dash_base. "Ran in
     # the window", so the table lists the plots' population.
-    base_filters = (_ran_between(JobSeriesTable, *window),)
+    base_filters = (ran_between(JobSeriesTable, *window),)
 
     scope_user_id = _scope_or_view_as(sess, req, as_user)
     cluster_ids = _resolve_cluster_ids(sess, clusters)

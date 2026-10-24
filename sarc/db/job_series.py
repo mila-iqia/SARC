@@ -36,7 +36,9 @@ by the indexed lookups /v0 filters use. The GPU-only covering indexes are
 partial on `ELIGIBILITY` -- the population every /dash panel reads.
 """
 
-from sqlalchemy import Index, text
+from typing import Any
+
+from sqlalchemy import Index, and_, text
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import BIGINT, JSON, Field, col, func, select
 
@@ -826,3 +828,76 @@ class JobSeriesDB(SQLModel, table=True):
     """The user's member type valid at the job's submit time."""
     supervisors: list[int] | None = Field(sa_type=JSON)
     """Supervisor user ids, ordered, valid at the job's submit time."""
+
+
+# --------------------------------------------------------------------------- #
+# Shared job-run expressions (/dash panels and target_share_report)
+# --------------------------------------------------------------------------- #
+#
+# The GPU population these read over is the ELIGIBILITY one, so the window
+# predicate keeps the spelling the partial covering indexes can answer. A job
+# is charged to the periods it ran in, in proportion to the time it spent in
+# each, rather than wholly to the period it was submitted in: a bar reads as
+# "RGU.h spent in this week", not "RGU.h eventually spent by the jobs
+# submitted this week". Two consequences: a job submitted before the window
+# but running inside it now counts, and a bar no longer sums the jobs it is
+# drawn from -- only the slice of each that lands in the window. Every
+# windowed reader selects through the same `ran_between` predicate.
+
+ELIGIBILITY_CLAUSES = (
+    col(JobSeriesTable.allocated_gres_gpu) > 0,
+    col(JobSeriesTable.gpu_type_rgu_drac).is_not(None),
+)
+"""The clause spelling of ELIGIBILITY, for queries built with expressions."""
+
+
+def job_end(cols):
+    """The instant the job's run stopped, through the indexed SQL function."""
+    return func.slurm_job_end(cols.start_time, cols.elapsed_time)
+
+
+def job_span(*, start_time, elapsed_time):
+    """A job's run as epoch seconds: ``[start, start + elapsed)``.
+
+    Anchored on ``elapsed_time``, not ``end_time``, so the slices add back up
+    to the cost columns, which are all built from elapsed.
+    """
+    start = func.extract("epoch", start_time)
+    return start, start + elapsed_time
+
+
+def ran_between(cols, lo, hi):
+    """SQL predicate: the job was running at some point within ``[lo, hi)``.
+
+    Bounds are epoch seconds -- either Python floats for a fixed window, or
+    SQL expressions for a computed bucket.
+
+    Two comparisons over the ``slurm_job_end`` expression index (on
+    ``ix_job_series_end`` here, on ``ix_slurm_jobs_end_gpu`` on slurm_jobs);
+    any other spelling reads every row. The degenerate cases are the
+    function's NULL: a job that never started, and a run of no length.
+    Half-open on both sides, so a run closing exactly on ``lo`` is out, and
+    one opening exactly on ``hi`` too.
+    """
+    return and_(
+        job_end(cols) > func.to_timestamp(lo), cols.start_time < func.to_timestamp(hi)
+    )
+
+
+def overlap_hours(cols, interval: tuple[Any, Any], *other_intervals: tuple[Any, Any]):
+    """SQL expression: hours of the job's run that fall inside all the given
+    ``[lo, hi)`` intervals -- their intersection as one clipped width.
+
+    ``cols`` is anything carrying the ``start_time``/``elapsed_time`` columns
+    (the table itself or a subquery's column collection); bounds are epoch
+    seconds, Python floats or SQL expressions.
+
+    Guard it or it lies: ``least``/``greatest`` ignore NULL, so a job that
+    never started would take the full width of the intervals, and one running
+    outside the bounds a negative width -- nothing clamps either. The window
+    is guarded by ``ran_between``, each /dash bucket by the bucket table.
+    """
+    start, end = job_span(start_time=cols.start_time, elapsed_time=cols.elapsed_time)
+    lows = [interval[0], *(other[0] for other in other_intervals)]
+    highs = [interval[1], *(other[1] for other in other_intervals)]
+    return (func.least(end, *highs) - func.greatest(start, *lows)) / 3600.0
