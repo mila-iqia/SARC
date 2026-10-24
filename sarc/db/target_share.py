@@ -16,11 +16,12 @@ from pathlib import Path
 from typing import Annotated
 
 from pydantic import BeforeValidator, ValidationInfo, field_validator
-from sqlalchemy import CheckConstraint, func, literal_column
+from sqlalchemy import CheckConstraint, and_, func, literal_column, or_
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
-from sqlmodel import Field, Relationship, Session, delete, select
+from sqlmodel import Field, Relationship, Session, col, delete, select
 
 from .cluster import SlurmClusterDB
+from .job_series import JobSeriesTable
 from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
@@ -79,8 +80,12 @@ class TargetShareDB(SQLModel, table=True):
     cluster: SlurmClusterDB = Relationship(passive_deletes="all")
 
     # Budget target: the allocations CSV group_name (e.g. rrg-bengioy-ad or
-    # mila). How it maps onto slurm_jobs.account — bare group vs the _gpu /
-    # _cpu leaf accounts — is left to each consumer, still to be decided.
+    # mila). It attributes the slurm_jobs.account rows named exactly by it,
+    # or by it plus the "_gpu" suffix (DRAC leaf accounts); see
+    # target_share_report. "_cpu" accounts stay out: an RGU budget is GPU
+    # capacity only (the CSV's cpu rows carry cores, never rgu_year), and a
+    # GPU job running on a "_cpu" account is a data anomaly worth surfacing
+    # as unbudgeted, not absorbing into the pool.
     # NULL covers the whole cluster: budgets negotiated at cluster level
     # (PAICE shares) have no single group to name.
     allocation: str | None
@@ -252,3 +257,184 @@ def insert_target_shares() -> None:
         sess.add_all(shares)
         sess.commit()
     logger.info(f"Refreshed {len(shares)} target shares from {config.target_shares}")
+
+
+# --------------------------------------------------------------------------- #
+# Consumption vs. budget
+# --------------------------------------------------------------------------- #
+
+
+class BudgetConsumption(SQLModel):
+    """One target share with its prorated target and in-budget consumption,
+    both in RGU-hours over the report window."""
+
+    cluster_name: str
+    allocation: str | None
+    start: date
+    end: date
+    rgu_year: float
+    target_rgu_hours: float
+    consumed_rgu_hours: float
+
+
+class UnbudgetedConsumption(SQLModel):
+    """GPU consumption of a budgeted cluster that no target share of that
+    cluster attributes to (other accounts, or hours outside every period)."""
+
+    cluster_name: str
+    consumed_rgu_hours: float
+
+
+def _utc_day_epoch(day):
+    """A budget's DATE bound as epoch seconds: the calendar-day midnight in
+    UTC, the instant sessions read timestamps at -- independent of the
+    session TimeZone, unlike a bare ``start::timestamptz`` cast."""
+    return func.extract("epoch", func.timezone("UTC", day))
+
+
+def target_share_report(
+    sess: Session, *, begin: datetime, end: datetime, cluster_name: str | None = None
+) -> tuple[list[BudgetConsumption], list[UnbudgetedConsumption]]:
+    """Compare GPU consumption against the target shares over ``[begin, end)``.
+
+    A job contributes ``allocated_rgu_drac x hours`` for the hours its run
+    (``[start_time, start_time + elapsed_time]``, the /dash span) spends
+    inside the budget period *and* the window, on jobs of the budget's
+    cluster attributed to it by the account rule documented on
+    TargetShareDB.allocation. The target is prorated over the same
+    intersection: ``rgu_year`` is a rate of RGUs, so the prorated target is
+    ``rgu_year x hours`` of it. Budgets not intersecting the window are
+    absent, budgets intersecting it with no matching jobs report 0 consumed.
+
+    The second list is the complement per budgeted cluster: eligible GPU
+    consumption of the window minus what any of that cluster's budgets
+    attributed. Clusters without any target share carry no budget notion and
+    stay out of both lists. ``begin``/``end`` must be timezone-aware.
+    """
+    if end <= begin:
+        return [], []
+    begin_s, end_s = begin.timestamp(), end.timestamp()
+
+    budget_start = _utc_day_epoch(col(TargetShareDB.start))
+    budget_end = _utc_day_epoch(col(TargetShareDB.end))
+    in_window = and_(budget_start < end_s, budget_end > begin_s)
+
+    # The /dash GPU population, running within the window: the eligibility
+    # conjuncts are what the partial covering indexes are for, and
+    # slurm_job_end(...) keeps the window predicate on the indexed form.
+    run_start = func.extract("epoch", col(JobSeriesTable.start_time))
+    run_end = run_start + col(JobSeriesTable.elapsed_time)
+    job_wheres = [
+        col(JobSeriesTable.allocated_gres_gpu) > 0,
+        col(JobSeriesTable.gpu_type_rgu_drac).is_not(None),
+        func.slurm_job_end(
+            col(JobSeriesTable.start_time), col(JobSeriesTable.elapsed_time)
+        )
+        > func.to_timestamp(begin_s),
+        col(JobSeriesTable.start_time) < func.to_timestamp(end_s),
+    ]
+    if cluster_name is not None:
+        job_wheres.append(
+            col(JobSeriesTable.cluster_id).in_(
+                select(SlurmClusterDB.id)
+                .where(SlurmClusterDB.name == cluster_name)
+                .scalar_subquery()
+            )
+        )
+    jobs = (
+        select(  # ty:ignore[no-matching-overload]
+            col(JobSeriesTable.cluster_id).label("cluster_id"),
+            col(JobSeriesTable.account).label("account"),
+            col(JobSeriesTable.allocated_rgu_drac).label("rgu"),
+            run_start.label("run_start"),
+            run_end.label("run_end"),
+        )
+        .where(*job_wheres)
+        .subquery()
+    )
+
+    attribution = or_(
+        col(TargetShareDB.allocation).is_(None),
+        jobs.c.account == col(TargetShareDB.allocation),
+        jobs.c.account == func.concat(col(TargetShareDB.allocation), "_gpu"),
+    )
+    hours_in_budget = (
+        func.least(jobs.c.run_end, budget_end, end_s)
+        - func.greatest(jobs.c.run_start, budget_start, begin_s)
+    ) / 3600.0
+    prorated_target = (
+        col(TargetShareDB.rgu_year)
+        * (func.least(budget_end, end_s) - func.greatest(budget_start, begin_s))
+        / 3600.0
+    )
+
+    budgets_where = [in_window]
+    if cluster_name is not None:
+        budgets_where.append(SlurmClusterDB.name == cluster_name)
+    budget_rows = sess.exec(
+        select(  # ty:ignore[no-matching-overload]
+            col(SlurmClusterDB.name).label("cluster_name"),
+            col(TargetShareDB.allocation),
+            col(TargetShareDB.start),
+            col(TargetShareDB.end),
+            col(TargetShareDB.rgu_year),
+            prorated_target.label("target_rgu_hours"),
+            func.coalesce(func.sum(jobs.c.rgu * hours_in_budget), 0.0).label(
+                "consumed_rgu_hours"
+            ),
+        )
+        .join(SlurmClusterDB, col(SlurmClusterDB.id) == col(TargetShareDB.cluster_id))
+        .outerjoin(
+            jobs,
+            and_(
+                jobs.c.cluster_id == col(TargetShareDB.cluster_id),
+                attribution,
+                hours_in_budget > 0,
+            ),
+        )
+        .where(*budgets_where)
+        .group_by(col(TargetShareDB.id), col(SlurmClusterDB.name))
+        .order_by(col(SlurmClusterDB.name), col(TargetShareDB.start))
+    ).all()
+    budgets = [
+        BudgetConsumption.model_validate(dict(row._mapping)) for row in budget_rows
+    ]
+
+    # Unbudgeted = the window's whole eligible consumption of a budgeted
+    # cluster minus the attributed part; the difference is arithmetically
+    # what the attribution left out, whatever the reason (foreign account,
+    # hours outside every budget period).
+    attributed: dict[str, float] = {}
+    for budget in budgets:
+        attributed[budget.cluster_name] = (
+            attributed.get(budget.cluster_name, 0.0) + budget.consumed_rgu_hours
+        )
+    window_hours = (
+        func.least(jobs.c.run_end, end_s) - func.greatest(jobs.c.run_start, begin_s)
+    ) / 3600.0
+    totals = sess.exec(
+        select(
+            jobs.c.cluster_id,
+            func.sum(jobs.c.rgu * window_hours).label("consumed_rgu_hours"),
+        )
+        .where(
+            jobs.c.cluster_id.in_(
+                select(col(TargetShareDB.cluster_id)).where(in_window).scalar_subquery()
+            )
+        )
+        .group_by(jobs.c.cluster_id)
+    ).all()
+    names = dict(
+        sess.exec(select(col(SlurmClusterDB.id), col(SlurmClusterDB.name))).all()
+    )
+    unbudgeted = []
+    for cluster_id, total in totals:
+        rest = float(total) - attributed.get(names[cluster_id], 0.0)
+        if rest > 0:
+            unbudgeted.append(
+                UnbudgetedConsumption(
+                    cluster_name=names[cluster_id], consumed_rgu_hours=rest
+                )
+            )
+    unbudgeted.sort(key=lambda row: row.cluster_name)
+    return budgets, unbudgeted
