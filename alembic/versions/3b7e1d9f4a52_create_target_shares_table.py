@@ -10,6 +10,7 @@ from typing import Sequence, Union
 
 import sqlalchemy as sa
 
+import sarc.db.sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -26,8 +27,12 @@ def upgrade() -> None:
         sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("cluster_id", sa.Integer(), nullable=False),
         sa.Column("allocation", sa.String(), nullable=True),
-        sa.Column("start_date", sa.Date(), nullable=False),
-        sa.Column("end_date", sa.Date(), nullable=False),
+        sa.Column(
+            "start_date", sarc.db.sqlmodel.UTCDateTime(timezone=True), nullable=False
+        ),
+        sa.Column(
+            "end_date", sarc.db.sqlmodel.UTCDateTime(timezone=True), nullable=False
+        ),
         sa.Column("rgu_year", sa.Float(), nullable=False),
         sa.ForeignKeyConstraint(["cluster_id"], ["clusters.id"]),
         sa.PrimaryKeyConstraint("id"),
@@ -41,7 +46,7 @@ def upgrade() -> None:
     op.execute(
         "ALTER TABLE target_shares ADD CONSTRAINT target_shares_no_overlap "
         "EXCLUDE USING gist ("
-        "cluster_id WITH =, daterange(start_date, end_date, '[)') WITH &&)"
+        "cluster_id WITH =, tstzrange(start_date, end_date, '[)') WITH &&)"
     )
     # ### end Alembic commands ###
 

@@ -1,7 +1,6 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
-from sqlalchemy import text
 from sqlmodel import Session, select
 
 from sarc.db.cluster import SlurmClusterDB
@@ -11,9 +10,7 @@ from sarc.db.target_share import TargetShareDB, target_share_report
 from sarc.db.users import UserDB
 from sarc.models.job import SlurmState
 
-# Window fully inside every budget below, so a budget's prorated target is
-# rgu_year x 888 h (2026-03-25 -> 2026-05-01) unless the budget starts inside
-# it (fromage: 720 h from 2026-04-01).
+# The report window: 2026-03-25 -> 2026-05-01, 37 days or 888 h.
 BEGIN = datetime(2026, 3, 25, tzinfo=UTC)
 END = datetime(2026, 5, 1, tzinfo=UTC)
 
@@ -34,8 +31,8 @@ def add_budget(
         TargetShareDB(
             cluster_id=cluster_id(sess, cluster),
             allocation=allocation,
-            start_date=start,
-            end_date=end,
+            start_date=utc_day(start),
+            end_date=utc_day(end),
             rgu_year=rgu_year,
         )
     )
@@ -99,14 +96,13 @@ def scenario(jobless_read_write_db: Session):
     add_budget(sess, "patate", None, 4, "2026-03-01", "2027-03-01")
     add_budget(sess, "hyrule", "rrg-hyrule-ad", 1, "2026-01-01", "2027-01-01")
 
-    day = utc_day
     add_job(  # 24 h x 2 GPUs, fully in budget
         sess,
         gpu,
         user,
         cluster="fromage",
         account="rrg-fromage-ad_gpu",
-        start=day("2026-04-01T00:00"),
+        start=utc_day("2026-04-01T00:00"),
         hours=24,
         gpus=2,
         job_id=1,
@@ -117,7 +113,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="fromage",
         account="rrg-fromage-ad_gpu",
-        start=day("2026-03-31T12:00"),
+        start=utc_day("2026-03-31T12:00"),
         hours=24,
         gpus=1,
         job_id=2,
@@ -128,7 +124,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="fromage",
         account="rrg-fromage-ad",
-        start=day("2026-04-02T00:00"),
+        start=utc_day("2026-04-02T00:00"),
         hours=10,
         gpus=1,
         job_id=3,
@@ -139,7 +135,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="fromage",
         account="rrg-fromage-ad_cpu",
-        start=day("2026-04-03T00:00"),
+        start=utc_day("2026-04-03T00:00"),
         hours=10,
         gpus=1,
         job_id=4,
@@ -150,7 +146,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="fromage",
         account="def-fromage_gpu",
-        start=day("2026-04-04T00:00"),
+        start=utc_day("2026-04-04T00:00"),
         hours=5,
         gpus=1,
         job_id=5,
@@ -161,7 +157,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="fromage",
         account="rrg-fromage-ad_gpu",
-        start=day("2026-03-26T00:00"),
+        start=utc_day("2026-03-26T00:00"),
         hours=6,
         gpus=1,
         job_id=6,
@@ -172,7 +168,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="patate",
         account="rrg-patate_gpu",
-        start=day("2026-04-05T00:00"),
+        start=utc_day("2026-04-05T00:00"),
         hours=3,
         gpus=2,
         job_id=7,
@@ -183,7 +179,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="patate",
         account="some-odd-account",
-        start=day("2026-04-06T00:00"),
+        start=utc_day("2026-04-06T00:00"),
         hours=3,
         gpus=1,
         job_id=8,
@@ -194,7 +190,7 @@ def scenario(jobless_read_write_db: Session):
         user,
         cluster="gerudo",
         account="rrg-gerudo_gpu",
-        start=day("2026-04-06T00:00"),
+        start=utc_day("2026-04-06T00:00"),
         hours=4,
         gpus=1,
         job_id=9,
@@ -203,61 +199,74 @@ def scenario(jobless_read_write_db: Session):
     return gpu.drac_rgu
 
 
-@pytest.mark.parametrize("session_tz", ["UTC", "America/Montreal"])
-def test_report(jobless_read_write_db: Session, scenario: float, session_tz: str):
-    """Budget bounds are UTC midnights whatever the session TimeZone."""
+def test_report(jobless_read_write_db: Session, scenario: float):
+    # RGUs of the test GPU: a job's RGU-hours are gpus x hours x w.
     w = scenario
-    jobless_read_write_db.connection().execute(
-        text(f"SET LOCAL TimeZone = '{session_tz}'")
-    )
-    budgets, unbudgeted = target_share_report(
-        jobless_read_write_db, begin=BEGIN, end=END
-    )
+    budgets, totals = target_share_report(jobless_read_write_db, begin=BEGIN, end=END)
 
+    # One row per budget intersecting the window; gerudo has no budget.
     assert [(b.cluster_name, b.allocation) for b in budgets] == [
         ("fromage", "rrg-fromage-ad"),
         ("hyrule", "rrg-hyrule-ad"),
         ("patate", None),
     ]
     fromage, hyrule, patate = budgets
+
+    # fromage's budget starts on 2026-04-01, inside the window: its target is
+    # 10 RGUs x the 720 h from 2026-04-01 to END.
     assert fromage.target_rgu_hours == pytest.approx(10 * 720)
-    assert fromage.consumed_rgu_hours == pytest.approx((24 * 2 + 12 + 10) * w), (
-        "gpu-suffix and bare accounts count, clipped to the budget period"
-    )
+    # fromage's budget takes job 1 (24 h x 2 GPUs), the 12 h of job 2 after
+    # the budget start, and job 3 (10 h, bare account).
+    assert fromage.consumed_rgu_hours == pytest.approx((24 * 2 + 12 + 10) * w)
+    # hyrule's budget covers the whole window: 1 RGU x 888 h.
     assert hyrule.target_rgu_hours == pytest.approx(1 * 888)
+    # hyrule has no jobs.
     assert hyrule.consumed_rgu_hours == 0
+    # patate's budget covers the whole window: 4 RGUs x 888 h.
     assert patate.target_rgu_hours == pytest.approx(4 * 888)
+    # patate's budget has no allocation, so it takes every job of the cluster:
+    # job 7 (3 h x 2 GPUs) and job 8 (3 h, any account).
     assert patate.consumed_rgu_hours == pytest.approx((3 * 2 + 3) * w)
 
-    assert [(u.cluster_name, u.consumed_rgu_hours) for u in unbudgeted] == [
-        ("fromage", pytest.approx((12 + 10 + 5 + 6) * w))
-    ], "_cpu leaf, def- and pre-budget hours only, on budgeted clusters"
+    # Each budgeted cluster's total, whatever the account: fromage's jobs 1 to
+    # 6 run entirely inside the window, hyrule has none, patate has jobs 7, 8.
+    assert [(t.cluster_name, t.consumed_rgu_hours) for t in totals] == [
+        ("fromage", pytest.approx((24 * 2 + 24 + 10 + 10 + 5 + 6) * w)),
+        ("hyrule", 0),
+        ("patate", pytest.approx((3 * 2 + 3) * w)),
+    ]
+    # fromage's total minus its budget is what no budget covers: the 12 h of
+    # job 2 before the budget start, job 4 (_cpu account), job 5 (def-
+    # account) and job 6 (before the budget start).
+    assert totals[0].consumed_rgu_hours - fromage.consumed_rgu_hours == (
+        pytest.approx((12 + 10 + 5 + 6) * w)
+    )
 
 
 def test_cluster_filter(jobless_read_write_db: Session, scenario: float):
     w = scenario
-    budgets, unbudgeted = target_share_report(
+    budgets, totals = target_share_report(
         jobless_read_write_db, begin=BEGIN, end=END, cluster_name="fromage"
     )
     assert [b.cluster_name for b in budgets] == ["fromage"]
     assert budgets[0].consumed_rgu_hours == pytest.approx((24 * 2 + 12 + 10) * w)
-    assert [u.cluster_name for u in unbudgeted] == ["fromage"]
+    assert [t.cluster_name for t in totals] == ["fromage"]
 
-    budgets, unbudgeted = target_share_report(
+    budgets, totals = target_share_report(
         jobless_read_write_db, begin=BEGIN, end=END, cluster_name="gerudo"
     )
-    assert budgets == [] and unbudgeted == []
+    assert budgets == [] and totals == []
 
 
 def test_window_outside_every_budget(jobless_read_write_db: Session, scenario: float):
-    budgets, unbudgeted = target_share_report(
+    budgets, totals = target_share_report(
         jobless_read_write_db,
         begin=datetime(2024, 1, 1, tzinfo=UTC),
         end=datetime(2024, 2, 1, tzinfo=UTC),
     )
-    assert budgets == [] and unbudgeted == []
+    assert budgets == [] and totals == []
 
 
 def test_empty_window(jobless_read_write_db: Session, scenario: float):
-    budgets, unbudgeted = target_share_report(jobless_read_write_db, begin=END, end=END)
-    assert budgets == [] and unbudgeted == []
+    budgets, totals = target_share_report(jobless_read_write_db, begin=END, end=END)
+    assert budgets == [] and totals == []

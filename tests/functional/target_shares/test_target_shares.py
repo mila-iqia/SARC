@@ -1,4 +1,4 @@
-from datetime import date
+from datetime import UTC, datetime
 
 import gifnoc
 from pytest import mark, raises
@@ -15,6 +15,11 @@ HEADER = (
     "start,       end,         cluster_name, resource_name,  group_name,"
     "     cpu_year, gpu_year, rgu_year, project_size\n"
 )
+
+
+def utc(year, month, day):
+    """Midnight UTC of a day, the instant the import stores for a CSV day."""
+    return datetime(year, month, day, tzinfo=UTC)
 
 
 def write_csv(tmp_path, content):
@@ -58,10 +63,10 @@ def test_insert_target_shares(tmp_path, empty_read_write_db):
     # allocation on two clusters does not conflict either. The cpu and storage
     # rows are absent: no rgu_year, no budget.
     assert table_rows(empty_read_write_db) == [
-        ("fromage", "def-bonhomme", date(2024, 4, 1), date(2025, 4, 1), 5000),
-        ("fromage", "rrg-bonhomme-ad", date(2025, 4, 1), date(2026, 4, 1), 100000),
-        ("fromage", "rrg-bonhomme-ad", date(2026, 4, 1), date(2027, 4, 1), 110000),
-        ("patate", "rrg-bonhomme-ad", date(2025, 4, 1), date(2026, 4, 1), 40000),
+        ("fromage", "def-bonhomme", utc(2024, 4, 1), utc(2025, 4, 1), 5000),
+        ("fromage", "rrg-bonhomme-ad", utc(2025, 4, 1), utc(2026, 4, 1), 100000),
+        ("fromage", "rrg-bonhomme-ad", utc(2026, 4, 1), utc(2027, 4, 1), 110000),
+        ("patate", "rrg-bonhomme-ad", utc(2025, 4, 1), utc(2026, 4, 1), 40000),
     ]
 
 
@@ -133,9 +138,9 @@ def test_overlap_in_csv_rejected(tmp_path, empty_read_write_db):
         + "2025-09-01,  2026-09-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad, ,         10,       100000,\n"
         "2026-01-01,  2027-01-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad, ,         10,       110000,\n",
     )
-    with gifnoc.overlay({"sarc.target_shares": str(bad)}), raises(ValueError) as e:
+    # The exclusion constraint rejects it; pg8000 raises ProgrammingError.
+    with gifnoc.overlay({"sarc.target_shares": str(bad)}), raises(ProgrammingError):
         insert_target_shares()
-    assert "overlapping target shares" in str(e.value)
     # Failed import leaves the previous content untouched.
     assert table_rows(empty_read_write_db) == before
 
@@ -153,7 +158,7 @@ def test_unknown_cluster_skipped(tmp_path, empty_read_write_db):
         insert_target_shares()
     # The known-cluster row lands, the unknown-cluster row is skipped.
     assert table_rows(empty_read_write_db) == [
-        ("patate", "rrg-bonhomme-ad", date(2025, 4, 1), date(2026, 4, 1), 100000)
+        ("patate", "rrg-bonhomme-ad", utc(2025, 4, 1), utc(2026, 4, 1), 100000)
     ]
 
 
@@ -188,15 +193,15 @@ def test_db_constraint_rejects_overlap(empty_read_write_db, first, second):
             TargetShareDB(
                 cluster_id=fromage_id,
                 allocation=first,
-                start_date="2025-04-01",
-                end_date="2026-04-01",
+                start_date=utc(2025, 4, 1),
+                end_date=utc(2026, 4, 1),
                 rgu_year=100000,
             ),
             TargetShareDB(
                 cluster_id=fromage_id,
                 allocation=second,
-                start_date="2025-09-01",
-                end_date="2026-09-01",
+                start_date=utc(2025, 9, 1),
+                end_date=utc(2026, 9, 1),
                 rgu_year=110000,
             ),
         ]
@@ -223,19 +228,3 @@ def test_empty_allocation_is_whole_cluster(tmp_path, empty_read_write_db):
         row.allocation for row in empty_read_write_db.exec(select(TargetShareDB))
     ] == [None]
     assert rows[0][4] == 1000
-
-
-@mark.parametrize("other", ["def-bonhomme", ""])
-def test_two_allocations_on_one_cluster_conflict(tmp_path, empty_read_write_db, other):
-    """A second allocation, or a whole-cluster budget, overlapping a budget of
-    the same cluster is rejected: each job then has one budget at most."""
-    csv = write_csv(
-        tmp_path,
-        HEADER
-        + "2026-04-01,  2027-04-01,  fromage,    fromage-gpu,    rrg-bonhomme-ad, ,         10,       100000,\n"
-        f"2026-04-01,  2027-04-01,  fromage,    fromage,        {other},    ,         10,       150000,\n",
-    )
-    with gifnoc.overlay({"sarc.target_shares": str(csv)}), raises(ValueError) as e:
-        insert_target_shares()
-    assert "overlapping target shares" in str(e.value)
-    assert table_rows(empty_read_write_db) == []

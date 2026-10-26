@@ -11,33 +11,34 @@ sync on the natural key.
 
 import csv
 import logging
-from datetime import date, datetime
+from datetime import UTC, date, datetime, time
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import BeforeValidator, ValidationError, ValidationInfo, field_validator
-from sqlalchemy import TIMESTAMP, CheckConstraint, and_, cast, func, literal_column, or_
+from sqlalchemy import CheckConstraint, and_, func, literal_column, or_
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlmodel import Field, Session, col, delete, select
 
+from sarc.validators import datetime_utc
+
 from .cluster import SlurmClusterDB
 from .job_series import ELIGIBILITY_CLAUSES, JobSeriesTable, overlap_hours, ran_between
-from .sqlmodel import SQLModel
+from .sqlmodel import SQLModel, datetime_utc_field
 
 logger = logging.getLogger(__name__)
 
 
-def validate_date(value: str | date | datetime) -> date:
-    if isinstance(value, str):
-        if "T" in value:
-            return datetime.strptime(value, "%Y-%m-%dT%H:%M:%S").date()
+def utc_midnight(value: str | date) -> datetime:
+    """A CSV day as the instant midnight UTC.
 
-        return datetime.strptime(value, "%Y-%m-%d").date()
-
-    if isinstance(value, datetime):
-        return value.date()
-
-    return value
+    This is our convention: the CSV gives bare days, and we do not know
+    whether a budget starts at midnight UTC or at midnight in its cluster's
+    time zone. Rather than look up each cluster's time zone, every bound is
+    normalized to midnight UTC.
+    """
+    day = date.fromisoformat(value) if isinstance(value, str) else value
+    return datetime.combine(day, time(), tzinfo=UTC)
 
 
 def empty_allocation_as_none(value: object) -> object:
@@ -58,7 +59,7 @@ class TargetShareDB(SQLModel, table=True):
         ExcludeConstraint(
             ("cluster_id", "="),
             (
-                func.daterange(
+                func.tstzrange(
                     literal_column("start_date"), literal_column("end_date"), "[)"
                 ),
                 "&&",
@@ -82,9 +83,10 @@ class TargetShareDB(SQLModel, table=True):
     # NULL covers the whole cluster: budgets negotiated at cluster level
     # have no single group to name.
     allocation: str | None
-    # Budget period, end exclusive: the CSV's start and end columns.
-    start_date: Annotated[date, BeforeValidator(validate_date)]
-    end_date: Annotated[date, BeforeValidator(validate_date)]
+    # Budget period, end exclusive: the CSV's start and end days, read as
+    # midnight UTC by utc_midnight.
+    start_date: datetime_utc = datetime_utc_field()
+    end_date: datetime_utc = datetime_utc_field()
     # The CSV's rgu_year, a count of RGUs (RGU-years per year), whatever the
     # period length. RGU-hours over a window = rgu_year x hours of overlap
     # with [start_date, end_date).
@@ -94,11 +96,10 @@ class TargetShareDB(SQLModel, table=True):
 class TargetShareRow(SQLModel):
     """One validated CSV row, before cluster-id resolution."""
 
-    start_date: Annotated[date, BeforeValidator(validate_date)]
-    end_date: Annotated[date, BeforeValidator(validate_date)]
     cluster_name: str
     allocation: Annotated[str | None, BeforeValidator(empty_allocation_as_none)]
-    # Annual rate, as the allocations.csv rgu_year column.
+    start_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
+    end_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
     rgu_year: float
 
     @field_validator("rgu_year")
@@ -110,10 +111,12 @@ class TargetShareRow(SQLModel):
 
     @field_validator("end_date")
     @classmethod
-    def end_after_start(cls, end_date: date, info: ValidationInfo) -> date:
+    def end_after_start(cls, end_date: datetime, info: ValidationInfo) -> datetime:
         start_date = info.data.get("start_date")
         if start_date is not None and end_date <= start_date:
-            raise ValueError(f"end {end_date} is not after start {start_date}")
+            raise ValueError(
+                f"end {end_date.date()} is not after start {start_date.date()}"
+            )
         return end_date
 
 
@@ -133,17 +136,19 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
         if missing:
             raise ValueError(f"{path}: missing column(s): {', '.join(missing)}")
         for line_nb, row in enumerate(reader, start=2):  # header is line 1
-            row.pop(None, None)  # fields past the header's last column
+            # values past the header's last column (trailing commas) land under the key None.
+            row.pop(None, None)
+
             if all(not (value or "").strip() for value in row.values()):
                 continue  # fully empty row
             rgu_year = (row.get("rgu_year") or "").strip()
             if not rgu_year:
                 continue  # a cpu, storage or gpu_year row: no RGU budget
             values = {
-                "start_date": row["start"],
-                "end_date": row["end"],
                 "cluster_name": row["cluster_name"],
                 "allocation": row.get("group_name"),
+                "start_date": row["start"],
+                "end_date": row["end"],
                 "rgu_year": rgu_year,
             }
             try:
@@ -151,31 +156,6 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
             except ValidationError as e:
                 raise ValueError(f"{path}:{line_nb}: invalid row {row}") from e
     return rows
-
-
-def _rows_conflict(first: TargetShareRow, second: TargetShareRow) -> bool:
-    """True when two rows budget one cluster over overlapping periods."""
-    return (
-        first.cluster_name == second.cluster_name
-        and first.start_date < second.end_date
-        and second.start_date < first.end_date
-    )
-
-
-def _check_no_overlap(rows: list[TargetShareRow]) -> None:
-    """Reject two rows of one cluster with overlapping periods. The DB
-    constraint enforces the same rule; checking here names both rows, where a
-    constraint violation only gives a cluster id."""
-    for i, first in enumerate(rows):
-        for second in rows[i + 1 :]:
-            if _rows_conflict(first, second):
-                raise ValueError(
-                    f"overlapping target shares for {first.cluster_name}: "
-                    f"{first.allocation or 'all accounts'} "
-                    f"[{first.start_date}, {first.end_date}) and "
-                    f"{second.allocation or 'all accounts'} "
-                    f"[{second.start_date}, {second.end_date})"
-                )
 
 
 def _resolve_cluster_ids(
@@ -216,7 +196,6 @@ def insert_target_shares() -> None:
         return
 
     rows = read_target_shares_csv(config.target_shares)
-    _check_no_overlap(rows)
 
     with config.db.session() as sess:
         shares = _resolve_cluster_ids(sess, rows)
@@ -237,31 +216,24 @@ class BudgetConsumption(SQLModel):
 
     cluster_name: str
     allocation: str | None
-    start_date: date
-    end_date: date
+    start_date: datetime_utc
+    end_date: datetime_utc
     rgu_year: float
     target_rgu_hours: float
     consumed_rgu_hours: float
 
 
-class UnbudgetedConsumption(SQLModel):
-    """GPU consumption of a budgeted cluster that no target share of that
-    cluster attributes to (other accounts, or hours outside every period)."""
+class ClusterConsumption(SQLModel):
+    """All the eligible GPU consumption of a budgeted cluster, in RGU-hours
+    over the report window, inside its budgets or not."""
 
     cluster_name: str
     consumed_rgu_hours: float
 
 
-def _utc_day_epoch(day):
-    """A budget's DATE bound as the epoch seconds of its midnight UTC. The
-    value must not go through timestamptz (a cast, or timezone()): that
-    conversion places midnight in the session TimeZone."""
-    return func.extract("epoch", cast(day, TIMESTAMP))
-
-
 def target_share_report(
     sess: Session, *, begin: datetime, end: datetime, cluster_name: str | None = None
-) -> tuple[list[BudgetConsumption], list[UnbudgetedConsumption]]:
+) -> tuple[list[BudgetConsumption], list[ClusterConsumption]]:
     """Compare GPU consumption against the target shares over ``[begin, end)``.
 
     A job contributes ``allocated_rgu_drac x hours`` for the hours its run
@@ -273,17 +245,19 @@ def target_share_report(
     ``rgu_year x hours`` of it. Budgets not intersecting the window are
     absent, budgets intersecting it with no matching jobs report 0 consumed.
 
-    The second list is the complement per budgeted cluster: eligible GPU
-    consumption of the window minus what any of that cluster's budgets
-    attributed. A cluster with no target share intersecting the window is in
-    neither list. ``begin``/``end`` must be timezone-aware.
+    The second list holds the total eligible GPU consumption of the window
+    for each cluster with a target share intersecting it, 0 included: minus
+    the consumption of that cluster's budgets, it gives what no budget
+    covers (other accounts, hours outside every period). A cluster with no
+    target share intersecting the window is in neither list.
+    ``begin``/``end`` must be timezone-aware.
     """
     if end <= begin:
         return [], []
     begin_s, end_s = begin.timestamp(), end.timestamp()
 
-    budget_start = _utc_day_epoch(col(TargetShareDB.start_date))
-    budget_end = _utc_day_epoch(col(TargetShareDB.end_date))
+    budget_start = func.extract("epoch", col(TargetShareDB.start_date))
+    budget_end = func.extract("epoch", col(TargetShareDB.end_date))
     in_window = and_(budget_start < end_s, budget_end > begin_s)
 
     # The shared GPU population, running within the window; the subquery
@@ -324,9 +298,9 @@ def target_share_report(
         / 3600.0
     )
 
-    budgets_where = [in_window]
+    clusters_where = []
     if cluster_name is not None:
-        budgets_where.append(SlurmClusterDB.name == cluster_name)
+        clusters_where.append(SlurmClusterDB.name == cluster_name)
     budget_rows = sess.exec(
         select(  # ty:ignore[no-matching-overload]
             col(SlurmClusterDB.name).label("cluster_name"),
@@ -348,7 +322,7 @@ def target_share_report(
                 hours_in_budget > 0,
             ),
         )
-        .where(*budgets_where)
+        .where(in_window, *clusters_where)
         .group_by(col(TargetShareDB.id), col(SlurmClusterDB.name))
         .order_by(
             col(SlurmClusterDB.name),
@@ -360,39 +334,23 @@ def target_share_report(
         BudgetConsumption.model_validate(dict(row._mapping)) for row in budget_rows
     ]
 
-    # Unbudgeted = the window's whole eligible consumption of a budgeted
-    # cluster minus the attributed part; the difference is arithmetically
-    # what the attribution left out, whatever the reason (foreign account,
-    # hours outside every budget period).
-    attributed: dict[str, float] = {}
-    for budget in budgets:
-        attributed[budget.cluster_name] = (
-            attributed.get(budget.cluster_name, 0.0) + budget.consumed_rgu_hours
-        )
+    # From the clusters, not the jobs, so a budgeted cluster without jobs
+    # still gets its row, at 0.
     window_hours = overlap_hours(jobs.c, (begin_s, end_s))
-    totals = sess.exec(
+    budgeted_clusters = select(col(TargetShareDB.cluster_id)).where(in_window)
+    total_rows = sess.exec(
         select(
-            jobs.c.cluster_id,
-            func.sum(jobs.c.rgu * window_hours).label("consumed_rgu_hours"),
+            col(SlurmClusterDB.name),
+            func.coalesce(func.sum(jobs.c.rgu * window_hours), 0.0),
         )
-        .where(
-            jobs.c.cluster_id.in_(
-                select(col(TargetShareDB.cluster_id)).where(in_window).scalar_subquery()
-            )
-        )
-        .group_by(jobs.c.cluster_id)
+        .select_from(SlurmClusterDB)
+        .outerjoin(jobs, jobs.c.cluster_id == col(SlurmClusterDB.id))
+        .where(col(SlurmClusterDB.id).in_(budgeted_clusters), *clusters_where)
+        .group_by(col(SlurmClusterDB.name))
+        .order_by(col(SlurmClusterDB.name))
     ).all()
-    names = dict(
-        sess.exec(select(col(SlurmClusterDB.id), col(SlurmClusterDB.name))).all()
-    )
-    unbudgeted = []
-    for cluster_id, total in totals:
-        rest = float(total) - attributed.get(names[cluster_id], 0.0)
-        if rest > 0:
-            unbudgeted.append(
-                UnbudgetedConsumption(
-                    cluster_name=names[cluster_id], consumed_rgu_hours=rest
-                )
-            )
-    unbudgeted.sort(key=lambda row: row.cluster_name)
-    return budgets, unbudgeted
+    totals = [
+        ClusterConsumption(cluster_name=name, consumed_rgu_hours=total)
+        for name, total in total_rows
+    ]
+    return budgets, totals
