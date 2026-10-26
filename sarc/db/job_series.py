@@ -831,7 +831,7 @@ class JobSeriesDB(SQLModel, table=True):
 
 
 # --------------------------------------------------------------------------- #
-# Shared job-run expressions (/dash panels and target_share_report)
+# Shared job-run expressions
 # --------------------------------------------------------------------------- #
 #
 # The GPU population these read over is the ELIGIBILITY one, so the window
@@ -856,14 +856,14 @@ def job_end(cols):
     return func.slurm_job_end(cols.start_time, cols.elapsed_time)
 
 
-def job_span(*, start_time, elapsed_time):
+def job_span(cols):
     """A job's run as epoch seconds: ``[start, start + elapsed)``.
 
     Anchored on ``elapsed_time``, not ``end_time``, so the slices add back up
     to the cost columns, which are all built from elapsed.
     """
-    start = func.extract("epoch", start_time)
-    return start, start + elapsed_time
+    start = func.extract("epoch", cols.start_time)
+    return start, start + cols.elapsed_time
 
 
 def ran_between(cols, lo, hi):
@@ -892,12 +892,12 @@ def overlap_hours(cols, interval: tuple[Any, Any], *other_intervals: tuple[Any, 
     (the table itself or a subquery's column collection); bounds are epoch
     seconds, Python floats or SQL expressions.
 
-    Guard it or it lies: ``least``/``greatest`` ignore NULL, so a job that
-    never started would take the full width of the intervals, and one running
-    outside the bounds a negative width -- nothing clamps either. The window
-    is guarded by ``ran_between``, each /dash bucket by the bucket table.
+    Only meaningful for a job that ran inside the intervals, which the caller
+    must ensure (``ran_between``, the /dash bucket table): ``least`` and
+    ``greatest`` ignore NULL, so a job that never started gets the full width
+    of the intervals, and a job outside them a negative width.
     """
-    start, end = job_span(start_time=cols.start_time, elapsed_time=cols.elapsed_time)
+    start, end = job_span(cols)
     lows = [interval[0], *(other[0] for other in other_intervals)]
     highs = [interval[1], *(other[1] for other in other_intervals)]
     return (func.least(end, *highs) - func.greatest(start, *lows)) / 3600.0

@@ -4,7 +4,7 @@ The `target_shares` table is the materialization of the allocations CSV named
 by the `sarc.target_shares` config key (default `data/allocations.csv`, same
 format as the code's data file). `insert_target_shares()` deletes and re-inserts
 every row at each import, so surrogate ids churn: consumers must join on the
-natural key (cluster_id, allocation, period) and never persist `id`. If a future
+natural key (cluster_id, start_date) and never persist `id`. If a future
 table ever references `id`, this full-refresh strategy must be replaced by a
 sync on the natural key.
 """
@@ -15,10 +15,10 @@ from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated
 
-from pydantic import BeforeValidator, ValidationInfo, field_validator
-from sqlalchemy import CheckConstraint, and_, func, literal_column, or_
+from pydantic import BeforeValidator, ValidationError, ValidationInfo, field_validator
+from sqlalchemy import TIMESTAMP, CheckConstraint, and_, cast, func, literal_column, or_
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
-from sqlmodel import Field, Relationship, Session, col, delete, select
+from sqlmodel import Field, Session, col, delete, select
 
 from .cluster import SlurmClusterDB
 from .job_series import ELIGIBILITY_CLAUSES, JobSeriesTable, overlap_hours, ran_between
@@ -50,34 +50,27 @@ def empty_allocation_as_none(value: object) -> object:
 class TargetShareDB(SQLModel, table=True):
     __tablename__ = "target_shares"
     __table_args__ = (
-        # Two target shares for the same cluster and allocation may not
-        # overlap. The period is half-open, [start, end), so consecutive
-        # budget years touching at a boundary date are legal — same
-        # convention as allocations.csv. Requires the btree_gist extension.
-        # coalesce() keeps NULL allocations (whole-cluster budgets) from
-        # silently escaping the constraint: a gist exclusion predicate with
-        # a NULL operand is never true. A NULL vs. concrete-allocation
-        # overlap is not expressible here; the import check in
-        # _check_no_overlap rejects it instead.
+        # One target share per cluster at any instant, whatever the
+        # allocation, so a job is attributed to one budget at most. The
+        # period is half-open, [start_date, end_date), so consecutive budget
+        # years touching at a boundary date are legal — same convention as
+        # allocations.csv. Requires the btree_gist extension.
         ExcludeConstraint(
             ("cluster_id", "="),
-            (func.coalesce(literal_column('"allocation"'), ""), "="),
             (
                 func.daterange(
-                    literal_column('"start"'), literal_column('"end"'), "[)"
+                    literal_column("start_date"), literal_column("end_date"), "[)"
                 ),
                 "&&",
             ),
             name="target_shares_no_overlap",
         ),
-        # "end" is a reserved word: it must be quoted in the raw SQL.
-        CheckConstraint('"end" > start', name="target_shares_end_after_start"),
+        CheckConstraint("end_date > start_date", name="target_shares_end_after_start"),
     )
 
     # Database ID
     id: int | None = Field(default=None, primary_key=True)
-    cluster_id: int = Field(foreign_key="clusters.id", index=True)
-    cluster: SlurmClusterDB = Relationship(passive_deletes="all")
+    cluster_id: int = Field(foreign_key="clusters.id")
 
     # Budget target: the allocations CSV group_name (e.g. rrg-bengioy-ad or
     # mila). It attributes the slurm_jobs.account rows named exactly by it,
@@ -87,23 +80,22 @@ class TargetShareDB(SQLModel, table=True):
     # GPU job running on a "_cpu" account is a data anomaly worth surfacing
     # as unbudgeted, not absorbing into the pool.
     # NULL covers the whole cluster: budgets negotiated at cluster level
-    # (PAICE shares) have no single group to name.
+    # have no single group to name.
     allocation: str | None
-    # Budget period, end exclusive.
-    start: Annotated[date, BeforeValidator(validate_date)]
-    end: Annotated[date, BeforeValidator(validate_date)]
-    # Allocated compute, the CSV's rgu_year column stored raw: RGU-years per
-    # year, i.e. an average count of RGUs. RGU-hours over a window = rgu_year
-    # x hours of overlap with [start, end). Open question for rows not
-    # spanning a year: rgu_year may be the period's RGU-year total, not a rate.
+    # Budget period, end exclusive: the CSV's start and end columns.
+    start_date: Annotated[date, BeforeValidator(validate_date)]
+    end_date: Annotated[date, BeforeValidator(validate_date)]
+    # The CSV's rgu_year, a count of RGUs (RGU-years per year), whatever the
+    # period length. RGU-hours over a window = rgu_year x hours of overlap
+    # with [start_date, end_date).
     rgu_year: float
 
 
 class TargetShareRow(SQLModel):
     """One validated CSV row, before cluster-id resolution."""
 
-    start: Annotated[date, BeforeValidator(validate_date)]
-    end: Annotated[date, BeforeValidator(validate_date)]
+    start_date: Annotated[date, BeforeValidator(validate_date)]
+    end_date: Annotated[date, BeforeValidator(validate_date)]
     cluster_name: str
     allocation: Annotated[str | None, BeforeValidator(empty_allocation_as_none)]
     # Annual rate, as the allocations.csv rgu_year column.
@@ -116,13 +108,13 @@ class TargetShareRow(SQLModel):
             raise ValueError(f"rgu_year must be positive, got {rgu_year}")
         return rgu_year
 
-    @field_validator("end")
+    @field_validator("end_date")
     @classmethod
-    def end_after_start(cls, end: date, info: ValidationInfo) -> date:
-        start = info.data.get("start")
-        if start is not None and end <= start:
-            raise ValueError(f"end {end} is not after start {start}")
-        return end
+    def end_after_start(cls, end_date: date, info: ValidationInfo) -> date:
+        start_date = info.data.get("start_date")
+        if start_date is not None and end_date <= start_date:
+            raise ValueError(f"end {end_date} is not after start {start_date}")
+        return end_date
 
 
 def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
@@ -132,8 +124,6 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
     storage, and the pre-RGU gpu_year rows) describe no RGU budget and are
     skipped here.
     """
-    from pydantic import ValidationError
-
     required = ["start", "end", "cluster_name", "group_name", "rgu_year"]
     rows: list[TargetShareRow] = []
     with path.open(newline="") as csv_file:
@@ -150,8 +140,8 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
             if not rgu_year:
                 continue  # a cpu, storage or gpu_year row: no RGU budget
             values = {
-                "start": row["start"],
-                "end": row["end"],
+                "start_date": row["start"],
+                "end_date": row["end"],
                 "cluster_name": row["cluster_name"],
                 "allocation": row.get("group_name"),
                 "rgu_year": rgu_year,
@@ -164,38 +154,27 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
 
 
 def _rows_conflict(first: TargetShareRow, second: TargetShareRow) -> bool:
-    """True when two rows budget the same accounts over overlapping periods.
-
-    A NULL-allocation row covers every account of its cluster, so it
-    conflicts with any other row of that cluster, concrete allocations
-    included.
-    """
-    if first.cluster_name != second.cluster_name:
-        return False
-    if first.start >= second.end or second.start >= first.end:
-        return False
-    if first.allocation is None or second.allocation is None:
-        return True
-    return first.allocation == second.allocation
+    """True when two rows budget one cluster over overlapping periods."""
+    return (
+        first.cluster_name == second.cluster_name
+        and first.start_date < second.end_date
+        and second.start_date < first.end_date
+    )
 
 
 def _check_no_overlap(rows: list[TargetShareRow]) -> None:
-    """Reject rows whose covered accounts and periods overlap within the CSV.
-
-    The DB exclusion constraint catches same-allocation (and NULL/NULL)
-    overlaps at flush; checking here rejects NULL vs. concrete overlaps the
-    constraint cannot express, and names the offending pair instead of
-    raising a constraint violation traceback.
-    """
+    """Reject two rows of one cluster with overlapping periods. The DB
+    constraint enforces the same rule; checking here names both rows, where a
+    constraint violation only gives a cluster id."""
     for i, first in enumerate(rows):
         for second in rows[i + 1 :]:
             if _rows_conflict(first, second):
                 raise ValueError(
                     f"overlapping target shares for {first.cluster_name}: "
                     f"{first.allocation or 'all accounts'} "
-                    f"[{first.start}, {first.end}) and "
+                    f"[{first.start_date}, {first.end_date}) and "
                     f"{second.allocation or 'all accounts'} "
-                    f"[{second.start}, {second.end})"
+                    f"[{second.start_date}, {second.end_date})"
                 )
 
 
@@ -219,8 +198,8 @@ def _resolve_cluster_ids(
             TargetShareDB(
                 cluster_id=cluster_id,
                 allocation=row.allocation,
-                start=row.start,
-                end=row.end,
+                start_date=row.start_date,
+                end_date=row.end_date,
                 rgu_year=row.rgu_year,
             )
         )
@@ -228,24 +207,12 @@ def _resolve_cluster_ids(
 
 
 def insert_target_shares() -> None:
-    """Full-refresh `target_shares` from the allocations CSV of the config.
-
-    No-op when the config key is null or the file is missing. All rows are
-    validated first, then the table is emptied and refilled in a single
-    transaction: readers see either the previous set or the new one, never a
-    partial or empty table, and rows deleted from the CSV disappear here —
-    merge-by-key semantics could not. Raises on any invalid row: a silently
-    dropped budget would skew every report built on it, so a failed deploy is
-    the wanted outcome. Rows whose cluster the database does not know are
-    skipped instead, see _resolve_cluster_ids. Runs after insert_clusters,
-    which seeds the clusters resolved here.
-    """
+    """Replace the content of `target_shares` with the configured CSV, in one
+    transaction. A missing file or any invalid row raises: only null disables
+    the import, and a silently dropped budget would skew every report."""
     from sarc.config import config
 
     if config.target_shares is None:
-        return
-    if not config.target_shares.is_file():
-        logger.warning(f"target shares file {config.target_shares} not found")
         return
 
     rows = read_target_shares_csv(config.target_shares)
@@ -270,8 +237,8 @@ class BudgetConsumption(SQLModel):
 
     cluster_name: str
     allocation: str | None
-    start: date
-    end: date
+    start_date: date
+    end_date: date
     rgu_year: float
     target_rgu_hours: float
     consumed_rgu_hours: float
@@ -286,10 +253,10 @@ class UnbudgetedConsumption(SQLModel):
 
 
 def _utc_day_epoch(day):
-    """A budget's DATE bound as epoch seconds: the calendar-day midnight in
-    UTC, the instant sessions read timestamps at -- independent of the
-    session TimeZone, unlike a bare ``start::timestamptz`` cast."""
-    return func.extract("epoch", func.timezone("UTC", day))
+    """A budget's DATE bound as the epoch seconds of its midnight UTC. The
+    value must not go through timestamptz (a cast, or timezone()): that
+    conversion places midnight in the session TimeZone."""
+    return func.extract("epoch", cast(day, TIMESTAMP))
 
 
 def target_share_report(
@@ -308,15 +275,15 @@ def target_share_report(
 
     The second list is the complement per budgeted cluster: eligible GPU
     consumption of the window minus what any of that cluster's budgets
-    attributed. Clusters without any target share carry no budget notion and
-    stay out of both lists. ``begin``/``end`` must be timezone-aware.
+    attributed. A cluster with no target share intersecting the window is in
+    neither list. ``begin``/``end`` must be timezone-aware.
     """
     if end <= begin:
         return [], []
     begin_s, end_s = begin.timestamp(), end.timestamp()
 
-    budget_start = _utc_day_epoch(col(TargetShareDB.start))
-    budget_end = _utc_day_epoch(col(TargetShareDB.end))
+    budget_start = _utc_day_epoch(col(TargetShareDB.start_date))
+    budget_end = _utc_day_epoch(col(TargetShareDB.end_date))
     in_window = and_(budget_start < end_s, budget_end > begin_s)
 
     # The shared GPU population, running within the window; the subquery
@@ -364,8 +331,8 @@ def target_share_report(
         select(  # ty:ignore[no-matching-overload]
             col(SlurmClusterDB.name).label("cluster_name"),
             col(TargetShareDB.allocation),
-            col(TargetShareDB.start),
-            col(TargetShareDB.end),
+            col(TargetShareDB.start_date),
+            col(TargetShareDB.end_date),
             col(TargetShareDB.rgu_year),
             prorated_target.label("target_rgu_hours"),
             func.coalesce(func.sum(jobs.c.rgu * hours_in_budget), 0.0).label(
@@ -383,7 +350,11 @@ def target_share_report(
         )
         .where(*budgets_where)
         .group_by(col(TargetShareDB.id), col(SlurmClusterDB.name))
-        .order_by(col(SlurmClusterDB.name), col(TargetShareDB.start))
+        .order_by(
+            col(SlurmClusterDB.name),
+            col(TargetShareDB.start_date),
+            col(TargetShareDB.allocation),
+        )
     ).all()
     budgets = [
         BudgetConsumption.model_validate(dict(row._mapping)) for row in budget_rows

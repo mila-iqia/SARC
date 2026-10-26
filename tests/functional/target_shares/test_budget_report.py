@@ -1,6 +1,7 @@
 from datetime import UTC, datetime, timedelta
 
 import pytest
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from sarc.db.cluster import SlurmClusterDB
@@ -33,8 +34,8 @@ def add_budget(
         TargetShareDB(
             cluster_id=cluster_id(sess, cluster),
             allocation=allocation,
-            start=start,
-            end=end,
+            start_date=start,
+            end_date=end,
             rgu_year=rgu_year,
         )
     )
@@ -202,8 +203,13 @@ def scenario(jobless_read_write_db: Session):
     return gpu.drac_rgu
 
 
-def test_report(jobless_read_write_db: Session, scenario: float):
+@pytest.mark.parametrize("session_tz", ["UTC", "America/Montreal"])
+def test_report(jobless_read_write_db: Session, scenario: float, session_tz: str):
+    """Budget bounds are UTC midnights whatever the session TimeZone."""
     w = scenario
+    jobless_read_write_db.connection().execute(
+        text(f"SET LOCAL TimeZone = '{session_tz}'")
+    )
     budgets, unbudgeted = target_share_report(
         jobless_read_write_db, begin=BEGIN, end=END
     )

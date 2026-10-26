@@ -486,11 +486,7 @@ class Config:
     logging: LoggingConfig | None = None
     notifications: UsageNotifyConfig | None = None
     target_shares: Path | None = Path("data/allocations.csv")
-    """Path to the allocations CSV declaring the target shares (annual compute
-    budgets in RGU-years per cluster/account), imported into the `target_shares`
-    table by `init_insert()`. Only the columns start, end, cluster_name,
-    group_name and rgu_year are read; rows without an rgu_year (cpu, storage)
-    and rows naming a cluster the database does not know are skipped.
+    """Allocations CSV imported into the `target_shares` table by `init_insert()`.
     Set to null to disable the import."""
 
     def __post_init__(self):

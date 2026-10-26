@@ -276,9 +276,6 @@ def _apply_focus(
 # --------------------------------------------------------------------------- #
 # Pro-rating: attributing a job's usage to the time it was actually running
 # --------------------------------------------------------------------------- #
-#
-# The primitives live in sarc.db.job_series (job_span, ran_between,
-# overlap_hours), shared with target_share_report.
 
 
 def _bucket_bounds(
@@ -343,9 +340,7 @@ def _bucket_table(
     the whole window, which is the half an index can answer.
     """
     starts, ends = _bucket_bounds(begin_dt, finish_dt, period)
-    run_start, run_end = job_span(
-        start_time=cols.start_time, elapsed_time=cols.elapsed_time
-    )
+    run_start, run_end = job_span(cols)
     # width_bucket numbers from 1, so position - 1 is the caller's index.
     pos = func.generate_series(
         func.width_bucket(run_start, starts), func.width_bucket(run_end, starts)
@@ -415,7 +410,7 @@ def _uniform_bucket_table(cols, plan: tuple[float, float, int], lo, hi):
     bucket, and the clamps are what the window predicate already guarantees.
     """
     anchor, step, n = plan
-    start, end = job_span(start_time=cols.start_time, elapsed_time=cols.elapsed_time)
+    start, end = job_span(cols)
     k = func.generate_series(
         func.greatest(func.floor((start - anchor) / step), 0).cast(Integer),
         func.least(func.ceil((end - anchor) / step) - 1, n - 1).cast(Integer),

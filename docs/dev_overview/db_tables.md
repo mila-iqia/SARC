@@ -82,12 +82,12 @@ diskusage` plainly inserts, so re-parsing a window duplicates its reports.
 ## Target shares
 
 `target_shares` holds the compute budgets of `data/allocations.csv`: one row per
-cluster, allocation and period, a NULL allocation meaning the whole cluster.
+cluster and period, a NULL allocation meaning the whole cluster.
 `rgu_year` is the CSV value as-is, an average count of RGUs; rows without one
 (CPU, storage) are not imported. `init_insert()` empties and refills the table
 on every run, so its ids churn: join on the natural key, never keep an `id`. A
-GiST exclusion constraint forbids two overlapping periods for the same cluster
-and allocation.
+GiST exclusion constraint forbids two overlapping periods on the same cluster,
+whatever their allocations.
 
 ## Run state
 

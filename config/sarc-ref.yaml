@@ -8,15 +8,8 @@ sarc:
       # unless host is a GCP instance name in which case it will use the
       # default service account for the machine
   patches: "patches" # this is the path to the patches directory
-  target_shares: "data/allocations.csv" # The allocations CSV of target shares
-  # (annual compute budgets in RGU-years per cluster/account), imported - full
-  # refresh - into the target_shares table by `python -m sarc.db`. Reads the
-  # start, end (end exclusive), cluster_name, group_name and rgu_year columns
-  # only; a blank group_name budgets the whole cluster. Rows without rgu_year
-  # (cpu, storage) and rows naming a cluster the database does not know are
-  # skipped. The table stores the annual rgu_year rate; consumers convert it
-  # to RGU-hours when comparing against job consumption.
-  # Set to null to disable the import.
+  target_shares: "data/allocations.csv" # The allocations CSV imported into the
+  # target_shares table by `python -m sarc.db`; null disables the import.
   server: # API server config
     auth: # If null, disables authentification for the API
       # easy-oauth config, see https://pypi.org/project/easy-oauth/
