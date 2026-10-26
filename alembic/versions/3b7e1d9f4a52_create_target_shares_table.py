@@ -24,7 +24,6 @@ def upgrade() -> None:
     """Upgrade schema."""
     op.create_table(
         "target_shares",
-        sa.Column("id", sa.Integer(), nullable=False),
         sa.Column("cluster_id", sa.Integer(), nullable=False),
         sa.Column("allocation", sa.String(), nullable=True),
         sa.Column(
@@ -35,7 +34,7 @@ def upgrade() -> None:
         ),
         sa.Column("rgu_year", sa.Float(), nullable=False),
         sa.ForeignKeyConstraint(["cluster_id"], ["clusters.id"]),
-        sa.PrimaryKeyConstraint("id"),
+        sa.PrimaryKeyConstraint("cluster_id", "start_date"),
         sa.CheckConstraint(
             "end_date > start_date", name="target_shares_end_after_start"
         ),

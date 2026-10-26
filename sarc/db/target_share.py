@@ -1,9 +1,4 @@
-"""Target shares: the GPU budgets of the allocations CSV, per cluster and period.
-
-`insert_target_shares()` deletes and re-inserts every row at each import, so
-ids change: join on the natural key (cluster_id, start_date), never keep an
-`id`. A table referencing `id` would need a sync on that key instead.
-"""
+"""Target shares: the GPU budgets of the allocations CSV, per cluster and period."""
 
 import csv
 import logging
@@ -62,9 +57,9 @@ class TargetShareDB(SQLModel, table=True):
         CheckConstraint("end_date > start_date", name="target_shares_end_after_start"),
     )
 
-    # Database ID
-    id: int | None = Field(default=None, primary_key=True)
-    cluster_id: int = Field(foreign_key="clusters.id")
+    # The primary key is (cluster_id, start_date): one share per cluster at a
+    # time.
+    cluster_id: int = Field(foreign_key="clusters.id", primary_key=True)
 
     # The CSV's group_name (e.g. rrg-bengioy-ad). A budget takes the jobs whose
     # account is this name or this name + "_gpu"; "_cpu" accounts stay out, an
@@ -73,7 +68,7 @@ class TargetShareDB(SQLModel, table=True):
     allocation: str | None
     # Budget period, end exclusive: the CSV's start and end days, read as
     # midnight UTC by utc_midnight.
-    start_date: datetime_utc = datetime_utc_field()
+    start_date: datetime_utc = datetime_utc_field(primary_key=True)
     end_date: datetime_utc = datetime_utc_field()
     # A number of RGUs (RGU-years per year), whatever the period length:
     # RGU-hours = rgu_year x hours.
@@ -292,7 +287,11 @@ def target_share_report(
             ),
         )
         .where(in_window, *clusters_where)
-        .group_by(col(TargetShareDB.id), col(SlurmClusterDB.name))
+        .group_by(
+            col(TargetShareDB.cluster_id),
+            col(TargetShareDB.start_date),
+            col(SlurmClusterDB.name),
+        )
         .order_by(
             col(SlurmClusterDB.name),
             col(TargetShareDB.start_date),
