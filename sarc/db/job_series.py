@@ -834,21 +834,16 @@ class JobSeriesDB(SQLModel, table=True):
 # Shared job-run expressions
 # --------------------------------------------------------------------------- #
 #
-# The GPU population these read over is the ELIGIBILITY one, so the window
-# predicate keeps the spelling the partial covering indexes can answer. A job
-# is charged to the periods it ran in, in proportion to the time it spent in
-# each, rather than wholly to the period it was submitted in: a bar reads as
-# "RGU.h spent in this week", not "RGU.h eventually spent by the jobs
-# submitted this week". Two consequences: a job submitted before the window
-# but running inside it now counts, and a bar no longer sums the jobs it is
-# drawn from -- only the slice of each that lands in the window. Every
-# windowed reader selects through the same `ran_between` predicate.
+# A job counts in each period it ran in, in proportion to the time it spent
+# there, not wholly in the period it was submitted in. Window queries filter
+# with `ran_between` and ELIGIBILITY_CLAUSES: written this way, Postgres can
+# use the job_series indexes.
 
 ELIGIBILITY_CLAUSES = (
     col(JobSeriesTable.allocated_gres_gpu) > 0,
     col(JobSeriesTable.gpu_type_rgu_drac).is_not(None),
 )
-"""The clause spelling of ELIGIBILITY, for queries built with expressions."""
+"""ELIGIBILITY as SQLAlchemy conditions, for queries built in Python."""
 
 
 def job_end(cols):
@@ -867,17 +862,13 @@ def job_span(cols):
 
 
 def ran_between(cols, lo, hi):
-    """SQL predicate: the job was running at some point within ``[lo, hi)``.
+    """SQL predicate: the job ran at some point within ``[lo, hi)``; bounds in
+    epoch seconds, floats or SQL expressions.
 
-    Bounds are epoch seconds -- either Python floats for a fixed window, or
-    SQL expressions for a computed bucket.
-
-    Two comparisons over the ``slurm_job_end`` expression index (on
-    ``ix_job_series_end`` here, on ``ix_slurm_jobs_end_gpu`` on slurm_jobs);
-    any other spelling reads every row. The degenerate cases are the
-    function's NULL: a job that never started, and a run of no length.
-    Half-open on both sides, so a run closing exactly on ``lo`` is out, and
-    one opening exactly on ``hi`` too.
+    Keep this exact form: it lets Postgres use the indexes on
+    ``slurm_job_end``; any other form makes it read every row. Excluded: a job
+    that never started or ran for no time (``slurm_job_end`` is NULL), and a
+    run only touching ``lo`` or ``hi``.
     """
     return and_(
         job_end(cols) > func.to_timestamp(lo), cols.start_time < func.to_timestamp(hi)
@@ -885,17 +876,13 @@ def ran_between(cols, lo, hi):
 
 
 def overlap_hours(cols, interval: tuple[Any, Any], *other_intervals: tuple[Any, Any]):
-    """SQL expression: hours of the job's run that fall inside all the given
-    ``[lo, hi)`` intervals -- their intersection as one clipped width.
+    """SQL expression: hours of the job's run inside every given ``[lo, hi)``
+    interval, bounds in epoch seconds; ``cols`` is the table or a subquery's
+    ``.c``.
 
-    ``cols`` is anything carrying the ``start_time``/``elapsed_time`` columns
-    (the table itself or a subquery's column collection); bounds are epoch
-    seconds, Python floats or SQL expressions.
-
-    Only meaningful for a job that ran inside the intervals, which the caller
-    must ensure (``ran_between``, the /dash bucket table): ``least`` and
-    ``greatest`` ignore NULL, so a job that never started gets the full width
-    of the intervals, and a job outside them a negative width.
+    Only for jobs known to run inside the intervals (``ran_between``, the
+    /dash bucket table): a job that never started would get their full width,
+    one outside them a negative width.
     """
     start, end = job_span(cols)
     lows = [interval[0], *(other[0] for other in other_intervals)]

@@ -58,10 +58,8 @@ def test_insert_target_shares(tmp_path, empty_read_write_db):
     with gifnoc.overlay({"sarc.target_shares": str(configured_csv(tmp_path))}):
         insert_target_shares()
 
-    # Consecutive years [2025-04-01, 2026-04-01) + [2026-04-01, 2027-04-01)
-    # coexist: the half-open periods only touch, they do not overlap. The same
-    # allocation on two clusters does not conflict either. The cpu and storage
-    # rows are absent: no rgu_year, no budget.
+    # Touching periods, and one allocation on two clusters, coexist; cpu and
+    # storage rows (no rgu_year) are not imported.
     assert table_rows(empty_read_write_db) == [
         ("fromage", "def-bonhomme", utc(2024, 4, 1), utc(2025, 4, 1), 5000),
         ("fromage", "rrg-bonhomme-ad", utc(2025, 4, 1), utc(2026, 4, 1), 100000),
@@ -71,8 +69,7 @@ def test_insert_target_shares(tmp_path, empty_read_write_db):
 
 
 def test_init_insert_imports_target_shares(tmp_path, empty_read_write_db):
-    """init_insert, the deploy path, runs the import; the other tests call
-    insert_target_shares directly."""
+    """init_insert, the deploy path, runs the import."""
     with gifnoc.overlay({"sarc.target_shares": str(configured_csv(tmp_path))}):
         init_insert()
     assert len(table_rows(empty_read_write_db)) == 4
@@ -156,7 +153,6 @@ def test_unknown_cluster_skipped(tmp_path, empty_read_write_db):
     )
     with gifnoc.overlay({"sarc.target_shares": str(csv)}):
         insert_target_shares()
-    # The known-cluster row lands, the unknown-cluster row is skipped.
     assert table_rows(empty_read_write_db) == [
         ("patate", "rrg-bonhomme-ad", utc(2025, 4, 1), utc(2026, 4, 1), 100000)
     ]

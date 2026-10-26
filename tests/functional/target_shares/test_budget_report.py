@@ -184,7 +184,7 @@ def scenario(jobless_read_write_db: Session):
         gpus=1,
         job_id=8,
     )
-    add_job(  # gerudo carries no budget notion at all
+    add_job(  # gerudo has no budget
         sess,
         gpu,
         user,

@@ -40,9 +40,7 @@ def upgrade() -> None:
             "end_date > start_date", name="target_shares_end_after_start"
         ),
     )
-    # One target share per cluster at any instant (see TargetShareDB):
-    # the half-open periods [start_date, end_date) of a cluster must not
-    # overlap.
+    # One target share per cluster at any instant (see TargetShareDB).
     op.execute(
         "ALTER TABLE target_shares ADD CONSTRAINT target_shares_no_overlap "
         "EXCLUDE USING gist ("

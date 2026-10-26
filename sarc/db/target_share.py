@@ -1,12 +1,8 @@
-"""Target shares: annual compute budgets (RGU-years) declared per cluster/account.
+"""Target shares: the GPU budgets of the allocations CSV, per cluster and period.
 
-The `target_shares` table is the materialization of the allocations CSV named
-by the `sarc.target_shares` config key (default `data/allocations.csv`, same
-format as the code's data file). `insert_target_shares()` deletes and re-inserts
-every row at each import, so surrogate ids churn: consumers must join on the
-natural key (cluster_id, start_date) and never persist `id`. If a future
-table ever references `id`, this full-refresh strategy must be replaced by a
-sync on the natural key.
+`insert_target_shares()` deletes and re-inserts every row at each import, so
+ids change: join on the natural key (cluster_id, start_date), never keep an
+`id`. A table referencing `id` would need a sync on that key instead.
 """
 
 import csv
@@ -51,11 +47,8 @@ def empty_allocation_as_none(value: object) -> object:
 class TargetShareDB(SQLModel, table=True):
     __tablename__ = "target_shares"
     __table_args__ = (
-        # One target share per cluster at any instant, whatever the
-        # allocation, so a job is attributed to one budget at most. The
-        # period is half-open, [start_date, end_date), so consecutive budget
-        # years touching at a boundary date are legal — same convention as
-        # allocations.csv. Requires the btree_gist extension.
+        # One target share per cluster at any instant, so a job counts in one
+        # budget at most. Periods are [start_date, end_date): years may touch.
         ExcludeConstraint(
             ("cluster_id", "="),
             (
@@ -73,23 +66,17 @@ class TargetShareDB(SQLModel, table=True):
     id: int | None = Field(default=None, primary_key=True)
     cluster_id: int = Field(foreign_key="clusters.id")
 
-    # Budget target: the allocations CSV group_name (e.g. rrg-bengioy-ad or
-    # mila). It attributes the slurm_jobs.account rows named exactly by it,
-    # or by it plus the "_gpu" suffix (DRAC leaf accounts); see
-    # target_share_report. "_cpu" accounts stay out: an RGU budget is GPU
-    # capacity only (the CSV's cpu rows carry cores, never rgu_year), and a
-    # GPU job running on a "_cpu" account is a data anomaly worth surfacing
-    # as unbudgeted, not absorbing into the pool.
-    # NULL covers the whole cluster: budgets negotiated at cluster level
-    # have no single group to name.
+    # The CSV's group_name (e.g. rrg-bengioy-ad). A budget takes the jobs whose
+    # account is this name or this name + "_gpu"; "_cpu" accounts stay out, an
+    # RGU budget covers GPUs only. NULL, for a budget negotiated for the whole
+    # cluster, takes all its jobs.
     allocation: str | None
     # Budget period, end exclusive: the CSV's start and end days, read as
     # midnight UTC by utc_midnight.
     start_date: datetime_utc = datetime_utc_field()
     end_date: datetime_utc = datetime_utc_field()
-    # The CSV's rgu_year, a count of RGUs (RGU-years per year), whatever the
-    # period length. RGU-hours over a window = rgu_year x hours of overlap
-    # with [start_date, end_date).
+    # A number of RGUs (RGU-years per year), whatever the period length:
+    # RGU-hours = rgu_year x hours.
     rgu_year: float
 
 
@@ -121,12 +108,7 @@ class TargetShareRow(SQLModel):
 
 
 def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
-    """Parse and validate the allocations CSV, raising on any bad row.
-
-    Reads only the target-share columns; rows without an rgu_year (cpu,
-    storage, and the pre-RGU gpu_year rows) describe no RGU budget and are
-    skipped here.
-    """
+    """Parse and validate the allocations CSV, raising on any bad row."""
     required = ["start", "end", "cluster_name", "group_name", "rgu_year"]
     rows: list[TargetShareRow] = []
     with path.open(newline="") as csv_file:
@@ -168,8 +150,7 @@ def _resolve_cluster_ids(
     for row in rows:
         cluster_id = db_clusters.get(row.cluster_name)
         if cluster_id is None:
-            # Budgets of not-yet-instrumented clusters stay in the CSV until
-            # insert_clusters learns them; the import must not fail on them.
+            # The CSV may also list clusters SARC does not scrape yet: skip them.
             logger.warning(
                 f"skipping target share for unknown cluster {row.cluster_name!r}"
             )
@@ -187,9 +168,8 @@ def _resolve_cluster_ids(
 
 
 def insert_target_shares() -> None:
-    """Replace the content of `target_shares` with the configured CSV, in one
-    transaction. A missing file or any invalid row raises: only null disables
-    the import, and a silently dropped budget would skew every report."""
+    """Replace `target_shares` with the CSV rows, in one transaction. A missing
+    file or a bad row raises: only null disables the import."""
     from sarc.config import config
 
     if config.target_shares is None:
@@ -234,23 +214,14 @@ class ClusterConsumption(SQLModel):
 def target_share_report(
     sess: Session, *, begin: datetime, end: datetime, cluster_name: str | None = None
 ) -> tuple[list[BudgetConsumption], list[ClusterConsumption]]:
-    """Compare GPU consumption against the target shares over ``[begin, end)``.
+    """Compare GPU consumption with the target shares over ``[begin, end)``.
 
-    A job contributes ``allocated_rgu_drac x hours`` for the hours its run
-    (the shared ``job_span`` one, ``[start_time, start_time + elapsed_time]``)
-    spends inside the budget period *and* the window, on jobs of the
-    budget's cluster attributed to it by the account rule documented on
-    TargetShareDB.allocation. The target is prorated over the same
-    intersection: ``rgu_year`` is a rate of RGUs, so the prorated target is
-    ``rgu_year x hours`` of it. Budgets not intersecting the window are
-    absent, budgets intersecting it with no matching jobs report 0 consumed.
-
-    The second list holds the total eligible GPU consumption of the window
-    for each cluster with a target share intersecting it, 0 included: minus
-    the consumption of that cluster's budgets, it gives what no budget
-    covers (other accounts, hours outside every period). A cluster with no
-    target share intersecting the window is in neither list.
-    ``begin``/``end`` must be timezone-aware.
+    Budgets: each target share intersecting the window, with its target
+    (rgu_year x hours of the window in its period) and the RGU-hours its jobs
+    spent there (account rule on TargetShareDB.allocation). Totals: each
+    budgeted cluster's consumption of the window, 0 included; minus its
+    budgets, it gives what no budget covers. A cluster without a target share
+    in the window is in neither list. ``begin``/``end`` must be timezone-aware.
     """
     if end <= begin:
         return [], []
@@ -260,9 +231,7 @@ def target_share_report(
     budget_end = func.extract("epoch", col(TargetShareDB.end_date))
     in_window = and_(budget_start < end_s, budget_end > begin_s)
 
-    # The shared GPU population, running within the window; the subquery
-    # keeps start_time/elapsed_time so overlap_hours can be spelled over
-    # jobs.c in both queries below.
+    # Eligible GPU jobs running in the window, with the columns overlap_hours reads.
     job_wheres = [*ELIGIBILITY_CLAUSES, ran_between(JobSeriesTable, begin_s, end_s)]
     if cluster_name is not None:
         job_wheres.append(
