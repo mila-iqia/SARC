@@ -8,7 +8,7 @@ from sqlmodel import Session, select
 from sarc.cache import Cache, CacheEntry
 from sarc.config import UTC, ClusterConfig, config
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.job import SlurmJobDB
+from sarc.db.job import SlurmJobDB, job_exists
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
 from sarc.scraping.gpu_fixes import fix_gpu_types
@@ -220,6 +220,7 @@ def parse_cache_entry(
         scraped_end = parse_date(key.split("_")[2])
 
         nb_skipped = 0
+        nb_skipped_over_time_limit = 0
         nb_total = 0
         for entry in parse_raw(value, cluster_name, scraped_start, scraped_end):
             if entry is None:
@@ -236,6 +237,37 @@ def parse_cache_entry(
                     entry["job_id"],
                 )
             entry["cluster_id"] = entry_cluster.id
+
+            # A corrupted slurm db on some clusters leaves finished jobs stuck
+            # in a running state, so sacct keeps reporting them with an elapsed
+            # time growing past their time limit. Such bogus records must not
+            # overwrite the data we already have for that job, so if the job is
+            # already in the db, ignore the entry. If it is not, add it
+            # normally.
+            time_limit = entry["time_limit"]
+            if (
+                entry["job_state"] == "RUNNING"
+                # time_limit is never None, but it could be I guess.
+                and time_limit is not None
+                and entry["elapsed_time"] > time_limit
+                and job_exists(
+                    sess,
+                    entry["cluster_id"],  # ty: ignore[invalid-argument-type]
+                    entry["job_id"],
+                    entry["submit_time"],
+                )
+            ):
+                logger.warning(
+                    "Skipping job %s on cluster %s (submit_time %s): elapsed %ss exceeds its time limit of %ss and the job is already in the db",
+                    entry["job_id"],
+                    entry_cluster_name,
+                    entry["submit_time"],
+                    entry["elapsed_time"],
+                    time_limit,
+                )
+                nb_skipped_over_time_limit += 1
+                continue
+
             entry["sarc_user_id"] = get_user_id_for_cluster_user(
                 sess, entry["cluster_id"], entry["cluster_user"], entry["submit_time"]
             )
@@ -266,6 +298,10 @@ def parse_cache_entry(
         if nb_skipped > 0:
             logger.warning(
                 f"skipped {nb_skipped}/{nb_total} ({int(100 * nb_skipped / nb_total)}%) jobs on {cluster_name} because we can't find a user for it"
+            )
+        if nb_skipped_over_time_limit > 0:
+            logger.warning(
+                f"skipped {nb_skipped_over_time_limit}/{nb_total} jobs on {cluster_name} because they ran over their time limit and are already in the db (possible slurm db corruption)"
             )
         bulk_upsert_jobs(sess, jobs_to_upsert)
         jobs_to_upsert = []

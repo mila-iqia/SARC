@@ -1,3 +1,4 @@
+from datetime import datetime
 from types import SimpleNamespace
 from typing import Self
 
@@ -191,6 +192,25 @@ class SlurmJobDB(SQLModel, table=True):
             )
         ).one_or_none()
         return sess.merge(res)
+
+
+def job_exists(
+    sess: Session, cluster_id: int, job_id: int, submit_time: datetime
+) -> bool:
+    """Return True if a job with this identity is already in the database.
+
+    Matches the identity constraint ix_job_unique (cluster_id, submit_time, job_id).
+    """
+    return (
+        sess.exec(
+            select(SlurmJobDB.id).where(
+                SlurmJobDB.cluster_id == cluster_id,
+                SlurmJobDB.job_id == job_id,
+                SlurmJobDB.submit_time == submit_time,
+            )
+        ).first()
+        is not None
+    )
 
 
 def get_rgus(rgu_version: str = "1.0") -> dict[str, float]:
