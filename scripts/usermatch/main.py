@@ -4,6 +4,8 @@ User matching viewer GUI.
 Loads all users from the SARC database and serves a local web page with two views:
   - All Users: every user with their matching IDs.
   - Match DRAC: pair unmatched DRAC users with unmatched LDAP users and export JSON.
+    Exported pairs identify DRAC users by their username ("drac_username"),
+    falling back to the CCI ("drac_member") when no username is known.
 
 Usage:
     SARC_CONFIG=config/sarc-prod.yaml SARC_MODE=scraping uv run python scripts/usermatch/main.py
@@ -17,17 +19,19 @@ import webbrowser
 from http.server import BaseHTTPRequestHandler, HTTPServer
 from pathlib import Path
 
-from sqlmodel import select
+from sqlmodel import Session, func, select
 from tqdm import tqdm
 
 from sarc.config import config
-from sarc.db.users import UserDB
+from sarc.db.users import CredentialsDB, UserDB
 
 
-def load_ignore_list(path: str | Path | None) -> list[str]:
-    """Load ignored DRAC member IDs from a JSON file.
+def load_ignore_list(path: str | Path | None) -> list[dict[str, str]]:
+    """Load ignored DRAC users from a JSON file.
 
-    Returns a list of string DRAC member IDs (mids).
+    Returns a list of matching ids ({"name": ..., "mid": ...}), where name is
+    "drac_username" or "drac_member" (CCI, legacy format). Legacy CCI entries
+    are converted to usernames by the page when the user is known.
     If path is None, file doesn't exist, or file contains invalid JSON, returns [].
     """
     if path is None:
@@ -46,16 +50,17 @@ def load_ignore_list(path: str | Path | None) -> list[str]:
     result = []
     for item in data:
         if isinstance(item, str):
-            result.append(item)
+            result.append({"name": "drac_member", "mid": item})
         elif isinstance(item, dict):
             if "matching_id" in item and isinstance(item["matching_id"], dict):
+                name = item["matching_id"].get("name") or "drac_member"
                 mid = item["matching_id"].get("mid")
                 if mid:
-                    result.append(str(mid))
+                    result.append({"name": str(name), "mid": str(mid)})
             elif "mid" in item and item["mid"]:
-                result.append(str(item["mid"]))
+                result.append({"name": "drac_member", "mid": str(item["mid"])})
             elif "drac_member" in item and item["drac_member"]:
-                result.append(str(item["drac_member"]))
+                result.append({"name": "drac_member", "mid": str(item["drac_member"])})
     return result
 
 
@@ -163,6 +168,7 @@ _HTML = """\
   .badge.mila_ldap   { background: #1c2e4a; border: 1px solid #1f6feb; color: #79c0ff; }
   .badge.drac_member { background: #1c3023; border: 1px solid #238636; color: #56d364; }
   .badge.drac_role   { background: #1c3023; border: 1px solid #2ea043; color: #3fb950; }
+  .badge.drac_username { background: #13302e; border: 1px solid #1b8a7e; color: #4fd1c5; }
   .badge.mymila      { background: #2e1c3a; border: 1px solid #8957e5; color: #d2a8ff; }
   .badge.other       { background: #2e2a1c; border: 1px solid #9e6a03; color: #e3b341; }
 
@@ -303,7 +309,7 @@ _HTML = """\
       <div class="match-col-inner">
         <table>
           <thead>
-            <tr><th>Display name</th><th>Email</th><th>DRAC ID</th><th>Action</th></tr>
+            <tr><th>Display name</th><th>Email</th><th>DRAC username</th><th>CCI</th><th>Action</th></tr>
           </thead>
           <tbody id="tbody-drac"></tbody>
         </table>
@@ -372,13 +378,27 @@ document.querySelectorAll(".nav-tab").forEach(tab => {
 
 // ---- badge helpers -----------------------------------------------------
 const PLUGIN_CLASSES = { mila_ldap:"mila_ldap", drac_member:"drac_member",
-                          drac_role:"drac_role", mymila:"mymila" };
+                          drac_role:"drac_role", mymila:"mymila",
+                          drac_username:"drac_username" };
 function badgeClass(p) { return PLUGIN_CLASSES[p] || "other"; }
 function badge(p, mid) {
   return `<span class="badge ${badgeClass(p)}">
     <span class="badge-plugin">${p}</span>
     <span class="badge-mid">${mid}</span></span>`;
 }
+function usernameBadge(u) {
+  return u && u.drac_username ? badge("drac_username", u.drac_username) : "";
+}
+function cciBadge(u) {
+  return u && u.matching_ids.drac_member ? badge("drac_member", u.matching_ids.drac_member) : "";
+}
+// Matching id identifying a DRAC user: the username, or the CCI if unknown.
+function dracRef(u) {
+  return u.drac_username
+    ? { name: "drac_username", mid: u.drac_username }
+    : { name: "drac_member", mid: u.matching_ids.drac_member };
+}
+function refKey(ref) { return `${ref.name}:${ref.mid}`; }
 
 // ========================================================================
 // PAGE 1 — All users
@@ -391,12 +411,13 @@ function badge(p, mid) {
     q = q.trim().toLowerCase();
     let n = 0;
     tbody.innerHTML = USERS.filter(u => {
-      const flat = `${u.display_name} ${u.email} ` +
+      const flat = `${u.display_name} ${u.email} ${u.drac_username || ""} ` +
         Object.entries(u.matching_ids).map(([p,m]) => `${p} ${m}`).join(" ");
       return !q || flat.toLowerCase().includes(q);
     }).map(u => {
       n++;
-      const badges = Object.entries(u.matching_ids).map(([p,m]) => badge(p,m)).join("");
+      const badges = Object.entries(u.matching_ids).map(([p,m]) => badge(p,m)).join("") +
+        usernameBadge(u);
       return `<tr>
         <td class="name">${u.display_name}</td>
         <td class="email">${u.email}</td>
@@ -414,14 +435,16 @@ function badge(p, mid) {
 // PAGE 2 — Match DRAC
 // ========================================================================
 (function() {
-  // Split users into the two pools
+  // Split users into the two pools, based on the DRAC username (users may
+  // not have a CCI)
   const dracOnly = USERS.filter(u =>
-    "drac_member" in u.matching_ids && !("mila_ldap" in u.matching_ids));
+    u.drac_username && !("mila_ldap" in u.matching_ids));
   const ldapOnly = USERS.filter(u =>
-    "mila_ldap" in u.matching_ids && !("drac_member" in u.matching_ids));
+    "mila_ldap" in u.matching_ids && !u.drac_username);
 
   const pairs = [];         // [{drac: user, ldap: user}]
-  const ignoredMids = new Set(INITIAL_IGNORED || []);
+  // Ignored DRAC users: refKey → matching id ({name, mid}), see dracRef
+  const ignored = new Map();
   let selectedDrac = null;  // currently selected DRAC row user
 
   const tbodyDrac = document.getElementById("tbody-drac");
@@ -443,7 +466,21 @@ function badge(p, mid) {
   const pairedIds = new Set();
 
   function isPaired(u) { return pairedIds.has(u.id); }
-  function isIgnored(u) { return ignoredMids.has(u.matching_ids.drac_member); }
+  function isIgnored(u) { return ignored.has(refKey(dracRef(u))); }
+
+  // Add a matching id to the ignore list, converting legacy CCI entries to
+  // usernames when the user is known. Returns false if already ignored.
+  function addIgnored(ref) {
+    if (ref.name === "drac_member") {
+      const u = dracOnly.find(user => user.matching_ids.drac_member === ref.mid);
+      if (u) ref = dracRef(u);
+    }
+    const key = refKey(ref);
+    if (ignored.has(key)) return false;
+    ignored.set(key, { name: ref.name, mid: ref.mid });
+    return true;
+  }
+  (INITIAL_IGNORED || []).forEach(addIgnored);
 
   // ---- render left column (DRAC-only) ----------------------------------
   function renderDrac(q) {
@@ -451,7 +488,7 @@ function badge(p, mid) {
     let n = 0;
     const rows = dracOnly.map(u => {
       const mid = u.matching_ids.drac_member || "";
-      const hay = `${u.display_name} ${u.email} ${mid}`.toLowerCase();
+      const hay = `${u.display_name} ${u.email} ${u.drac_username || ""} ${mid}`.toLowerCase();
       const visible = !q || hay.includes(q);
       const hidden = !visible || isPaired(u) || isIgnored(u);
       if (!hidden) n++;
@@ -464,7 +501,8 @@ function badge(p, mid) {
       return `<tr class="${cls}" data-id="${u.id}">
         <td class="name">${u.display_name}</td>
         <td class="email">${u.email || ""}</td>
-        <td>${badge("drac_member", mid)}</td>
+        <td>${usernameBadge(u)}</td>
+        <td>${cciBadge(u)}</td>
         <td><button class="btn btn-ignore" data-id="${u.id}">Ignore</button></td>
       </tr>`;
     }).join("");
@@ -488,7 +526,7 @@ function badge(p, mid) {
         const user = dracOnly.find(u => u.id === parseInt(btn.dataset.id));
         if (!user) return;
         if (selectedDrac === user) selectedDrac = null;
-        ignoredMids.add(user.matching_ids.drac_member);
+        addIgnored(dracRef(user));
         renderAll();
         renderIgnored();
       });
@@ -557,7 +595,7 @@ function badge(p, mid) {
       <div class="pair-row">
         <div class="pair-cell">
           <div class="pair-name">${p.drac.display_name}</div>
-          <div class="pair-mid">${badge("drac_member", p.drac.matching_ids.drac_member)}</div>
+          <div class="pair-mid">${usernameBadge(p.drac)} ${cciBadge(p.drac)}</div>
         </div>
         <div class="pair-arrow">→</div>
         <div class="pair-cell">
@@ -574,28 +612,31 @@ function badge(p, mid) {
 
   // ---- ignored section --------------------------------------------------
   function renderIgnored() {
-    btnDownloadIgnore.disabled = ignoredMids.size === 0;
-    countIgnored.textContent = `(${ignoredMids.size})`;
-    if (ignoredMids.size === 0) {
+    btnDownloadIgnore.disabled = ignored.size === 0;
+    countIgnored.textContent = `(${ignored.size})`;
+    if (ignored.size === 0) {
       ignoredList.innerHTML = '<p class="pairs-empty">No ignored DRAC users.</p>';
       return;
     }
-    ignoredList.innerHTML = Array.from(ignoredMids).map(mid => {
-      const u = dracOnly.find(user => user.matching_ids.drac_member === mid);
-      const name = u ? u.display_name : mid;
+    ignoredList.innerHTML = Array.from(ignored).map(([key, ref]) => {
+      const u = dracOnly.find(user => refKey(dracRef(user)) === key);
+      const name = u ? u.display_name : ref.mid;
       const email = u && u.email ? u.email : "";
+      const ids = u
+        ? `${usernameBadge(u)} ${cciBadge(u)}`
+        : badge(ref.name, ref.mid);
       return `<div class="pair-row">
         <div class="pair-cell">
           <div class="pair-name">${name}</div>
-          <div class="pair-mid">${email ? email + " • " : ""}${badge("drac_member", mid)}</div>
+          <div class="pair-mid">${email ? email + " • " : ""}${ids}</div>
         </div>
-        <button class="btn btn-ignore btn-unignore" data-mid="${mid}">Unignore</button>
+        <button class="btn btn-ignore btn-unignore" data-key="${key}">Unignore</button>
       </div>`;
     }).join("");
 
     ignoredList.querySelectorAll(".btn-unignore").forEach(btn => {
       btn.addEventListener("click", () => {
-        ignoredMids.delete(btn.dataset.mid);
+        ignored.delete(btn.dataset.key);
         renderAll();
         renderIgnored();
       });
@@ -603,9 +644,7 @@ function badge(p, mid) {
   }
 
   btnDownloadIgnore.addEventListener("click", () => {
-    const data = Array.from(ignoredMids).map(mid => ({
-      matching_id: { name: "drac_member", mid: mid },
-    }));
+    const data = Array.from(ignored.values()).map(ref => ({ matching_id: ref }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
     const a = document.createElement("a");
     a.href = URL.createObjectURL(blob);
@@ -630,17 +669,15 @@ function badge(p, mid) {
       }
       let loaded = 0;
       entries.forEach(entry => {
-        let mid = null;
-        if (typeof entry === "string") mid = entry;
+        let ref = null;
+        if (typeof entry === "string") ref = { name: "drac_member", mid: entry };
         else if (typeof entry === "object" && entry !== null) {
-          if (entry.matching_id && entry.matching_id.mid) mid = entry.matching_id.mid;
-          else if (entry.mid) mid = entry.mid;
-          else if (entry.drac_member) mid = entry.drac_member;
+          if (entry.matching_id && entry.matching_id.mid)
+            ref = { name: entry.matching_id.name || "drac_member", mid: entry.matching_id.mid };
+          else if (entry.mid) ref = { name: "drac_member", mid: entry.mid };
+          else if (entry.drac_member) ref = { name: "drac_member", mid: entry.drac_member };
         }
-        if (mid && !ignoredMids.has(mid)) {
-          ignoredMids.add(mid);
-          loaded++;
-        }
+        if (ref && addIgnored(ref)) loaded++;
       });
       renderAll();
       renderIgnored();
@@ -650,7 +687,7 @@ function badge(p, mid) {
   });
 
   btnClearIgnore.addEventListener("click", () => {
-    ignoredMids.clear();
+    ignored.clear();
     loadIgnoreReport.textContent = "";
     renderAll();
     renderIgnored();
@@ -678,9 +715,11 @@ function badge(p, mid) {
       try { entries = JSON.parse(e.target.result); }
       catch { loadReport.textContent = "Error: invalid JSON file."; return; }
 
-      // Build lookup maps: drac_member mid → user, mila_ldap mid → user
+      // Build lookup maps: drac_member mid / drac username → user, mila_ldap mid → user
       const dracByMid = {};
       dracOnly.forEach(u => { dracByMid[u.matching_ids.drac_member] = u; });
+      const dracByUsername = {};
+      dracOnly.forEach(u => { if (u.drac_username) dracByUsername[u.drac_username] = u; });
       const ldapByMid = {};
       ldapOnly.forEach(u => { ldapByMid[u.matching_ids.mila_ldap] = u; });
 
@@ -688,7 +727,8 @@ function badge(p, mid) {
       entries.forEach(entry => {
         const dracMid = entry.matching_id?.mid;
         const ldapMid = entry.known_matches?.find(m => m.name === "mila_ldap")?.mid;
-        const drac = dracByMid[dracMid];
+        const drac = entry.matching_id?.name === "drac_username"
+          ? dracByUsername[dracMid] : dracByMid[dracMid];
         const ldap = ldapByMid[ldapMid];
         if (!drac || !ldap || isPaired(drac) || isPaired(ldap)) { skipped++; return; }
         pairs.push({ drac, ldap });
@@ -722,7 +762,7 @@ function badge(p, mid) {
   // ---- download --------------------------------------------------------
   btnDownload.addEventListener("click", () => {
     const data = pairs.map(p => ({
-      matching_id: { name: "drac_member", mid: p.drac.matching_ids.drac_member },
+      matching_id: dracRef(p.drac),
       known_matches: [{ name: "mila_ldap", mid: p.ldap.matching_ids.mila_ldap }],
     }));
     const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
@@ -785,9 +825,21 @@ function badge(p, mid) {
 # ---------------------------------------------------------------------------
 
 
+def load_drac_usernames(sess: Session) -> dict[int, str]:
+    """Map user ids to their most recent DRAC username."""
+    stmt = (
+        select(CredentialsDB.user_id, CredentialsDB.username)
+        .where(CredentialsDB.domain == "drac")
+        .order_by(func.lower(CredentialsDB.valid))
+    )
+    # Later validity periods overwrite earlier ones.
+    return {user_id: username for user_id, username in sess.exec(stmt)}
+
+
 def load_users() -> list[dict]:
     """Fetch all users from the database with their matching IDs."""
     with config.db.session() as sess:
+        drac_usernames = load_drac_usernames(sess)
         db_users = sess.exec(select(UserDB)).all()
         return [
             {
@@ -795,6 +847,7 @@ def load_users() -> list[dict]:
                 "display_name": u.display_name,
                 "email": u.email,
                 "matching_ids": dict(u.matching_ids),
+                "drac_username": drac_usernames.get(u.id),
             }
             for u in tqdm(db_users, desc="Loading users", unit="user")
         ]
@@ -851,7 +904,7 @@ def main():
         "--ignore-file",
         type=str,
         default=None,
-        help="Path to JSON file containing ignored DRAC user IDs",
+        help="Path to JSON file containing ignored DRAC users",
     )
     args = parser.parse_args()
 
@@ -859,12 +912,12 @@ def main():
     users = load_users()
     print(f"Loaded {len(users)} users.")
 
-    ignored_mids = load_ignore_list(args.ignore_file)
-    if ignored_mids:
-        print(f"Loaded {len(ignored_mids)} ignored DRAC IDs from {args.ignore_file}.")
+    ignored = load_ignore_list(args.ignore_file)
+    if ignored:
+        print(f"Loaded {len(ignored)} ignored DRAC users from {args.ignore_file}.")
 
     users_json = json.dumps(users, ensure_ascii=False)
-    ignored_json = json.dumps(ignored_mids, ensure_ascii=False)
+    ignored_json = json.dumps(ignored, ensure_ascii=False)
     html_bytes = (
         _HTML.replace("__USERS_DATA__", users_json)
         .replace("__IGNORED_DATA__", ignored_json)
