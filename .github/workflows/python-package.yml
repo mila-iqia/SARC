@@ -35,7 +35,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.5"
+          version: "0.13.6"
 
       - name: Test with tox
         env:
@@ -51,7 +51,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.5"
+          version: "0.13.6"
 
       - name: Check ruff
         run: uv run tox -e ruff
@@ -68,7 +68,7 @@ jobs:
       - name: Set up uv
         uses: astral-sh/setup-uv@v10.3.2
         with:
-          version: "0.13.5"
+          version: "0.13.6"
 
       - name: Install dependencies
         run: |
