@@ -202,7 +202,7 @@ def scenario(jobless_read_write_db: Session):
 def test_report(jobless_read_write_db: Session, scenario: float):
     # RGUs of the test GPU: a job's RGU-hours are gpus x hours x w.
     w = scenario
-    budgets, totals = target_share_report(jobless_read_write_db, begin=BEGIN, end=END)
+    budgets = target_share_report(jobless_read_write_db, begin=BEGIN, end=END)
 
     # One row per budget intersecting the window; gerudo has no budget.
     assert [(b.cluster_name, b.allocation) for b in budgets] == [
@@ -228,45 +228,44 @@ def test_report(jobless_read_write_db: Session, scenario: float):
     # job 7 (3 h x 2 GPUs) and job 8 (3 h, any account).
     assert patate.consumed_rgu_hours == pytest.approx((3 * 2 + 3) * w)
 
-    # Each budgeted cluster's total, whatever the account: fromage's jobs 1 to
-    # 6 run entirely inside the window, hyrule has none, patate has jobs 7, 8.
-    assert [(t.cluster_name, t.consumed_rgu_hours) for t in totals] == [
-        ("fromage", pytest.approx((24 * 2 + 24 + 10 + 10 + 5 + 6) * w)),
+    # Over the same hours, the whole cluster, whatever the account: fromage's
+    # jobs 1 to 5 (job 2 from the budget start; job 6 ran before it), hyrule
+    # has none, patate has jobs 7, 8.
+    assert [(b.cluster_name, b.cluster_rgu_hours) for b in budgets] == [
+        ("fromage", pytest.approx((24 * 2 + 12 + 10 + 10 + 5) * w)),
         ("hyrule", 0),
         ("patate", pytest.approx((3 * 2 + 3) * w)),
     ]
-    # fromage's total minus its budget is what no budget covers: the 12 h of
-    # job 2 before the budget start, job 4 (_cpu account), job 5 (def-
-    # account) and job 6 (before the budget start).
-    assert totals[0].consumed_rgu_hours - fromage.consumed_rgu_hours == (
-        pytest.approx((12 + 10 + 5 + 6) * w)
+    # The gap between fromage's cluster and budget consumptions is the other
+    # accounts only: job 4 (_cpu account) and job 5 (def- account).
+    assert fromage.cluster_rgu_hours - fromage.consumed_rgu_hours == (
+        pytest.approx((10 + 5) * w)
     )
 
 
 def test_cluster_filter(jobless_read_write_db: Session, scenario: float):
     w = scenario
-    budgets, totals = target_share_report(
+    budgets = target_share_report(
         jobless_read_write_db, begin=BEGIN, end=END, cluster_name="fromage"
     )
     assert [b.cluster_name for b in budgets] == ["fromage"]
     assert budgets[0].consumed_rgu_hours == pytest.approx((24 * 2 + 12 + 10) * w)
-    assert [t.cluster_name for t in totals] == ["fromage"]
 
-    budgets, totals = target_share_report(
+    budgets = target_share_report(
         jobless_read_write_db, begin=BEGIN, end=END, cluster_name="gerudo"
     )
-    assert budgets == [] and totals == []
+    assert budgets == []
 
 
 def test_window_outside_every_budget(jobless_read_write_db: Session, scenario: float):
-    budgets, totals = target_share_report(
+    budgets = target_share_report(
         jobless_read_write_db,
         begin=datetime(2024, 1, 1, tzinfo=UTC),
         end=datetime(2024, 2, 1, tzinfo=UTC),
     )
-    assert budgets == [] and totals == []
+    assert budgets == []
 
 
 def test_empty_window(jobless_read_write_db: Session, scenario: float):
-    budgets, totals = target_share_report(jobless_read_write_db, begin=END, end=END)
-    assert budgets == [] and totals == []
+    budgets = target_share_report(jobless_read_write_db, begin=END, end=END)
+    assert budgets == []

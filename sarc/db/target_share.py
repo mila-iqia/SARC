@@ -32,13 +32,6 @@ def utc_midnight(value: str | date) -> datetime:
     return datetime.combine(day, time(), tzinfo=UTC)
 
 
-def empty_allocation_as_none(value: object) -> object:
-    """A blank CSV allocation field means the whole-cluster budget (NULL)."""
-    if isinstance(value, str) and not value.strip():
-        return None
-    return value
-
-
 class TargetShareDB(SQLModel, table=True):
     __tablename__ = "target_shares"
     __table_args__ = (
@@ -79,10 +72,18 @@ class TargetShareRow(SQLModel):
     """One validated CSV row, before cluster-id resolution."""
 
     cluster_name: str
-    allocation: Annotated[str | None, BeforeValidator(empty_allocation_as_none)]
+    allocation: str | None
     start_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
     end_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
     rgu_year: float
+
+    @field_validator("allocation")
+    @classmethod
+    def empty_allocation_as_none(cls, allocation: str | None) -> str | None:
+        """A blank CSV allocation field means the whole-cluster budget (NULL)."""
+        if allocation is None or not allocation.strip():
+            return None
+        return allocation
 
     @field_validator("rgu_year")
     @classmethod
@@ -186,8 +187,9 @@ def insert_target_shares() -> None:
 
 
 class BudgetConsumption(SQLModel):
-    """One target share with its prorated target and in-budget consumption,
-    both in RGU-hours over the report window."""
+    """One target share, in RGU-hours over its period within the report window:
+    its prorated target, the consumption of its allocation, and the consumption
+    of the whole cluster, whatever the account."""
 
     cluster_name: str
     allocation: str | None
@@ -196,30 +198,23 @@ class BudgetConsumption(SQLModel):
     rgu_year: float
     target_rgu_hours: float
     consumed_rgu_hours: float
-
-
-class ClusterConsumption(SQLModel):
-    """All the eligible GPU consumption of a budgeted cluster, in RGU-hours
-    over the report window, inside its budgets or not."""
-
-    cluster_name: str
-    consumed_rgu_hours: float
+    cluster_rgu_hours: float
 
 
 def target_share_report(
     sess: Session, *, begin: datetime, end: datetime, cluster_name: str | None = None
-) -> tuple[list[BudgetConsumption], list[ClusterConsumption]]:
+) -> list[BudgetConsumption]:
     """Compare GPU consumption with the target shares over ``[begin, end)``.
 
-    Budgets: each target share intersecting the window, with its target
-    (rgu_year x hours of the window in its period) and the RGU-hours its jobs
-    spent there (account rule on TargetShareDB.allocation). Totals: each
-    budgeted cluster's consumption of the window, 0 included; minus its
-    budgets, it gives what no budget covers. A cluster without a target share
-    in the window is in neither list. ``begin``/``end`` must be timezone-aware.
+    One row per target share intersecting the window, over the hours of the
+    window in its period: its target (rgu_year x those hours), the RGU-hours
+    its allocation's jobs spent there (account rule on
+    TargetShareDB.allocation), and those of all the cluster's jobs. A cluster
+    without a target share in the window has no row. ``begin``/``end`` must be
+    timezone-aware.
     """
     if end <= begin:
-        return [], []
+        return []
     begin_s, end_s = begin.timestamp(), end.timestamp()
 
     budget_start = func.extract("epoch", col(TargetShareDB.start_date))
@@ -256,6 +251,7 @@ def target_share_report(
     hours_in_budget = overlap_hours(
         jobs.c, (begin_s, end_s), (budget_start, budget_end)
     )
+    rgu_hours = jobs.c.rgu * hours_in_budget
     prorated_target = (
         col(TargetShareDB.rgu_year)
         * (func.least(budget_end, end_s) - func.greatest(budget_start, begin_s))
@@ -273,17 +269,16 @@ def target_share_report(
             col(TargetShareDB.end_date),
             col(TargetShareDB.rgu_year),
             prorated_target.label("target_rgu_hours"),
-            func.coalesce(func.sum(jobs.c.rgu * hours_in_budget), 0.0).label(
+            func.coalesce(func.sum(rgu_hours).filter(attribution), 0.0).label(
                 "consumed_rgu_hours"
             ),
+            func.coalesce(func.sum(rgu_hours), 0.0).label("cluster_rgu_hours"),
         )
         .join(SlurmClusterDB, col(SlurmClusterDB.id) == col(TargetShareDB.cluster_id))
         .outerjoin(
             jobs,
             and_(
-                jobs.c.cluster_id == col(TargetShareDB.cluster_id),
-                attribution,
-                hours_in_budget > 0,
+                jobs.c.cluster_id == col(TargetShareDB.cluster_id), hours_in_budget > 0
             ),
         )
         .where(in_window, *clusters_where)
@@ -298,27 +293,4 @@ def target_share_report(
             col(TargetShareDB.allocation),
         )
     ).all()
-    budgets = [
-        BudgetConsumption.model_validate(dict(row._mapping)) for row in budget_rows
-    ]
-
-    # From the clusters, not the jobs, so a budgeted cluster without jobs
-    # still gets its row, at 0.
-    window_hours = overlap_hours(jobs.c, (begin_s, end_s))
-    budgeted_clusters = select(col(TargetShareDB.cluster_id)).where(in_window)
-    total_rows = sess.exec(
-        select(
-            col(SlurmClusterDB.name),
-            func.coalesce(func.sum(jobs.c.rgu * window_hours), 0.0),
-        )
-        .select_from(SlurmClusterDB)
-        .outerjoin(jobs, jobs.c.cluster_id == col(SlurmClusterDB.id))
-        .where(col(SlurmClusterDB.id).in_(budgeted_clusters), *clusters_where)
-        .group_by(col(SlurmClusterDB.name))
-        .order_by(col(SlurmClusterDB.name))
-    ).all()
-    totals = [
-        ClusterConsumption(cluster_name=name, consumed_rgu_hours=total)
-        for name, total in total_rows
-    ]
-    return budgets, totals
+    return [BudgetConsumption.model_validate(dict(row._mapping)) for row in budget_rows]
