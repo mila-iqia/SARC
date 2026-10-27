@@ -20,7 +20,7 @@ from .sqlmodel import SQLModel, datetime_utc_field
 logger = logging.getLogger(__name__)
 
 
-def utc_midnight(value: str | date) -> datetime:
+def utc_midnight(day: str) -> datetime:
     """A CSV day as the instant midnight UTC.
 
     This is our convention: the CSV gives bare days, and we do not know
@@ -28,8 +28,7 @@ def utc_midnight(value: str | date) -> datetime:
     time zone. Rather than look up each cluster's time zone, every bound is
     normalized to midnight UTC.
     """
-    day = date.fromisoformat(value) if isinstance(value, str) else value
-    return datetime.combine(day, time(), tzinfo=UTC)
+    return datetime.combine(date.fromisoformat(day), time(), tzinfo=UTC)
 
 
 class TargetShareDB(SQLModel, table=True):
@@ -50,8 +49,8 @@ class TargetShareDB(SQLModel, table=True):
         CheckConstraint("end_date > start_date", name="target_shares_end_after_start"),
     )
 
-    # The primary key is (cluster_id, start_date): one share per cluster at a
-    # time.
+    # Primary key (cluster_id, start_date): unique because the exclusion
+    # constraint allows one share per cluster at a time.
     cluster_id: int = Field(foreign_key="clusters.id", primary_key=True)
 
     # The CSV's group_name (e.g. rrg-bengioy-ad). A budget takes the jobs whose
@@ -75,7 +74,7 @@ class TargetShareRow(SQLModel):
     allocation: str | None
     start_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
     end_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
-    rgu_year: float
+    rgu_year: float = Field(gt=0)
 
     @field_validator("allocation")
     @classmethod
@@ -84,13 +83,6 @@ class TargetShareRow(SQLModel):
         if allocation is None or not allocation.strip():
             return None
         return allocation
-
-    @field_validator("rgu_year")
-    @classmethod
-    def positive_rate(cls, rgu_year: float) -> float:
-        if rgu_year <= 0:
-            raise ValueError(f"rgu_year must be positive, got {rgu_year}")
-        return rgu_year
 
     @field_validator("end_date")
     @classmethod
@@ -113,18 +105,18 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
         missing = [name for name in required if name not in fieldnames]
         if missing:
             raise ValueError(f"{path}: missing column(s): {', '.join(missing)}")
-        for line_nb, row in enumerate(reader, start=2):  # header is line 1
+        for row in reader:
             # values past the header's last column (trailing commas) land under the key None.
             row.pop(None, None)
 
             if all(not (value or "").strip() for value in row.values()):
                 continue  # fully empty row
-            rgu_year = (row.get("rgu_year") or "").strip()
+            rgu_year = (row["rgu_year"] or "").strip()
             if not rgu_year:
                 continue  # a cpu, storage or gpu_year row: no RGU budget
             values = {
                 "cluster_name": row["cluster_name"],
-                "allocation": row.get("group_name"),
+                "allocation": row["group_name"],
                 "start_date": row["start"],
                 "end_date": row["end"],
                 "rgu_year": rgu_year,
@@ -132,7 +124,7 @@ def read_target_shares_csv(path: Path) -> list[TargetShareRow]:
             try:
                 rows.append(TargetShareRow.model_validate(values))
             except ValidationError as e:
-                raise ValueError(f"{path}:{line_nb}: invalid row {row}") from e
+                raise ValueError(f"{path}:{reader.line_num}: invalid row {row}") from e
     return rows
 
 
@@ -224,6 +216,7 @@ def target_share_report(
     # Eligible GPU jobs running in the window, with the columns overlap_hours reads.
     job_wheres = [*ELIGIBILITY_CLAUSES, ran_between(JobSeriesTable, begin_s, end_s)]
     if cluster_name is not None:
+        # For speed only: clusters_where, below, already limits the result to this cluster.
         job_wheres.append(
             col(JobSeriesTable.cluster_id).in_(
                 select(SlurmClusterDB.id)
