@@ -50,7 +50,7 @@ The columns are:
 
 - `DISPLAY NAME`
 - `EMAIL` the main email address
-- `MATCH IDS` the different ids for this user, from the different sources (with color code) : `mila_ldap`/`mymila`/`legacy_dump`/`drac_member`
+- `MATCH IDS` the different ids for this user, from the different sources (with color code) : `mila_ldap`/`mymila`/`legacy_dump`/`drac_member`/`slurm_allocation_members`, plus the DRAC username (`drac_username`)
 
 ## "Match DRAC" page
 
@@ -72,8 +72,8 @@ block
 > The `Auto-pair by email` button will automatically match entries with the same @mila.quebec e-mail address.
 > This is a good practice to start with it.
 
-One the left, the `Unmatched DRAC Users` list, with all users with a `drac_member` ID, but with no LDAP account. These are the items we want to match.
-On the right, the `LDAP users without DRAC` list, which are available for matching with DRAC entries.
+One the left, the `Unmatched DRAC Users` list, with all users with a DRAC username, but with no LDAP account. These are the items we want to match. Their CCI (`drac_member` ID) is shown when known.
+On the right, the `LDAP users without DRAC` list, with all LDAP users with no DRAC username, which are available for matching with DRAC entries.
 
 Select one item on each list, and a new entry will be added to the `Pairs` list in the bottom, removing these two entries from the top lists.
 
@@ -82,13 +82,26 @@ Select one item on each list, and a new entry will be added to the `Pairs` list 
 Even if it's not mandatory, you can read a previous version of the matching file with the `Load from file...` button.
 You can save the file with the `Download JSON` button.
 
+DRAC accounts are identified by their username in the file:
+
+```json
+[
+  {
+    "matching_id": { "name": "drac_username", "mid": "jdoe" },
+    "known_matches": [{ "name": "mila_ldap", "mid": "john.doe@mila.quebec" }]
+  }
+]
+```
+
+Older files identifying DRAC accounts by their CCI (`"name": "drac_member"`) can still be loaded, and are still understood by SARC.
+
 ### ignore list file
 
 Some rare cases are unsolvable; some DRAC accounts cannot be merged to any existing LDAP account in SARC, for whatever reason (account too old to have been catched by SARC scrapings, for example)
 
 To reduce the overhead, you can add a DRAC account to the ignore list with the `Ignore` button of the entry in the `Unmatched DRAC users` list.
 
-Like the `Pairs` list, you can load/save the ignore list.
+Like the `Pairs` list, you can load/save the ignore list. DRAC accounts are identified by their username in it too; entries from older files using the CCI are converted to usernames when loaded, when the user is found.
 
 > [!Note]
 > The ignore list file is not injected into SARC, it is up to you to keep a copy of it between user matching runs.
