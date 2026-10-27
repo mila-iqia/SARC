@@ -407,6 +407,111 @@ def test_update_job(
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
 )
+@pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
+def test_over_time_limit_job_not_overwritten(
+    get_jobs, test_config, create_sacct_json, remote, cli_main, caplog
+):
+    """A corrupted running job must not overwrite the job already in the db.
+
+    Corrupted slurm dbs leave finished jobs in a running state, with an
+    elapsed time beyond their time limit. On re-parse, such an entry is
+    ignored if the job is already in the db, but is still added normally if
+    it is not.
+    """
+    cmd = (
+        "export TZ=UTC && /opt/slurm/bin/sacct -X "
+        f"-S {_dtfmt(2023, 2, 15)} -E {_dtfmt(2023, 2, 16)} "
+        "--allusers --json --duplicates"
+    )
+    submit = datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC)
+
+    # First parse: the job finished normally (elapsed 3600 < limit 43200).
+    good = create_sacct_json([{"job_id": 1, "time": _times_for(submit)}])
+
+    # Second parse: the slurm db is corrupted. Job 1 is stuck in RUNNING with
+    # an elapsed time over its time limit; job 2 is a different job with the
+    # same problem but is not in the db yet.
+    over_limit = {**_times_for(submit), "elapsed": 999999}
+    corrupt = create_sacct_json(
+        [
+            {
+                "job_id": 1,
+                "time": over_limit,
+                "state": {"current": ["RUNNING"], "reason": "None"},
+            },
+            {
+                "job_id": 2,
+                "time": over_limit,
+                "state": {"current": ["RUNNING"], "reason": "None"},
+            },
+        ]
+    )
+
+    remote.expect(
+        host="raisin",
+        commands=[
+            Command(cmd=cmd, out=good.encode("utf-8")),
+            Command(cmd=cmd, out=corrupt.encode("utf-8")),
+        ],
+    )
+
+    # Import here so that config is setup correctly when CLI is created.
+    import sarc.cli  # noqa: F401
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-14T00:00"]) == 0
+
+    jobs = {j.job_id: j for j in get_jobs()}
+    assert list(jobs) == [1]
+    assert jobs[1].job_state == SlurmState.COMPLETED
+    assert jobs[1].elapsed_time == 3600
+
+    time.sleep(1)
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "--intervals",
+                f"{_dtfmt(2023, 2, 15)}-{_dtfmt(2023, 2, 16)}",
+            ]
+        )
+        == 0
+    )
+    assert cli_main(["-v", "parse", "jobs", "--since", "2023-02-15T00:00"]) == 0
+
+    jobs = {j.job_id: j for j in get_jobs()}
+    # Job 1: the corrupted record was ignored, the db data was not touched.
+    assert jobs[1].job_state == SlurmState.COMPLETED
+    assert jobs[1].elapsed_time == 3600
+    # Job 2: over its time limit but not in the db yet, added normally.
+    assert jobs[2].job_state == SlurmState.RUNNING
+    assert jobs[2].elapsed_time == 999999
+
+    assert (
+        "Skipping job 1 on cluster raisin" in caplog.text
+        and "elapsed 999999s exceeds its time limit of 43200s" in caplog.text
+    )
+
+
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"raisin": {"host": "raisin"}}}], indirect=True
+)
 @pytest.mark.parametrize("json_jobs", [{}], indirect=True)
 @pytest.mark.usefixtures("jobless_read_write_db", "enabled_cache", "no_pkey")
 def test_save_job(get_jobs, test_config, sacct_json, remote, file_regression, cli_main):
