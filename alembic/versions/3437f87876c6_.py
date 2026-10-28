@@ -12,7 +12,6 @@ import sqlalchemy as sa
 import sqlmodel.sql.sqltypes
 from sqlalchemy.dialects import postgresql
 
-import sarc.db.sqlmodel
 from alembic import op
 
 # revision identifiers, used by Alembic.
@@ -29,16 +28,12 @@ def upgrade() -> None:
         "target_shares",
         sa.Column("cluster_id", sa.Integer(), nullable=False),
         sa.Column("allocation", sqlmodel.sql.sqltypes.AutoString(), nullable=True),
-        sa.Column(
-            "start_date", sarc.db.sqlmodel.UTCDateTime(timezone=True), nullable=False
-        ),
-        sa.Column(
-            "end_date", sarc.db.sqlmodel.UTCDateTime(timezone=True), nullable=False
-        ),
+        sa.Column("start_date", sa.Date(), nullable=False),
+        sa.Column("end_date", sa.Date(), nullable=False),
         sa.Column("rgu_year", sa.Float(), nullable=False),
         postgresql.ExcludeConstraint(
             (sa.column("cluster_id"), "="),
-            (sa.text("tstzrange(start_date, end_date, '[)')"), "&&"),
+            (sa.text("daterange(start_date, end_date, '[)')"), "&&"),
             using="gist",
             name="target_shares_no_overlap",
         ),

@@ -1,6 +1,7 @@
-from datetime import UTC, datetime, timedelta
+from datetime import UTC, date, datetime, timedelta
 
 import pytest
+from sqlalchemy import text
 from sqlmodel import Session, select
 
 from sarc.db.cluster import SlurmClusterDB
@@ -31,8 +32,8 @@ def add_budget(
         TargetShareDB(
             cluster_id=cluster_id(sess, cluster),
             allocation=allocation,
-            start_date=utc_day(start),
-            end_date=utc_day(end),
+            start_date=date.fromisoformat(start),
+            end_date=date.fromisoformat(end),
             rgu_year=rgu_year,
         )
     )
@@ -255,6 +256,47 @@ def test_cluster_filter(jobless_read_write_db: Session, scenario: float):
         jobless_read_write_db, begin=BEGIN, end=END, cluster_name="gerudo"
     )
     assert budgets == []
+
+
+def test_report_ignores_session_time_zone(
+    jobless_read_write_db: Session, scenario: float
+):
+    """Budget days are taken at midnight UTC whatever the session's TimeZone.
+
+    Our databases default to UTC, where a plain day::timestamptz cast gives
+    the right instant too: the session is switched to Montreal, where
+    midnight is 04:00 UTC in April.
+    """
+    sess = jobless_read_write_db
+    w = scenario
+    sess.connection().execute(text("SET LOCAL TIME ZONE 'America/Montreal'"))
+    # In this session, a plain cast lands at 04:00 UTC.
+    plain_cast = sess.connection().execute(
+        text("SELECT DATE '2026-04-01'::timestamptz")
+    )
+    assert plain_cast.scalar() == datetime(2026, 4, 1, 4, tzinfo=UTC)
+
+    # fromage's budget runs from 2026-04-01 to 2027-04-01. Around its start,
+    # it takes job 1 (24 h x 2 GPUs) and the 12 h of job 2 after the start.
+    # Read from 04:00 UTC, its first day would count 20 h instead of 24, and
+    # jobs 1 and 2 would each lose 4 h.
+    (first_day,) = target_share_report(
+        sess,
+        begin=datetime(2026, 3, 31, tzinfo=UTC),
+        end=datetime(2026, 4, 2, tzinfo=UTC),
+        cluster_name="fromage",
+    )
+    assert first_day.target_rgu_hours == pytest.approx(10 * 24)
+    assert first_day.consumed_rgu_hours == pytest.approx((24 * 2 + 12) * w)
+
+    # Read to 04:00 UTC, its last day would count 28 h instead of 24.
+    (last_day,) = target_share_report(
+        sess,
+        begin=datetime(2027, 3, 31, tzinfo=UTC),
+        end=datetime(2027, 4, 2, tzinfo=UTC),
+        cluster_name="fromage",
+    )
+    assert last_day.target_rgu_hours == pytest.approx(10 * 24)
 
 
 def test_window_outside_every_budget(jobless_read_write_db: Session, scenario: float):

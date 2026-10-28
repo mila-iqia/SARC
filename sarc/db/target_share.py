@@ -2,44 +2,43 @@
 
 import csv
 import logging
-from datetime import UTC, date, datetime, time
+from datetime import date, datetime
 from pathlib import Path
 from typing import Annotated
 
 from pydantic import BeforeValidator, ValidationError, ValidationInfo, field_validator
-from sqlalchemy import CheckConstraint, and_, func, literal_column, or_
+from sqlalchemy import TIMESTAMP, CheckConstraint, and_, cast, func, literal_column, or_
 from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlmodel import Field, Session, col, delete, select
 
-from sarc.validators import datetime_utc
-
 from .cluster import SlurmClusterDB
 from .job_series import ELIGIBILITY_CLAUSES, JobSeriesTable, overlap_hours, ran_between
-from .sqlmodel import SQLModel, datetime_utc_field
+from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
 
 
-def utc_midnight(day: str) -> datetime:
-    """A CSV day as the instant midnight UTC.
+def utc_midnight(day):
+    """SQL: midnight UTC of a DATE expression, as a timestamptz.
 
     This is our convention: the CSV gives bare days, and we do not know
     whether a budget starts at midnight UTC or at midnight in its cluster's
     time zone. Rather than look up each cluster's time zone, every bound is
-    normalized to midnight UTC.
+    normalized to midnight UTC. Spelled out because a plain
+    ``day::timestamptz`` cast takes midnight in the session's TimeZone.
     """
-    return datetime.combine(date.fromisoformat(day), time(), tzinfo=UTC)
+    return func.timezone("UTC", cast(day, TIMESTAMP))
 
 
 class TargetShareDB(SQLModel, table=True):
     __tablename__ = "target_shares"
     __table_args__ = (
-        # One target share per cluster at any instant, so a job counts in one
+        # One target share per cluster on any day, so a job counts in one
         # budget at most. Periods are [start_date, end_date): years may touch.
         ExcludeConstraint(
             ("cluster_id", "="),
             (
-                func.tstzrange(
+                func.daterange(
                     literal_column("start_date"), literal_column("end_date"), "[)"
                 ),
                 "&&",
@@ -58,10 +57,10 @@ class TargetShareDB(SQLModel, table=True):
     # RGU budget covers GPUs only. NULL, for a budget negotiated for the whole
     # cluster, takes all its jobs.
     allocation: str | None
-    # Budget period, end exclusive: the CSV's start and end days, read as
-    # midnight UTC by utc_midnight.
-    start_date: datetime_utc = datetime_utc_field(primary_key=True)
-    end_date: datetime_utc = datetime_utc_field()
+    # Budget period, end exclusive: the CSV's start and end days. Queries take
+    # each day at midnight UTC, through utc_midnight.
+    start_date: date = Field(primary_key=True)
+    end_date: date
     # A number of RGUs (RGU-years per year), whatever the period length:
     # RGU-hours = rgu_year x hours.
     rgu_year: float
@@ -72,8 +71,8 @@ class TargetShareRow(SQLModel):
 
     cluster_name: str
     allocation: str | None
-    start_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
-    end_date: Annotated[datetime_utc, BeforeValidator(utc_midnight)]
+    start_date: Annotated[date, BeforeValidator(date.fromisoformat)]
+    end_date: Annotated[date, BeforeValidator(date.fromisoformat)]
     rgu_year: float = Field(gt=0)
 
     @field_validator("allocation")
@@ -86,12 +85,10 @@ class TargetShareRow(SQLModel):
 
     @field_validator("end_date")
     @classmethod
-    def end_after_start(cls, end_date: datetime, info: ValidationInfo) -> datetime:
+    def end_after_start(cls, end_date: date, info: ValidationInfo) -> date:
         start_date = info.data.get("start_date")
         if start_date is not None and end_date <= start_date:
-            raise ValueError(
-                f"end {end_date.date()} is not after start {start_date.date()}"
-            )
+            raise ValueError(f"end {end_date} is not after start {start_date}")
         return end_date
 
 
@@ -185,8 +182,8 @@ class BudgetConsumption(SQLModel):
 
     cluster_name: str
     allocation: str | None
-    start_date: datetime_utc
-    end_date: datetime_utc
+    start_date: date
+    end_date: date
     rgu_year: float
     target_rgu_hours: float
     consumed_rgu_hours: float
@@ -209,8 +206,8 @@ def target_share_report(
         return []
     begin_s, end_s = begin.timestamp(), end.timestamp()
 
-    budget_start = func.extract("epoch", col(TargetShareDB.start_date))
-    budget_end = func.extract("epoch", col(TargetShareDB.end_date))
+    budget_start = func.extract("epoch", utc_midnight(col(TargetShareDB.start_date)))
+    budget_end = func.extract("epoch", utc_midnight(col(TargetShareDB.end_date)))
     in_window = and_(budget_start < end_s, budget_end > begin_s)
 
     # Eligible GPU jobs running in the window, with the columns overlap_hours reads.
