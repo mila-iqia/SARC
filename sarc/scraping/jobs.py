@@ -247,7 +247,6 @@ def parse_cache_entry(
             time_limit = entry["time_limit"]
             if (
                 entry["job_state"] == "RUNNING"
-                # time_limit is never None, but it could be I guess.
                 and time_limit is not None
                 and entry["elapsed_time"] > time_limit
                 and job_exists(
