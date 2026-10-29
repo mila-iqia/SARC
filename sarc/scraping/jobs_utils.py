@@ -114,12 +114,19 @@ def set_auto_end_time(cluster_name: str, end_field: str, date: datetime) -> None
         sess.commit()
 
 
-def parse_in_timezone(timestamp: int | None) -> datetime | None:
+def get_val32_sentiels(value: int | None) -> int | None:
     # -1 and -2 are flags returned by sacct
-    if timestamp in (None, 0, 4294967294, 4294967295):
+    if value in (0, 4294967294, 4294967295):
         return None
+    return value
+
+
+def parse_in_timezone(timestamp: int | None) -> datetime | None:
     # Slurm returns timestamps in UTC
-    return datetime.fromtimestamp(timestamp, UTC)
+    ts = get_val32_sentiels(timestamp)
+    if ts is None:
+        return ts
+    return datetime.fromtimestamp(ts, UTC)
 
 
 def _date_is_utc(value: datetime) -> bool:
@@ -292,7 +299,7 @@ def _convert_json_job(
             else entry["exit_code"].get("signal", {}).get("id", {}).get("number", None)
         ),
         time_limit=(
-            tlimit := (
+            tlimit := get_val32_sentiels(
                 entry["time"]["limit"]
                 if v_before_23
                 else entry["time"]["limit"]["number"]
@@ -379,7 +386,8 @@ def _convert_json_fast(
         job_state=job_state,
         exit_code=entry["exitcode_return_code"],
         signal=entry["exitcode_signal"],
-        time_limit=(tlimit := entry["time_timelimit"]) and tlimit * 60,
+        time_limit=(tlimit := get_val32_sentiels(entry["time_timelimit"]))
+        and tlimit * 60,
         submit_time=parse_in_timezone(entry["time_submit"]),
         start_time=parse_in_timezone(entry["time_start"]),
         end_time=end_time,
