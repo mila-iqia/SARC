@@ -1,7 +1,6 @@
 %%{init: {"layout": "elk"}}%%
 erDiagram
     direction LR
-    clusters ||--|{ allocationdb : cluster_id
     users ||--|{ credentialsdb : user_id
     diskusage_reports ||--|{ diskusage_groups : report_id
     clusters ||--|{ diskusage_reports : cluster_id
@@ -19,6 +18,7 @@ erDiagram
     users ||--|{ slurm_jobs : sarc_user_id
     user_supervisors ||--|{ supervisorshelper : list_id
     users ||--|{ supervisorshelper : supervisor
+    clusters ||--|{ target_shares : cluster_id
     users ||--|{ user_periods : user_id
     clusters ||--|{ user_periods : cluster_id
     users ||--|{ user_supervisors : user_id

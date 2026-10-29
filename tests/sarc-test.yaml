@@ -1,6 +1,7 @@
 sarc:
   cache: null
   patches: patches
+  target_shares: null
   clusters:
     fromage:
       user_domain: drac

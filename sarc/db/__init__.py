@@ -10,7 +10,6 @@ from .sqlmodel import SQLModel
 def get_meta():
     # We need to import those to register the tables
     from . import (  # noqa: F401
-        allocation,
         cluster,
         diskusage,
         healthcheck,
@@ -18,6 +17,7 @@ def get_meta():
         job_series,
         runstate,
         support,
+        target_share,
         user_periods,
         users,
     )
@@ -28,11 +28,16 @@ def get_meta():
 def init_insert() -> None:
     from sarc.config import config
 
+    from .target_share import insert_target_shares
+
     with config.db.session() as sess:
         insert_clusters(sess)
         insert_rgu(sess)
         sync_cluster_end_times(sess)
         sess.commit()
+    # Own transaction: a bad target-shares CSV must not undo the seeding above.
+    # Last, since it resolves cluster ids seeded by insert_clusters.
+    insert_target_shares()
 
 
 def sync_cluster_end_times(sess: Session) -> None:

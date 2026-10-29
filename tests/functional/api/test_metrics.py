@@ -1569,7 +1569,7 @@ _FOCUSED = [
 @pytest.mark.parametrize(("endpoint", "jobs_seen"), _FOCUSED)
 def test_focus_outside_the_range_is_an_empty_window(dash_client, endpoint, jobs_seen):
     """A focus clipping past the range asks about no time at all: no jobs. Left
-    inverted it would reach ``_ran_between`` as a tstzrange Postgres refuses."""
+    inverted it would reach ``ran_between`` as a tstzrange Postgres refuses."""
     r = dash_client.get(
         f"/dash/metrics/{endpoint}",
         params={

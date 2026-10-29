@@ -485,6 +485,9 @@ class Config:
     clusters: dict[str, ClusterConfig] = field(default_factory=dict)
     logging: LoggingConfig | None = None
     notifications: UsageNotifyConfig | None = None
+    target_shares: Path | None = Path(__file__).parent.parent / "data/allocations.csv"
+    """Allocations CSV imported into the `target_shares` table by `init_insert()`.
+    Set to null to disable the import."""
 
     def __post_init__(self):
         for name, cluster in self.clusters.items():

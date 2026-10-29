@@ -1,12 +1,11 @@
 import copy
 import datetime as dt
 from collections.abc import Iterable
-from datetime import date, datetime, timedelta
+from datetime import datetime, timedelta
 
 from sqlmodel import Session
 
 from sarc.config import UTC
-from sarc.db.allocation import AllocationDB
 from sarc.db.cluster import GPUBillingDB, SlurmClusterDB
 from sarc.db.diskusage import DiskUsageDB, DiskUsageGroupDB, DiskUsageUserDB
 from sarc.db.job import SlurmJobDB
@@ -501,125 +500,6 @@ def create_diskusages(
                 DiskUsageUserDB(user="revali", nbr_files=47085, size=4509715660)
             ]
     return diskusages
-
-
-def create_allocations(clusters: list[SlurmClusterDB]) -> list[AllocationDB]:
-    cluster_by_name = {c.name: c for c in clusters}
-    ts = datetime(year=2023, month=2, day=1, tzinfo=UTC)
-    fromage = cluster_by_name["fromage"].id
-    patate = cluster_by_name["patate"].id
-    return [
-        AllocationDB(
-            cluster_id=fromage,
-            resource_name="fromage-gpu",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=date(year=2017, month=4, day=1),
-            end=date(year=2018, month=4, day=1),
-            gpu_year=100,
-            rgu_year=400,
-        ),
-        AllocationDB(
-            cluster_id=fromage,
-            resource_name="fromage-storage",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2017, month=4, day=1),
-            end=datetime(year=2018, month=4, day=1),
-            project_size="50TB",
-            project_inodes="5e6",
-            nearline="15TB",
-        ),
-        AllocationDB(
-            cluster_id=fromage,
-            resource_name="fromage-gpu",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2018, month=4, day=1),
-            end=datetime(year=2019, month=4, day=1),
-            gpu_year=100,
-        ),
-        AllocationDB(
-            cluster_id=fromage,
-            resource_name="fromage-storage",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2018, month=4, day=1),
-            end=datetime(year=2019, month=4, day=1),
-            project_size="70TB",
-        ),
-        AllocationDB(
-            cluster_id=patate,
-            resource_name="patate-gpu",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2019, month=4, day=1),
-            end=datetime(year=2020, month=4, day=1),
-            gpu_year=190,
-            rgu_year=190,
-        ),
-        AllocationDB(
-            cluster_id=patate,
-            resource_name="patate-storage",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2019, month=4, day=1),
-            end=datetime(year=2020, month=4, day=1),
-            project_size="90TB",
-            project_inodes="5e6",
-            nearline="90TB",
-        ),
-        AllocationDB(
-            cluster_id=fromage,
-            resource_name="fromage-gpu",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2020, month=4, day=1),
-            end=datetime(year=2021, month=4, day=1),
-            gpu_year=130,
-            rgu_year=450,
-        ),
-        AllocationDB(
-            cluster_id=fromage,
-            resource_name="fromage-storage",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2020, month=4, day=1),
-            end=datetime(year=2021, month=4, day=1),
-            project_size="30TB",
-            project_inodes="5e6",
-        ),
-        AllocationDB(
-            cluster_id=patate,
-            resource_name="patate-compute",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2020, month=4, day=1),
-            end=datetime(year=2021, month=4, day=1),
-            cpu_year=219,
-        ),
-        AllocationDB(
-            cluster_id=patate,
-            resource_name="patate-gpu",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2020, month=4, day=1),
-            end=datetime(year=2021, month=4, day=1),
-            gpu_year=200,
-            rgu_year=500,
-        ),
-        AllocationDB(
-            cluster_id=patate,
-            resource_name="patate-storage",
-            group_name="rrg-bonhomme-ad",
-            timestamp=ts,
-            start=datetime(year=2020, month=4, day=1),
-            end=datetime(year=2021, month=4, day=1),
-            project_size="70TB",
-            project_inodes="5e6",
-            nearline="80TB",
-        ),
-    ]
 
 
 def extend_clusters(clusters: list[SlurmClusterDB]) -> None:

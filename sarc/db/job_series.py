@@ -36,7 +36,9 @@ by the indexed lookups /v0 filters use. The GPU-only covering indexes are
 partial on `ELIGIBILITY` -- the population every /dash panel reads.
 """
 
-from sqlalchemy import Index, text
+from typing import Any
+
+from sqlalchemy import Index, and_, text
 from sqlalchemy.dialects.postgresql import JSONB, aggregate_order_by
 from sqlmodel import BIGINT, JSON, Field, col, func, select
 
@@ -826,3 +828,63 @@ class JobSeriesDB(SQLModel, table=True):
     """The user's member type valid at the job's submit time."""
     supervisors: list[int] | None = Field(sa_type=JSON)
     """Supervisor user ids, ordered, valid at the job's submit time."""
+
+
+# --------------------------------------------------------------------------- #
+# Shared job-run expressions
+# --------------------------------------------------------------------------- #
+#
+# A job counts in each period it ran in, in proportion to the time it spent
+# there, not wholly in the period it was submitted in. Window queries filter
+# with `ran_between` and ELIGIBILITY_CLAUSES: written this way, Postgres can
+# use the job_series indexes.
+
+ELIGIBILITY_CLAUSES = (
+    col(JobSeriesTable.allocated_gres_gpu) > 0,
+    col(JobSeriesTable.gpu_type_rgu_drac).is_not(None),
+)
+"""ELIGIBILITY as SQLAlchemy conditions, for queries built in Python."""
+
+
+def job_end(cols):
+    """The instant the job's run stopped, through the indexed SQL function."""
+    return func.slurm_job_end(cols.start_time, cols.elapsed_time)
+
+
+def job_span(cols):
+    """A job's run as epoch seconds: ``[start, start + elapsed)``.
+
+    Anchored on ``elapsed_time``, not ``end_time``, so the slices add back up
+    to the cost columns, which are all built from elapsed.
+    """
+    start = func.extract("epoch", cols.start_time)
+    return start, start + cols.elapsed_time
+
+
+def ran_between(cols, lo, hi):
+    """SQL predicate: the job ran at some point within ``[lo, hi)``; bounds in
+    epoch seconds, floats or SQL expressions.
+
+    Keep this exact form: it lets Postgres use the indexes on
+    ``slurm_job_end``; any other form makes it read every row. Excluded: a job
+    that never started or ran for no time (``slurm_job_end`` is NULL), and a
+    run only touching ``lo`` or ``hi``.
+    """
+    return and_(
+        job_end(cols) > func.to_timestamp(lo), cols.start_time < func.to_timestamp(hi)
+    )
+
+
+def overlap_hours(cols, interval: tuple[Any, Any], *other_intervals: tuple[Any, Any]):
+    """SQL expression: hours of the job's run inside every given ``[lo, hi)``
+    interval, bounds in epoch seconds; ``cols`` is the table or a subquery's
+    ``.c``.
+
+    Only for jobs known to run inside the intervals (``ran_between``, the
+    /dash bucket table): a job that never started would get their full width,
+    one outside them a negative width.
+    """
+    start, end = job_span(cols)
+    lows = [interval[0], *(other[0] for other in other_intervals)]
+    highs = [interval[1], *(other[1] for other in other_intervals)]
+    return (func.least(end, *highs) - func.greatest(start, *lows)) / 3600.0
