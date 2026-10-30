@@ -651,6 +651,7 @@
           // Plot-local state
           {% if is_admin %}
           userRguTopN, userRguSortBy,
+          targetShareCluster,
           {% endif %}
           metricScatterMetric2,
           rguUsageView,
@@ -693,6 +694,7 @@
       {% if is_admin %}
       userRguTopN          = 16;
       userRguSortBy        = 'rgu_requested';
+      targetShareCluster   = '';
       {% endif %}
       metricScatterMetric2 = DEFAULT_METRIC2;
       rguUsageView         = 'per_period';
@@ -855,14 +857,15 @@
       density:           'Metric density',
       metric_comparison: 'Metric comparison',
       userrgu:           'RGU by user',
+      rgu_vs_target:     'RGU vs target share',
       {% endif %}
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
 
     // Map each plot type to the backend endpoint it consumes. heatmap_elapsed
     // and heatmap_wait share /heatmap, so caching by endpoint dedups fetches.
-    // metric_comparison is absent on purpose: it owns its data flow (a per-tile
-    // secondary picker that fetches /metric_comparison itself), rendered directly
+    // The SELF_FETCH_TILES (below) are absent on purpose: they own their data
+    // flow — a per-tile picker fetching its endpoint itself — rendered directly
     // by renderTile without a shared-cache fetch.
     const PLOT_TO_ENDPOINT = {
       job_counts:      'job_counts',
@@ -925,6 +928,13 @@
       });
       return opts;
     }
+
+    // Tiles that own their data flow: they fetch in their renderer, bypassing
+    // the shared endpoint cache, so renderTile renders them without a fetch.
+    // metric_comparison: a per-tile secondary-metric picker that re-fetches
+    // /metric_comparison itself; rgu_vs_target: a per-tile cluster picker over
+    // /target_shares (its cluster is picked on the tile, not in the toolbar).
+    const SELF_FETCH_TILES = new Set(['metric_comparison', 'rgu_vs_target']);
 
     // Tiles to redraw once a window resize settles -- those a live rescale
     // leaves visibly wrong, the known case being a wrapping legend stranded
@@ -1137,6 +1147,15 @@
     // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured'
     let userRguSortBy = _saved.userRguSortBy || 'rgu_requested';
     {% endif %}
+    // Cluster shown by the RGU-vs-target tile. Module-scoped like the other
+    // plot-local state, so the pick survives Updates. '' = no pick yet: the
+    // tile then snaps to the first budgeted cluster its endpoint reports.
+    // (The tile is admin-only, but these live outside the Jinja admin block:
+    // saveState/loadCharts touch them from shared code paths.)
+    let targetShareCluster = _saved.targetShareCluster || '';
+    // RGU-vs-target payloads keyed by cluster|window|period, cleared on Update
+    // like comparisonCache (the tile bypasses the shared endpoint cache).
+    let targetShareCache = {};
     // Job-table column keys hidden via the per-table column picker. Global (a
     // display preference shared by every job-table tile) so it survives
     // pagination, sorting and Update. Empty = all columns visible.
@@ -1150,9 +1169,10 @@
     // and the population every other tile draws from) or 'submitted' (jobs
     // submitted in each bucket — a submission rate, on a different population).
     let jobCountsView = _saved.jobCountsView || 'running';
-    // The tiles whose header carries a "View:" picker, i.e. the ones that get a
-    // .view-head-slot and are reloaded as a group when their view changes.
-    const VIEW_PICKER_TILES = new Set(['rgu_usage', 'job_counts']);
+    // The tiles whose header carries a picker next to the title: they get a
+    // .view-head-slot, filled once the renderer has its data. (rgu_vs_target's
+    // is a cluster picker; the others are "View:" pickers.)
+    const VIEW_PICKER_TILES = new Set(['rgu_usage', 'job_counts', 'rgu_vs_target']);
 
     function layoutToParam(l) {
       return l.map(row => row.join(',')).join(';');
@@ -1391,7 +1411,7 @@
             slot.className = 'jt-head-slot';
             header.appendChild(slot);
           } else if (VIEW_PICKER_TILES.has(plotType)) {
-            // Same idea for the "View:" picker: filled once the data is in.
+            // Same idea for the header picker: filled once the data is in.
             const slot = document.createElement('span');
             slot.className = 'view-head-slot';
             header.appendChild(slot);
@@ -1498,6 +1518,7 @@
                    density: renderDensity,
                    metric_comparison: renderMetricComparison,
                    userrgu: renderUserRgu,
+                   rgu_vs_target: renderRguVsTarget,
                    {% endif %} }[type];
       if (fn) fn(id, d);
     }
@@ -2027,6 +2048,171 @@
     }
 
     {% if is_admin %}
+    // RGU vs target share: like the metric-comparison tile, the choice lives
+    // on the tile — a cluster picker in its header, not the global cluster
+    // filter — and the tile owns its data flow (SELF_FETCH_TILES). The bar is
+    // the consumption of the share's own allocation per bucket, the horizontal
+    // segment the share's prorated target for that bucket: above the bar
+    // while under budget, inside it once over; the consumed/target
+    // percentage reads inside the bar's top. Buckets outside every budget
+    // draw no segment (null target), and the picker lists only clusters with
+    // a share in the window — the endpoint knows, so the tile never has to
+    // explain an empty pick.
+    function renderRguVsTarget(id, d) {
+      const el = document.getElementById(id);
+      if (!el) return;
+
+      el.innerHTML = '';
+      const box = document.createElement('div');
+      box.className = 'ms-box';
+      const plot = document.createElement('div');
+      plot.className = 'ms-plot';
+      box.appendChild(plot);
+      el.appendChild(box);
+
+      // The picker sits in the tile header, next to the title — the same
+      // .view-head-slot the "View:" pickers use (VIEW_PICKER_TILES) — so the
+      // plot keeps the tile's full height.
+      const lab = document.createElement('label');
+      lab.textContent = 'Cluster: ';
+      lab.title = 'Budgeted cluster to compare against its target share. This pick is per-tile: the global cluster and user filters do not apply here — a budget is set for the whole cluster. The Job-states filter does apply, to the consumption only (e.g. deselect RUNNING to hide phantom jobs).';
+      const sel = document.createElement('select');
+      sel.className = 'add-select';
+      lab.appendChild(sel);
+      const slot = el.closest('.tile')?.querySelector('.view-head-slot');
+      if (slot) {
+        slot.innerHTML = '';
+        slot.appendChild(lab);
+      }
+
+      async function draw(retried) {
+        Plotly.purge(plot);
+        if (!currentParams) return;
+        const url = targetSharesURL(currentParams, targetShareCluster);
+        plot.innerHTML = '<div class="tile-loading">Loading…</div>';
+        sel.disabled = true;
+        try {
+          if (!targetShareCache[url])
+            targetShareCache[url] = fetch(url).then(r => {
+              if (!r.ok) throw new Error(`HTTP ${r.status}`);
+              return r.json();
+            });
+          const data = await targetShareCache[url];
+          if (!document.body.contains(el) || el.dataset.plotType !== 'rgu_vs_target') return;
+          if (!data.clusters.length) {
+            sel.innerHTML = '';
+            showNoData(plot, 'No target shares in this window.');
+            return;
+          }
+          if (!data.periods.length) {
+            // No (or stale) pick: snap to the first budgeted cluster and
+            // refetch. One retry — if the snap still answers empty, show it.
+            if (!retried) {
+              targetShareCluster = data.clusters[0];
+              saveState();
+              await draw(true);
+              return;
+            }
+            showNoData(plot);
+            return;
+          }
+          sel.innerHTML = '';
+          data.clusters.forEach(c => {
+            const o = document.createElement('option');
+            o.value = c; o.textContent = c;
+            if (c === data.cluster) o.selected = true;
+            sel.appendChild(o);
+          });
+
+          // The share's annual rate: one number only when the window holds
+          // one budget — then the title carries it as a visual reference;
+          // when it straddles budgets, the hover's Budget line gives it per
+          // bucket instead.
+          const rguNum = v => (+v.toFixed(2)).toLocaleString('en-US');
+          const rguYearText = y => rguNum(y) + ' RGU·year';
+          const years = new Set(data.labels.flat().map(l => l.rgu_year));
+          const yearSuffix = years.size === 1
+            ? ' — ' + rguYearText([...years][0]) : '';
+          const budgetLines = data.labels.map(ls => ls.map(
+            l => l.label + ' · ' + rguYearText(l.rgu_year)).join(', '));
+
+          const unit = rguUnit();
+          const x = data.periods.map(p => p.period_start);
+          const ends = data.periods.map(p => p.period_end);
+          const consumed = data.consumed.map(v => v * unit.factor);
+          const targets = data.target.map(t => t === null ? null : t * unit.factor);
+          const opac = x.map(p => { const f = periodInFocus(p); return f === null ? 1 : f ? 1 : 0.35; });
+          const yMax = Math.max(0, ...consumed, ...targets.map(t => t || 0));
+          // A bar under ~6% of the y-range cannot hold the label; there it
+          // floats above the bar top (an empty bar: above the axis) instead.
+          const labelFloor = yMax * 0.06;
+          const shapes = [];
+          const annotations = [];
+          targets.forEach((t, i) => {
+            if (t === null) return;
+            // Category axis: shapes position on the category index, like the
+            // metric-trend focus band. Segment spans the bar's width.
+            shapes.push({
+              type: 'line', xref: 'x', yref: 'y',
+              x0: i - 0.45, x1: i + 0.45, y0: t, y1: t,
+              line: { color: '#111', width: 2.5 },
+            });
+            // Consumed/target as one readable figure inside the bar's top, so
+            // height and percentage read together. The ratio is unit-free
+            // (bars and targets share the unit factor), and a non-null target
+            // is > 0, so it never divides by zero.
+            const pct = data.consumed[i] / data.target[i] * 100;
+            const inside = consumed[i] > labelFloor;
+            annotations.push({
+              x: i, y: consumed[i], xref: 'x', yref: 'y',
+              text: (pct < 10 ? pct.toFixed(1) : Math.round(pct)) + ' %',
+              showarrow: false,
+              yanchor: inside ? 'top' : 'bottom', yshift: inside ? -3 : 3,
+              font: { size: 11, color: '#111' },
+              bgcolor: 'rgba(255,255,255,0.75)', borderpad: 2,
+            });
+          });
+          const traces = [{
+            type: 'bar', name: data.cluster, x: x, y: consumed,
+            customdata: ends.map((e, i) => [
+              e, targets[i] === null ? '' : rguNum(targets[i]), budgetLines[i],
+              rguNum(consumed[i]),
+            ]),
+            marker: { color: clusterColor(data.cluster), opacity: opac },
+            hovertemplate: data.cluster
+              + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[3]}<br>'
+              + 'Target: %{customdata[1]}<br>Budget: %{customdata[2]}<extra></extra>',
+          }];
+          Plotly.react(plot, traces, pLayout({
+            title: { text: 'RGU vs target share — ' + data.cluster + yearSuffix + ' (click to focus)',
+                     font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
+            xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
+            // Explicit range: shapes are left out of Plotly's y autorange, so
+            // a target above every bar would otherwise draw off-canvas.
+            yaxis: { title: { text: 'Total ' + unit.label }, range: [0, yMax * 1.1 || 1] },
+            shapes: shapes,
+            annotations: annotations,
+            showlegend: false,
+            margin: { l: 60, r: 20, t: 78, b: 100 },
+          }), { responsive: true }).then(gd => {
+            gd.removeAllListeners('plotly_click');
+            gd.on('plotly_click', evt => {
+              if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata[0]);
+            });
+          });
+        } catch (e) {
+          delete targetShareCache[url];  // don't cache a failed fetch
+          if (document.body.contains(el) && el.dataset.plotType === 'rgu_vs_target')
+            plot.innerHTML = `<div class="tile-error">Error: ${e.message}</div>`;
+        } finally {
+          if (document.body.contains(el)) sel.disabled = false;
+        }
+      }
+
+      sel.addEventListener('change', () => { targetShareCluster = sel.value; saveState(); draw(); });
+      draw();
+    }
+
     function renderUserRgu(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -3024,6 +3210,21 @@
         ...focusParams })), p);
     }
 
+    // /target_shares URL for the RGU-vs-target tile. Deliberately minimal
+    // (like comparisonURL stands apart): the tile's cluster is picked on the
+    // tile, and a budget is a fact of the whole cluster — the global cluster,
+    // user and job-state filters are not appended, and as_user would scope
+    // away the consumption the target was written against.
+    function targetSharesURL(p, cluster) {
+      // Only the job-states filter travels: it hides e.g. phantom RUNNING
+      // jobs from the consumption, while the calendar-based target is
+      // untouched. The cluster and user filters stay out (per-tile picker).
+      return withClustersAndStates('/dash/metrics/target_shares?' + new URLSearchParams({
+        start: p.start, end: p.end, period: p.period,
+        ...(cluster ? { cluster } : {}),
+      }), { job_states: p.job_states });
+    }
+
     function endpointURLBase(ep, p) {
       {% if is_admin %}
       const base = withAsUser({ start: p.start, end: p.end, ...(p.user_email ? { user_email: p.user_email } : {}) });
@@ -3109,10 +3310,10 @@
       // plain div. Only reloadTilesOfType hits this -- an Update rebuilds the
       // tile divs, so the stale state never survives one.
       Plotly.purge(chartDiv);
-      // Metric comparison owns its data flow (per-tile secondary picker that
-      // re-fetches /metric_comparison itself), so it skips the shared endpoint
-      // cache: render it straight away and let its own draw() do the fetching.
-      if (plotType === 'metric_comparison') {
+      // Self-fetch tiles (SELF_FETCH_TILES, above) own their data flow: their
+      // renderers fetch on their own, so renderTile draws them straight away
+      // and never touches the shared endpoint cache.
+      if (SELF_FETCH_TILES.has(plotType)) {
         chartDiv.innerHTML = '';
         renderPlot(chartDiv.id, plotType, {});
         return;
@@ -3166,6 +3367,7 @@
       currentParams   = params;
       endpointCache   = {};
       comparisonCache = {};
+      targetShareCache = {};
       endpointStatus  = {};
       saveState();
       updateStatus();

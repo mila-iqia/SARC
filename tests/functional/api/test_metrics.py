@@ -7,18 +7,19 @@ a guest.
 
 import math
 import re
-from datetime import datetime, timedelta, timezone
+from datetime import date, datetime, timedelta, timezone
 from types import SimpleNamespace
 
 import pytest
 from fastapi.testclient import TestClient
-from sqlmodel import col, select
+from sqlmodel import col, delete, select
 
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
 from sarc.db.job_series import JobSeriesTable
 from sarc.db.support import GpuRguDB
+from sarc.db.target_share import TargetShareDB, target_share_report
 from sarc.db.users import UserDB
 
 # Covers every factory-seeded job (submitted from 2023-02-14, +6h each).
@@ -1819,3 +1820,260 @@ def test_view_as_storage_key_is_distinct(app):
     user_direct = _storage_key(app.client(_USER))
 
     assert len({admin_own, admin_as_user, user_direct}) == 3
+
+
+# === RGU vs target share ======================================================
+# The admin-only /target_shares chart endpoint: per-bucket consumption of the
+# share's own allocation, the share's prorated target, and the picker list of
+# budgeted clusters.
+
+
+_TARGET_SHARES = "/dash/metrics/target_shares"
+
+
+@pytest.mark.usefixtures("read_only_db")
+@pytest.mark.parametrize(
+    "email,expected",
+    [pytest.param(_USER, 403, id="user"), pytest.param(_ADMIN, 200, id="admin")],
+)
+def test_target_shares_is_admin_only(app, email, expected):
+    """A target share is another group's budget: refused outright, not scoped
+    down to the caller's own jobs like the other endpoints."""
+    app.client(email).get(_TARGET_SHARES, params=WINDOW, expect_status=expected)
+
+
+def test_target_shares_guest_redirected(app):
+    """The router-level login redirect runs before the admin gate: a guest
+    gets the 307 to /login, not the 403."""
+    resp = TestClient(app, follow_redirects=False).get(_TARGET_SHARES, params=WINDOW)
+    assert resp.status_code == 307
+    assert resp.headers["location"].endswith("/login")
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_target_shares_empty(dash_client):
+    """The test config imports no allocations CSV, so the table is empty:
+    nothing to pick, nothing to draw."""
+    data = dash_client.get(_TARGET_SHARES, params=WINDOW).json()
+    assert data["clusters"] == []
+    assert data["periods"] == []
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_target_shares_unknown_cluster(dash_client):
+    dash_client.get(
+        _TARGET_SHARES, params={**WINDOW, "cluster": "nope"}, expect_status=404
+    )
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_target_share_tile_is_admin_only_in_template(app):
+    """The tile itself exists only in the admin template, hidden like every
+    other admin plot."""
+    admin_html = app.client(_ADMIN).get("/dash/metrics").text
+    user_html = app.client(_USER).get("/dash/metrics").text
+    assert "RGU vs target share" in admin_html
+    assert "RGU vs target share" not in user_html
+
+
+@pytest.fixture
+def dash_db_budgeted(dash_db):
+    """The one job left by _run_single_job, plus a target share on its
+    cluster: QUIET's first ten days, the job's own account, one RGU-year
+    (24 RGU·h per day bucket), running 48 h from 02-03.
+
+    Returns the cluster name and the hours the run is worth."""
+    with config.db.session() as sess:
+        total = _run_single_job(sess, _utc(2, 3), hours=48)
+        job = sess.exec(
+            select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+        ).one()
+        sess.add(
+            TargetShareDB(
+                cluster_id=job.cluster_id,
+                allocation=job.account,
+                start_date=date(2023, 2, 2),
+                end_date=date(2023, 2, 6),
+                rgu_year=1.0,
+            )
+        )
+        sess.commit()
+        cluster = sess.get(SlurmClusterDB, job.cluster_id)
+    return SimpleNamespace(cluster=cluster.name, total=total, account=job.account)
+
+
+def _target_shares(dash_client, cluster, **params) -> dict:
+    return dash_client.get(
+        _TARGET_SHARES, params={**QUIET, "period": "d", "cluster": cluster, **params}
+    ).json()
+
+
+def test_target_shares_consumption_and_prorated_target(dash_client, dash_db_budgeted):
+    """Day buckets of QUIET: the run's RGU·h land on the two days they run,
+    the target reads 24 RGU·h on each day the budget's period covers (one
+    RGU-year x 24 h) and null outside it."""
+    cluster = dash_db_budgeted.cluster
+    data = _target_shares(dash_client, cluster)
+
+    assert data["clusters"] == [cluster]
+    assert data["cluster"] == cluster
+    assert data["periods"][0]["period_start"] == "2023-02-01"
+    assert len(data["periods"]) == _QUIET_DAYS
+    assert data["consumed"] == pytest.approx(
+        [0, 0, _RGU_PER_JOB * 24, _RGU_PER_JOB * 24, 0, 0, 0, 0, 0, 0]
+    )
+    assert data["target"] == [None, 24, 24, 24, 24, None, None, None, None, None]
+    assert data["labels"][2] == [{"label": dash_db_budgeted.account, "rgu_year": 1.0}]
+    assert data["labels"][0] == []
+
+
+def test_target_shares_attribution_rule(dash_client, dash_db_budgeted):
+    """Only the budget's own account charges it: a bare group name or the
+    "_gpu" leaf both count, another account's jobs never do."""
+    for account, expected in (
+        ("rrg-someone-else", 0.0),
+        (f"{dash_db_budgeted.account}_gpu", dash_db_budgeted.total),
+    ):
+        with config.db.session() as sess:
+            job = sess.exec(
+                select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+            ).one()
+            job.account = account
+            sess.add(job)
+            sess.commit()
+        data = _target_shares(dash_client, dash_db_budgeted.cluster)
+        assert sum(data["consumed"]) == pytest.approx(expected), account
+        # The target belongs to the period, not to the consumption.
+        assert sum(t for t in data["target"] if t) == pytest.approx(96.0)
+
+
+def test_target_shares_null_allocation_budgets_the_whole_cluster(
+    dash_client, dash_db_budgeted
+):
+    """A NULL-allocation share attributes every account's hours, the rule
+    target_share_report applies to a whole-cluster budget."""
+    with config.db.session() as sess:
+        share = sess.exec(select(TargetShareDB)).one()
+        share.allocation = None
+        job = sess.exec(
+            select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+        ).one()
+        job.account = "rrg-someone-else"
+        sess.add(share)
+        sess.add(job)
+        sess.commit()
+    data = _target_shares(dash_client, dash_db_budgeted.cluster)
+    assert sum(data["consumed"]) == pytest.approx(dash_db_budgeted.total)
+    assert data["labels"][2] == [{"label": "(all accounts)", "rgu_year": 1.0}]
+
+
+def test_target_shares_job_states_filter_consumption_only(
+    dash_client, dash_db_budgeted
+):
+    """The Job-states picker trims the consumption scan, never the target:
+    excluding the run's state empties the bars, the budget line stands."""
+    cluster = dash_db_budgeted.cluster
+    with config.db.session() as sess:
+        job = sess.exec(
+            select(SlurmJobDB).where(col(SlurmJobDB.harmonized_gpu_type) == _GPU)
+        ).one()
+        job.job_state = SlurmState.RUNNING
+        sess.add(job)
+        sess.commit()
+
+    hidden = _target_shares(dash_client, cluster, job_states=["COMPLETED"])
+    shown = _target_shares(dash_client, cluster, job_states=["RUNNING"])
+    assert sum(hidden["consumed"]) == 0.0
+    assert sum(shown["consumed"]) == pytest.approx(dash_db_budgeted.total)
+    assert hidden["target"] == shown["target"], "the calendar ignores the filter"
+
+
+def test_target_shares_bucket_straddling_two_shares(dash_client, dash_db_budgeted):
+    """Week bucket [02-01, 02-06) covers both budgets: each prorates over its
+    own hours inside the bucket (1 x 72 h + 2 x 48 h), and the run's slices
+    attribute to the share their hours fall in."""
+    cluster = dash_db_budgeted.cluster
+    account = dash_db_budgeted.account
+    with config.db.session() as sess:
+        sess.exec(delete(TargetShareDB))
+        cluster_id = sess.exec(
+            select(SlurmClusterDB.id).where(SlurmClusterDB.name == cluster)
+        ).one()
+        sess.add_all(
+            [
+                TargetShareDB(
+                    cluster_id=cluster_id,
+                    allocation=account,
+                    start_date=date(2023, 2, 1),
+                    end_date=date(2023, 2, 4),
+                    rgu_year=1.0,
+                ),
+                TargetShareDB(
+                    cluster_id=cluster_id,
+                    allocation=account,
+                    start_date=date(2023, 2, 4),
+                    end_date=date(2023, 2, 6),
+                    rgu_year=2.0,
+                ),
+            ]
+        )
+        sess.commit()
+
+    weekly = _target_shares(dash_client, cluster, period="w")
+    # 02-01 is a Wednesday: the calendar week buckets are 5 days then 5.
+    assert len(weekly["periods"]) == 2
+    assert weekly["target"][0] == pytest.approx(1 * 72 + 2 * 48)
+    assert weekly["target"][1] is None, "the second week is past both budgets"
+    # The whole run sits inside the first bucket, half its hours in each
+    # share's period, both of which attribute its account.
+    assert weekly["consumed"][0] == pytest.approx(dash_db_budgeted.total)
+    assert weekly["consumed"][1] == 0.0
+    # One label per covering share, in period order.
+    assert weekly["labels"][0] == [
+        {"label": account, "rgu_year": 1.0},
+        {"label": account, "rgu_year": 2.0},
+    ]
+
+
+def test_target_shares_agrees_with_the_budget_report(dash_client, dash_db_budgeted):
+    """The chart and target_share_report are two views of one rule: summed
+    over the window, the buckets carry the report's prorated target and
+    attributed consumption."""
+    cluster = dash_db_budgeted.cluster
+    data = _target_shares(dash_client, cluster)
+    begin = datetime(2023, 2, 1, tzinfo=timezone.utc)
+    finish = begin + timedelta(days=_QUIET_DAYS)
+    with config.db.session() as sess:
+        (report,) = target_share_report(
+            sess, begin=begin, end=finish, cluster_name=cluster
+        )
+    assert sum(t for t in data["target"] if t) == pytest.approx(report.target_rgu_hours)
+    assert sum(data["consumed"]) == pytest.approx(report.consumed_rgu_hours)
+
+
+def test_target_shares_cluster_without_a_budget_in_the_window(
+    dash_client, dash_db_budgeted
+):
+    """A known cluster with no share in the window answers the picker list
+    and empty data, not a 404: the window, not the name, is what moved."""
+    with config.db.session() as sess:
+        other = sess.exec(
+            select(SlurmClusterDB).where(
+                SlurmClusterDB.name != dash_db_budgeted.cluster
+            )
+        ).first()
+        sess.add(
+            TargetShareDB(
+                cluster_id=other.id,
+                allocation=None,
+                start_date=date(2030, 1, 1),
+                end_date=date(2031, 1, 1),
+                rgu_year=5.0,
+            )
+        )
+        sess.commit()
+        other_name = other.name
+
+    data = _target_shares(dash_client, other_name)
+    assert data["clusters"] == [dash_db_budgeted.cluster]
+    assert data["periods"] == []

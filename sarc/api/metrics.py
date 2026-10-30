@@ -21,9 +21,9 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import Grouping
-from sqlmodel import Session, and_, case, col, func, select
+from sqlmodel import Session, and_, case, col, func, or_, select
 
-from sarc.api.v0 import Requestor, requestor
+from sarc.api.v0 import Requestor, requestor, require_admin
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB
@@ -35,6 +35,7 @@ from sarc.db.job_series import (
     overlap_hours,
     ran_between,
 )
+from sarc.db.target_share import TargetShareDB, utc_midnight
 from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
 
@@ -1235,6 +1236,146 @@ def metrics_rgu_by_cluster(
             for c in stacked_clusters
         ],
     }
+
+
+def _utc_midnight(day: date) -> datetime:
+    """Midnight UTC of a ``date`` — the Python twin of ``utc_midnight``
+    (sarc/db/target_share.py), the convention both budget bounds follow."""
+    return datetime(day.year, day.month, day.day, tzinfo=UTC)
+
+
+@router.get("/metrics/target_shares", dependencies=[Depends(require_admin)])
+def metrics_target_shares(
+    start: date = Query(default=None),
+    end: date = Query(default=None),
+    period: str = Query(default=_DEFAULT_PERIOD),
+    cluster: str | None = Query(default=None),
+    job_states: list[str] = Query(default=[]),
+    sess: Session = Depends(session_dep),
+):
+    """Per-bucket RGU.h consumed vs prorated target, for one budgeted cluster.
+
+    Admin-only: a target share is another group's budget. ``clusters`` lists
+    the clusters owning a target share that overlaps the window (the per-tile
+    picker's options); ``cluster`` picks which one to draw. Consumption is the
+    consumption of the share's own ``allocation`` (the account rule of
+    TargetShareDB), not the cluster's every job -- the target budgets those
+    jobs only. ``job_states`` filters that consumption scan (the dashboard's
+    Job-states picker), e.g. to hide phantom RUNNING jobs inflating the RGUs;
+    it leaves the target untouched. ``target`` prorates each share over the
+    hours of each bucket its period covers (rgu_year x hours, the
+    target_share_report rule), so a bucket crossing a period boundary sums
+    both shares and a bucket outside every period reads null, not 0. The
+    window's cluster/user filters deliberately do not apply: a budget
+    comparison is a fact about the whole cluster.
+    """
+    begin_dt, finish_dt = _date_range(start, end)
+    parsed = _parse_period(period)
+    fmt = _label_fmt(parsed)
+    begin_s, end_s = begin_dt.timestamp(), finish_dt.timestamp()
+
+    budget_start = func.extract("epoch", utc_midnight(col(TargetShareDB.start_date)))
+    budget_end = func.extract("epoch", utc_midnight(col(TargetShareDB.end_date)))
+    in_window = and_(budget_start < end_s, budget_end > begin_s)
+
+    budgeted = list(
+        sess.exec(
+            select(col(SlurmClusterDB.name))
+            .select_from(SlurmClusterDB)
+            .join(
+                TargetShareDB, col(TargetShareDB.cluster_id) == col(SlurmClusterDB.id)
+            )
+            .where(in_window)
+            .distinct()
+            .order_by(col(SlurmClusterDB.name))
+        ).all()
+    )
+    payload: dict = {
+        "clusters": budgeted,
+        "cluster": cluster,
+        "periods": [],
+        "consumed": [],
+        "target": [],
+        "labels": [],
+    }
+    if cluster is None or _no_buckets(begin_dt, finish_dt):
+        return payload
+    cid = SlurmClusterDB.id_by_name(sess, cluster)
+    if cid is None:
+        raise HTTPException(status_code=404, detail=f"Unknown cluster {cluster!r}")
+    if cluster not in budgeted:
+        # Known cluster, no share in this window: empty periods, the picker
+        # list says where the budgets actually are.
+        return payload
+
+    # The consumption scan is /rgu_by_cluster's for one cluster, with each
+    # slice also clipped to the target share its hours fall in (hours > 0 in
+    # the join: the whole cluster's hours outside every share's period budget
+    # no one, and a job crossing a period boundary splits between both).
+    buckets = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
+    hours = overlap_hours(
+        JobSeriesTable,
+        (buckets.c.bucket_start, buckets.c.bucket_end),
+        (budget_start, budget_end),
+    )
+    attribution = or_(
+        col(TargetShareDB.allocation).is_(None),
+        col(JobSeriesTable.account) == col(TargetShareDB.allocation),
+        col(JobSeriesTable.account)
+        == func.concat(col(TargetShareDB.allocation), "_gpu"),
+    )
+    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * hours
+    query = (
+        select(
+            buckets.c.bucket_index,
+            func.coalesce(
+                func.sum(case((attribution, rgu_hours), else_=0.0)), 0.0
+            ).label("consumed"),
+        )
+        .select_from(JobSeriesTable)
+        .join(buckets, true())
+        .join(TargetShareDB, and_(col(TargetShareDB.cluster_id) == cid, hours > 0))
+        .where(
+            *ELIGIBILITY_CLAUSES,
+            col(JobSeriesTable.cluster_id) == cid,
+            ran_between(JobSeriesTable, begin_s, end_s),
+        )
+        .group_by(buckets.c.bucket_index)
+        .order_by(buckets.c.bucket_index)
+    )
+    if job_states:
+        query = query.where(col(JobSeriesTable.job_state).in_(job_states))
+    # Two columns, so the rows read as tuples.
+    consumed = {i: float(v) for i, v in sess.exec(query)}
+
+    shares = sess.exec(
+        select(TargetShareDB)
+        .where(col(TargetShareDB.cluster_id) == cid, in_window)
+        .order_by(col(TargetShareDB.start_date))
+    ).all()
+    for i, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, parsed)):
+        target = 0.0
+        labels = []
+        for share in shares:
+            lo, hi = (
+                max(ps, _utc_midnight(share.start_date)),
+                min(pe, _utc_midnight(share.end_date)),
+            )
+            if hi > lo:
+                target += share.rgu_year * (hi - lo).total_seconds() / 3600.0
+                labels.append(
+                    {
+                        "label": share.allocation or "(all accounts)",
+                        "rgu_year": share.rgu_year,
+                    }
+                )
+        payload["periods"].append(
+            {"period_start": ps.strftime(fmt), "period_end": pe.strftime(fmt)}
+        )
+        payload["consumed"].append(consumed.get(i, 0.0))
+        payload["target"].append(target or None)
+        payload["labels"].append(labels)
+    return payload
 
 
 @router.get("/metrics/metric_trend")
