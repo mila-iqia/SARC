@@ -14,17 +14,23 @@ A RUNNING row counts as stuck when its time limit was reached more than
 RUNNING that long past `start_time + time_limit` can only be the corrupted
 state. A row without a time limit cannot be told this way and is left alone.
 
-For every stuck row, the `HEURISTICS` below are asked in order how long the
-run *actually* lasted; the first estimate wins, and a row no heuristic can
+For every stuck row, the `HEURISTICS` below are asked in order how long the run
+*actually* lasted; the first estimate wins, and a row no heuristic can
 estimate is only reported, never written. A heuristic is a function
 
-    def name(job: StuckJob, ctx: HeuristicContext) -> Estimate | None
+    def name(job: StuckJob) -> Estimate | None
 
-returning an `Estimate`, or None when it cannot tell. It may use the shared
-`ctx` to reach the clusters' prometheus (`ctx.has_prometheus`,
-`ctx.prometheus`) and the jobs cache (`ctx.jobs_cache`), and it may crash: a
-failure is logged and the next heuristic is asked. To add a heuristic, write
-it and put it in `HEURISTICS`, most trustworthy first.
+returning an `Estimate`, or None when it cannot tell; it may crash, in which
+case the failure is logged and the next heuristic is asked. To add a
+heuristic, write it and put it in `HEURISTICS`, most trustworthy first.
+
+The first heuristic is the jobs cache, which often still holds what the row
+lost: the scrape that saw the run finish. It reads one job's own span of the
+cache -- from its `start_time` to `CACHE_LOOKAHEAD` past its time limit, which
+is two days or a few, not the six years the cache holds -- and keeps the first
+record reporting a state the run cannot come back from, which gives both the
+duration and the state to close the row with. A job the cache never closes is
+left to the next heuristic.
 
 The fix file is json: one entry per estimated job, the job identified by
 (cluster_name, job_id, submit_time) -- the database's own unique key, so one
@@ -49,7 +55,7 @@ with -- `Estimate.state` per job, else `--state`, NODE_FAIL by default:
     }
 
 Needs the configuration `sarc parse jobs` runs with: the database, and
-whatever the heuristics read (per-cluster prometheus urls, the jobs cache):
+whatever the heuristics read (the jobs cache):
 
     SARC_CONFIG=<file> uv run python scripts/estimate_stuck_running_jobs.py -o fix.json
 """
@@ -57,19 +63,24 @@ whatever the heuristics read (per-cluster prometheus urls, the jobs cache):
 import argparse
 import json
 import logging
+import time
 from collections import defaultdict
 from collections.abc import Callable, Sequence
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from zipfile import ZipFile
 
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
+from sarc.cache import Cache
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.models.job import SlurmState
+from sarc.scraping.jobs import parse_date
+from sarc.scraping.jobs_utils import parse_raw
 
 logger = logging.getLogger("estimate_stuck_running_jobs")
 
@@ -79,6 +90,58 @@ NB_EXAMPLES = 10
 # heuristic nor --state asked for another one.
 FILE_VERSION = 1
 DEFAULT_STATE = SlurmState.NODE_FAIL
+
+# The jobs cache, the one `sarc fetch jobs` writes and `sarc parse jobs` reads.
+CACHE_SUBDIRECTORY = "jobs"
+
+# Stateless besides its subdirectory, and its root comes from the config when it
+# is used: the one instance is what every heuristic of every run reads.
+JOBS_CACHE = Cache(subdirectory=CACHE_SUBDIRECTORY)
+
+# How long past its time limit a job's span of the cache reaches: a run that
+# really ended is reported closed by the next scrape or two, and a day covers a
+# scrape of a slurm db still telling the lie. Past that span, a cache that says
+# nothing has nothing left to say about this job.
+CACHE_LOOKAHEAD = timedelta(days=1)
+
+# How late a fetch may be and still be worth reading for a job. A cache entry is
+# named for when it was fetched, and the period scraped on the cluster is in its
+# keys; sacct tells what the slurm db said at fetch time, so a fetch long past
+# the job's deadline only repeats the state that made the row stuck. The slack
+# covers a scrape catching up on a backlog, and keeps a cluster missing from the
+# cache from being walked to the end of it once per job.
+CACHE_FETCH_SLACK = timedelta(days=30)
+
+# The states that say a run stopped running, however it stopped. Not the ones
+# of a run still winding down (COMPLETING, STAGE_OUT, SIGNALING, RESIZING) nor
+# of one still queued or setting up (PENDING, CONFIGURING, RESV_DEL_HOLD), and
+# not the paused ones either (STOPPED, SUSPENDED): all of those can run again.
+CLOSED_STATES = frozenset(
+    {
+        SlurmState.BOOT_FAIL,
+        SlurmState.CANCELLED,
+        SlurmState.COMPLETED,
+        SlurmState.DEADLINE,
+        SlurmState.FAILED,
+        SlurmState.NODE_FAIL,
+        SlurmState.OUT_OF_MEMORY,
+        SlurmState.PREEMPTED,
+        SlurmState.REQUEUE_FED,
+        SlurmState.REQUEUE_HOLD,
+        SlurmState.REQUEUED,
+        SlurmState.REVOKED,
+        SlurmState.SPECIAL_EXIT,
+        SlurmState.TIMEOUT,
+    }
+)
+
+# What the fix file, and this script's own reports, identify a job by.
+type JobKey = tuple[str, int, datetime]
+
+# The cache values this run could not read, kept to only complain about each of
+# them once: every job whose span covers one reads it as many times as there are
+# jobs, and has nothing new to say about it the second time.
+UNPARSABLE: set[str] = set()
 
 
 @dataclass(frozen=True)
@@ -107,7 +170,7 @@ class StuckJob:
     nodes: tuple[str, ...]
 
     @property
-    def key(self) -> tuple[str, int, datetime]:
+    def key(self) -> JobKey:
         """The fix-file identity of this job."""
         return (self.cluster_name, self.job_id, self.submit_time)
 
@@ -124,20 +187,56 @@ class Estimate:
     note: str = ""
 
 
+@dataclass(frozen=True)
+class CacheState:
+    """What the jobs cache says ended one stuck run."""
+
+    # The state it reported, once the run was over.
+    state: SlurmState
+    # How long the run lasted as that record says, > 0.
+    duration: float
+    # When the record says the run ended, None when it only has an elapsed time.
+    end_time: datetime | None
+    # The cache key of the value the record came from: the cluster and the period
+    # it was scraped over, which is the date that actually means something here.
+    key: str
+    # When that value was fetched.
+    seen_at: datetime
+
+
+# What one heuristic gives: a callable that tells how a stuck run ended, or
+# None when it cannot tell.
 type Heuristic = Callable[[StuckJob], Estimate | None]
 
+
+def closed_state_in_cache(job: StuckJob) -> Estimate | None:
+    """Take the first state the jobs cache reported once the run was over.
+
+    The corruption that keeps the row RUNNING does not always keep the end of
+    the run out of the cache: a scrape of the job's own window saw it finish,
+    and its record says both when and how. The row lost that record, so it is
+    what the cache can give back, state and duration together.
+    """
+    seen = read_cache_state(JOBS_CACHE, job)
+    if seen is None:
+        return None
+    if seen.end_time is not None:
+        ended = f"ended at {seen.end_time.isoformat()}"
+    else:
+        ended = f"with no end time and an elapsed time of {seen.duration:.0f}s"
+    return Estimate(
+        duration=seen.duration,
+        state=seen.state,
+        note=(
+            f"the jobs cache read {seen.state.value} for the run, {ended}, "
+            f"in the value {seen.key} fetched at {seen.seen_at.isoformat()}"
+        ),
+    )
+
+
 # Asked in order for every stuck job, the first estimate wins. Add heuristics
-# here, most trustworthy first. None means "cannot tell" and asks the next
-# one; for example:
-#
-#     def last_sample(job: StuckJob, ctx: HeuristicContext) -> Estimate | None:
-#         """Take the last point prometheus has for the job as its real end."""
-#         if not ctx.has_prometheus(job.cluster_name):
-#             return None
-#         conn = ctx.prometheus(job.cluster_name)
-#         ...
-#         return Estimate(duration=..., note="last prometheus sample at ...")
-HEURISTICS: list[Heuristic] = []
+# here, most trustworthy first. None means "cannot tell" and asks the next one.
+HEURISTICS: list[Heuristic] = [closed_state_in_cache]
 
 
 def label(job: StuckJob) -> str:
@@ -205,6 +304,151 @@ def find_stuck_jobs(
             )
         )
     return jobs
+
+
+@dataclass(frozen=True)
+class _Window:
+    """One scraped period of the jobs cache: whose it is, which, and when."""
+
+    # The key the value is stored under, `<cluster>_<start>_<end>`.
+    key: str
+    cluster: str
+    start: datetime
+    end: datetime
+    # When it was fetched, which is when slurm was asked about the run.
+    fetched_at: datetime
+
+
+def read_cache_state(cache: Cache, job: StuckJob) -> CacheState | None:
+    """What the jobs cache says ended one run, read over its own span of it.
+
+    The span goes from the job's `start_time` to `CACHE_LOOKAHEAD` past its time
+    limit: a run that really ended was reported closed within a scrape or two of
+    its limit, so a cache that never said so has nothing left to say about it.
+
+    The cache holds some six years, so what a job costs is all in how much of it
+    gets walked. Only the entries from the start of the span on are, only the
+    values of the job's cluster among them are read, and only those scraped over
+    the span are decompressed: the entry's own date says when it was fetched,
+    while the period it scraped on the cluster is in its keys. A one-hour job
+    reads a couple of days of cache, not six years.
+    """
+    # Every job this script finds has a time limit; one without it would be
+    # looked for for the lookahead alone, which is a sane enough span.
+    deadline = job.start_time + timedelta(seconds=job.time_limit or 0) + CACHE_LOOKAHEAD
+    # `Cache._paths_from` and not `read_from`, which would read every entry of
+    # the span whole into memory: this walks the paths and opens a zip only to
+    # look at its keys.
+    for path, fetched_at in cache._paths_from(job.start_time):
+        if fetched_at > deadline + CACHE_FETCH_SLACK:
+            # The backstop, not the bound: the scan ends on its own when the
+            # periods scraped go past the deadline, below. Without this, a
+            # cluster the cache does not hold would be looked for to the end of
+            # it -- once per job.
+            break
+        closed: CacheState | None = None
+        scraped_past = False
+        with ZipFile(path) as zf:
+            for info in zf.infolist():
+                window = _window_of_key(info.filename, fetched_at)
+                if window is None or window.cluster != job.cluster_name:
+                    continue
+                if window.end <= job.start_time:
+                    continue  # the run had not started over this period
+                if window.start > deadline:
+                    scraped_past = True
+                    continue
+                closed = _read_value(zf.read(info), job, window)
+                if closed is not None:
+                    break
+        if closed is not None:
+            logger.debug(
+                f"{label(job)}: closed as {closed.state.value} in {closed.key}"
+            )
+            return closed
+        if scraped_past:
+            # Scraping only goes forward: no later entry covers this span again.
+            break
+    logger.debug(f"{label(job)}: no closed state in the span the cache holds")
+    return None
+
+
+def _read_value(raw: bytes, job: StuckJob, window: _Window) -> CacheState | None:
+    """What one scraped value says ended the run, if it says anything."""
+    try:
+        for record in parse_raw(raw, window.cluster, window.start, window.end):
+            closed = _read_record(record, job, window)
+            if closed is not None:
+                return closed
+    except Exception as e:
+        # A corrupt value only loses its own period: the next one, or a later
+        # entry, says as much about this run. Every job whose span covers it
+        # reads it, so it is only worth complaining about once.
+        if window.key in UNPARSABLE:
+            logger.debug(f"cannot parse the cache value of {window.key}: {e}")
+        else:
+            UNPARSABLE.add(window.key)
+            logger.warning(f"cannot parse the cache value of {window.key}: {e}")
+    return None
+
+
+def _read_record(
+    record: dict | None, job: StuckJob, window: _Window
+) -> CacheState | None:
+    """What one record of a scraped value says ended the run, if anything.
+
+    None for a record that is not this run, or is it but still running, or found
+    it closed without saying when: a later value of the span may know better.
+    """
+    if record is None:  # `parse_raw` skips the records it cannot convert
+        return None
+    if record["job_id"] != job.job_id or record["submit_time"] != job.submit_time:
+        return None  # another run of this id, a requeued one
+    state = _closed_state(record)
+    duration = _duration(job, record)
+    if state is None or duration is None:
+        return None
+    return CacheState(
+        state=state,
+        duration=duration,
+        end_time=record["end_time"],
+        key=window.key,
+        seen_at=window.fetched_at,
+    )
+
+
+def _window_of_key(key: str, fetched_at: datetime) -> _Window | None:
+    """What a cache key says its value holds, None if it is not a job value."""
+    parts = key.split("_")
+    if len(parts) != 3:
+        return None
+    try:
+        return _Window(
+            key, parts[0], parse_date(parts[1]), parse_date(parts[2]), fetched_at
+        )
+    except ValueError:
+        return None
+
+
+def _closed_state(record: dict) -> SlurmState | None:
+    """The state of a cache record, when it says the run stopped running."""
+    state = SlurmState.__members__.get(str(record["job_state"]))
+    return state if state in CLOSED_STATES else None
+
+
+def _duration(job: StuckJob, record: dict) -> float | None:
+    """How long the run lasted as one cache record says, None if it cannot say.
+
+    The record's end time less the *row's* start time, since the fix file
+    closes that row with `start_time + duration` and lands on this end time; the
+    record's own elapsed time when it has none.
+    """
+    end_time = record["end_time"]
+    if end_time is not None:
+        duration = (end_time - job.start_time).total_seconds()
+        return duration if duration > 0 else None
+    elapsed_time = record["elapsed_time"]
+    return float(elapsed_time) if elapsed_time > 0 else None
 
 
 def estimate_durations(
@@ -283,6 +527,7 @@ def log_report(
     entries: Sequence[dict],
     no_estimate: Sequence[StuckJob],
     path: Path,
+    took: timedelta,
 ) -> None:
     by_cluster: defaultdict[str, dict[str, int]] = defaultdict(lambda: defaultdict(int))
     for job in jobs:
@@ -295,9 +540,13 @@ def log_report(
         logger.info(f"[{cluster}] {counts['stuck']} stuck rows: {details}")
     for job in list(no_estimate)[:NB_EXAMPLES]:
         logger.warning(f"no estimate, e.g. {label(job)}")
+    if UNPARSABLE:
+        examples = ", ".join(sorted(UNPARSABLE)[:NB_EXAMPLES])
+        logger.warning(f"{len(UNPARSABLE)} cache values unparsable, e.g. {examples}")
     verb = "without an estimate" if no_estimate else "all estimated"
     logger.info(
-        f"{len(jobs)} stuck rows, {len(entries)} estimated ({verb}), fix file {path}"
+        f"{len(jobs)} stuck rows, {len(entries)} estimated ({verb}), "
+        f"fix file {path}, took {took}"
     )
 
 
@@ -336,7 +585,7 @@ def main():
     parser.add_argument(
         "--grace",
         type=float,
-        default=24.0,
+        default=1.0,
         help=(
             "hours past the time limit before a RUNNING row counts as stuck "
             "(default: %(default)s)."
@@ -366,6 +615,7 @@ def main():
             "every stuck job will be reported without an estimate."
         )
 
+    started = time.monotonic()
     with config.db.session() as sess:
         jobs = find_stuck_jobs(
             sess,
@@ -377,8 +627,9 @@ def main():
         logger.info("No row stuck in RUNNING")
         return
     entries, no_estimate = estimate_durations(jobs, args.state)
+    took = timedelta(seconds=round(time.monotonic() - started))
     write_fix_file(args.output, entries, args.state)
-    log_report(jobs, entries, no_estimate, args.output)
+    log_report(jobs, entries, no_estimate, args.output, took)
 
 
 if __name__ == "__main__":
