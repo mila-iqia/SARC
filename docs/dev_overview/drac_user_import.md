@@ -52,7 +52,7 @@ Slurm_Username,Nom,Email,Allocations,PI
 jdoe,John Doe,john.doe@mila.quebec,aip-jsmith,
 ```
 
-Such a CSV can be generated with a script like `local/tamia-aip/generate_drac_users_aip.py`. Only `Slurm_Username` and `Nom` are used for the import, and `Email` when it is not empty: the allocations are not stored in SARC.
+Such a CSV can be generated with a script like `scripts/generate_drac_users_aip.py`. Only `Slurm_Username` and `Nom` are used for the import, and `Email` when it is not empty: the allocations are not stored in SARC.
 
 The procedure is the same as above, with this configuration section:
 
