@@ -158,16 +158,6 @@ class StuckJob:
     start_time: datetime
     time_limit: int | None
     elapsed_time: float
-    latest_scraped_start: datetime | None
-    latest_scraped_end: datetime | None
-    # And the allocation it was running on.
-    array_job_id: int | None
-    task_id: int | None
-    partition: str
-    account: str
-    cluster_user: str
-    name: str
-    nodes: tuple[str, ...]
 
     @property
     def key(self) -> JobKey:
@@ -292,15 +282,6 @@ def find_stuck_jobs(
                 start_time=row.start_time,
                 time_limit=row.time_limit,
                 elapsed_time=row.elapsed_time,
-                latest_scraped_start=row.latest_scraped_start,
-                latest_scraped_end=row.latest_scraped_end,
-                array_job_id=row.array_job_id,
-                task_id=row.task_id,
-                partition=row.partition,
-                account=row.account,
-                cluster_user=row.cluster_user,
-                name=row.name,
-                nodes=tuple(row.nodes),
             )
         )
     return jobs
@@ -458,6 +439,9 @@ def estimate_durations(
     entries: list[dict] = []
     no_estimate: list[StuckJob] = []
     for job in jobs:
+        logger.info(
+            f"Checking for job ({job.cluster_name, job.job_id, job.submit_time})"
+        )
         found = _first_estimate(job)
         if found is None:
             no_estimate.append(job)
@@ -626,6 +610,8 @@ def main():
     if not jobs:
         logger.info("No row stuck in RUNNING")
         return
+    else:
+        logger.info(f"Found {len(jobs)} stuck jobs")
     entries, no_estimate = estimate_durations(jobs, args.state)
     took = timedelta(seconds=round(time.monotonic() - started))
     write_fix_file(args.output, entries, args.state)
