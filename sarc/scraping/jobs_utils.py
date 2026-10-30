@@ -142,7 +142,8 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     end_str = end.strftime(fmt)
     accounts = ",".join(cluster.accounts) if cluster.accounts else None
     accounts_option = f"-A {accounts} " if accounts else ""
-    cmd = f"{cluster.sacct_bin} {accounts_option}-X -S {start_str} -E {end_str} --allusers --json --duplicates"
+    allocation_only = "" if cluster.sacct_gpu_accounting else "-X "
+    cmd = f"{cluster.sacct_bin} {accounts_option}{allocation_only}-S {start_str} -E {end_str} --allusers --json --duplicates"
     logger.debug(f"{cluster.name} $ {cmd}")
     if cluster.host == "localhost":
         results: subprocess.CompletedProcess[str] | Result = subprocess.run(
@@ -150,7 +151,7 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
             shell=True,
             text=True,
             capture_output=True,
-            check=False,
+            check=cluster.sacct_gpu_accounting,
             env={"TZ": "UTC"} if not cluster.ignore_tz_utc else {},
         )
     else:
@@ -159,8 +160,29 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
         results = ssh.run(cmd, hide=True)
         logger.debug(results.stdout)
 
-    # return stdout as bytes
-    return results.stdout.encode("utf-8")
+    raw = results.stdout.encode("utf-8")
+    if cluster.sacct_gpu_accounting:
+        try:
+            document = json.loads(raw[raw.find(b"{") :])
+        except json.JSONDecodeError as error:
+            raise ValueError(
+                "GPU accounting requires native sacct JSON, not fastsacct flat/JSONL"
+            ) from error
+        if not isinstance(document, dict):
+            raise ValueError("sacct GPU accounting did not return a valid jobs list")
+        meta = document.get("meta") or {}
+        if not isinstance(meta, dict):
+            raise ValueError("sacct GPU accounting did not return valid metadata")
+        if meta.get("schema_version") in (
+            FASTSACCT_FLAT_SCHEMA,
+            FASTSACCT_JSONL_SCHEMA,
+        ):
+            raise ValueError(
+                "GPU accounting requires native sacct JSON, not fastsacct flat/JSONL"
+            )
+        if document.get("errors") or not isinstance(document.get("jobs"), list):
+            raise ValueError("sacct GPU accounting did not return a valid jobs list")
+    return raw
 
 
 def _state_from_list(states: list[str]) -> str:
