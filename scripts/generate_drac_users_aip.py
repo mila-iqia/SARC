@@ -43,7 +43,7 @@ def norm(s: str) -> str:
 
 def ssh(socket: str, host: str, script: str) -> str:
     """Exécute un script bash sur le cluster via le control master, renvoie stdout."""
-    r = subprocess.run(
+    r = subprocess.run(  # noqa: PLW1510
         ["ssh", "-S", socket, host, "bash -s"],
         input=script.encode(),
         capture_output=True,
@@ -58,7 +58,7 @@ def ssh(socket: str, host: str, script: str) -> str:
 def ensure_master(socket: str, host: str) -> None:
     """Réutilise le control master s'il répond, sinon se connecte (une seule
     invite mot de passe + MFA ; les commandes suivantes réutilisent le canal)."""
-    check = subprocess.run(
+    check = subprocess.run(  # noqa: PLW1510
         ["ssh", "-S", socket, "-O", "check", host], capture_output=True
     )
     if check.returncode == 0:
@@ -66,7 +66,7 @@ def ensure_master(socket: str, host: str) -> None:
         return
     Path(socket).unlink(missing_ok=True)
     log(f"connexion ssh {host} — saisis ton mot de passe + MFA si demandé...")
-    r = subprocess.run(
+    r = subprocess.run(  # noqa: PLW1510
         ["ssh", "-M", "-S", socket, "-o", "ControlPersist=60m", host, "true"]
     )
     if r.returncode != 0:
@@ -271,7 +271,7 @@ def main() -> None:
     log(f"OK : {args.out} — {len(rows)} users, email trouvé pour {n_mail}")
 
     if args.close_master:
-        subprocess.run(
+        subprocess.run(  # noqa: PLW1510
             ["ssh", "-S", socket, "-O", "exit", args.host], capture_output=True
         )
         log("control master fermé")
