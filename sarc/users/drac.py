@@ -98,6 +98,8 @@ def parse_csv_line(d: dict, sess: Session, csv_date: date | None):
             email=d["email"],
             sort_sub=0,
             matching_id=MatchID(name="drac_member", mid=d["ccri"][:-3]),
+            # Same id as the slurm_allocation_members plugin, to match its users
+            known_matches={MatchID(name="slurm_allocation_members", mid=d["username"])},
             associated_accounts={"drac": creds},
         )
 

@@ -379,10 +379,11 @@ def update_user_db(sess: Session, user: UserMatch, db_user: UserDB) -> None:
 
 @trace_decorator()
 def insert_new(sess: Session, user: UserMatch) -> None:
-    if user.display_name is None or user.email is None:
+    if user.display_name is None:
         logger.error("Attempting to add a new user with missing attributes: %s", user)
         return
-    db_user = UserDB(display_name=user.display_name, email=user.email)
+    # Some sources do not know the email: it may be filled later by another one.
+    db_user = UserDB(display_name=user.display_name, email=user.email or "")
     sess.add(db_user)
     sess.flush()
     for match_id in user.known_matches:
