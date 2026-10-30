@@ -29,7 +29,7 @@ class TestDRACMemberScraper(UserPluginTester):
         with open(Path(__file__).parent / "inputs" / raw_file, "rb") as f:
             raw_data = f.read()
         data = list(
-            d.model_dump()
+            d.model_dump(mode="json")
             for d in self.plugin.parse_user_data(
                 raw_data, datetime(year=2024, month=1, day=1, tzinfo=UTC)
             )

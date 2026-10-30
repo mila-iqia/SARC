@@ -1,0 +1,4 @@
+Slurm_Username,Nom,Email,Allocations,PI
+doej001,Jane Doe,JDoe@example.com,aip-doej001,oui
+petitbonhomme,Petit Bonhomme,,aip-doej001;aip-other,
+newuser,New User,,aip-other,
