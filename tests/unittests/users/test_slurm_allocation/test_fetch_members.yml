@@ -1,0 +1,2 @@
+'{"csv": "Slurm_Username,Nom,Email,Allocations,PI\ndoej001,Jane Doe,JDoe@example.com,aip-doej001,oui\npetitbonhomme,Petit
+  Bonhomme,,aip-doej001;aip-other,\nnewuser,New User,,aip-other,\n", "domain": "drac"}'
