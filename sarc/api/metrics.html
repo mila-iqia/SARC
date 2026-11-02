@@ -651,7 +651,7 @@
           // Plot-local state
           {% if is_admin %}
           userRguTopN, userRguSortBy,
-          targetShareCluster,
+          targetShareCluster, targetShareView,
           {% endif %}
           metricScatterMetric2,
           rguUsageView,
@@ -695,6 +695,7 @@
       userRguTopN          = 16;
       userRguSortBy        = 'rgu_requested';
       targetShareCluster   = '';
+      targetShareView      = 'per_period';
       {% endif %}
       metricScatterMetric2 = DEFAULT_METRIC2;
       rguUsageView         = 'per_period';
@@ -1153,6 +1154,7 @@
     // (The tile is admin-only, but these live outside the Jinja admin block:
     // saveState/loadCharts touch them from shared code paths.)
     let targetShareCluster = _saved.targetShareCluster || '';
+    let targetShareView = _saved.targetShareView || 'per_period';
     // RGU-vs-target payloads keyed by cluster|window|period, cleared on Update
     // like comparisonCache (the tile bypasses the shared endpoint cache).
     let targetShareCache = {};
@@ -2057,7 +2059,9 @@
     // percentage reads inside the bar's top. Buckets outside every budget
     // draw no segment (null target), and the picker lists only clusters with
     // a share in the window — the endpoint knows, so the tile never has to
-    // explain an empty pick.
+    // explain an empty pick. A View picker switches between the per-bucket
+    // series and the same series prefix-summed from the window start,
+    // computed here from the cached payload (no second fetch).
     function renderRguVsTarget(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -2070,7 +2074,7 @@
       box.appendChild(plot);
       el.appendChild(box);
 
-      // The picker sits in the tile header, next to the title — the same
+      // The pickers sit in the tile header, next to the title — the same
       // .view-head-slot the "View:" pickers use (VIEW_PICKER_TILES) — so the
       // plot keeps the tile's full height.
       const lab = document.createElement('label');
@@ -2082,7 +2086,28 @@
       const slot = el.closest('.tile')?.querySelector('.view-head-slot');
       if (slot) {
         slot.innerHTML = '';
+        // View picker first, like the other tiles. Cumulative re-renders
+        // from cache (a prefix sum of the fetched buckets), so the switch
+        // never refetches.
+        const vLab = document.createElement('label');
+        vLab.textContent = 'View: ';
+        vLab.title = 'Cumulative: each bucket shows consumption and prorated target summed from the window start to the end of that bucket.';
+        const vSel = document.createElement('select');
+        vSel.className = 'add-select';
+        [['per_period', 'Per period'], ['cumulative', 'Cumulative']].forEach(([v, t]) => {
+          const o = document.createElement('option');
+          o.value = v; o.textContent = t;
+          if (v === targetShareView) o.selected = true;
+          vSel.appendChild(o);
+        });
+        vLab.appendChild(vSel);
+        slot.appendChild(vLab);
         slot.appendChild(lab);
+        vSel.addEventListener('change', () => {
+          targetShareView = vSel.value;
+          saveState();
+          draw();
+        });
       }
 
       async function draw(retried) {
@@ -2137,10 +2162,29 @@
             l => l.label + ' · ' + rguYearText(l.rgu_year)).join(', '));
 
           const unit = rguUnit();
+          const cum = targetShareView === 'cumulative';
           const x = data.periods.map(p => p.period_start);
           const ends = data.periods.map(p => p.period_end);
-          const consumed = data.consumed.map(v => v * unit.factor);
-          const targets = data.target.map(t => t === null ? null : t * unit.factor);
+          // Cumulative view: prefix sum of the same per-bucket series. Each
+          // job's hours are split additively at the bucket bounds, so the
+          // sum up to bucket k's end is exactly the time covered since the
+          // window start. A target-null bucket adds nothing but does not
+          // reset the running target: past the share period's end the
+          // segment goes flat instead of vanishing, and stays absent
+          // before any budget has started.
+          let consumed, targets;
+          if (cum) {
+            let run = 0, runT = 0;
+            consumed = data.consumed.map(v => (run += v) * unit.factor);
+            targets = data.target.map(t => {
+              runT += t || 0;
+              return runT > 0 ? runT * unit.factor : null;
+            });
+          } else {
+            consumed = data.consumed.map(v => v * unit.factor);
+            targets = data.target.map(t => t === null ? null : t * unit.factor);
+          }
+          const pcts = targets.map((t, i) => t === null ? null : consumed[i] / t * 100);
           const opac = x.map(p => { const f = periodInFocus(p); return f === null ? 1 : f ? 1 : 0.35; });
           const yMax = Math.max(0, ...consumed, ...targets.map(t => t || 0));
           // A bar under ~6% of the y-range cannot hold the label; there it
@@ -2158,10 +2202,10 @@
               line: { color: '#111', width: 2.5 },
             });
             // Consumed/target as one readable figure inside the bar's top, so
-            // height and percentage read together. The ratio is unit-free
-            // (bars and targets share the unit factor), and a non-null target
-            // is > 0, so it never divides by zero.
-            const pct = data.consumed[i] / data.target[i] * 100;
+            // height and percentage read together (cumulative view: summed
+            // consumed / summed target). The ratio is unit-free and a
+            // non-null target is > 0, so it never divides by zero.
+            const pct = pcts[i];
             const inside = consumed[i] > labelFloor;
             annotations.push({
               x: i, y: consumed[i], xref: 'x', yref: 'y',
@@ -2180,16 +2224,20 @@
             ]),
             marker: { color: clusterColor(data.cluster), opacity: opac },
             hovertemplate: data.cluster
-              + '<br>Period: %{x}<br>' + unit.label + ': %{customdata[3]}<br>'
-              + 'Target: %{customdata[1]}<br>Budget: %{customdata[2]}<extra></extra>',
+              + '<br>Period: %{x}<br>' + (cum ? 'Cumulative ' : '') + unit.label
+              + ': %{customdata[3]}<br>'
+              + (cum ? 'Cumulative target' : 'Target') + ': %{customdata[1]}<br>'
+              + 'Budget: %{customdata[2]}<extra></extra>',
           }];
           Plotly.react(plot, traces, pLayout({
-            title: { text: 'RGU vs target share — ' + data.cluster + yearSuffix + ' (click to focus)',
+            title: { text: 'RGU vs target share — ' + data.cluster + yearSuffix
+                     + (cum ? ' · cumulative' : '') + ' (click to focus)',
                      font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
             xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
             // Explicit range: shapes are left out of Plotly's y autorange, so
             // a target above every bar would otherwise draw off-canvas.
-            yaxis: { title: { text: 'Total ' + unit.label }, range: [0, yMax * 1.1 || 1] },
+            yaxis: { title: { text: (cum ? 'Cumulative ' : 'Total ') + unit.label },
+                     range: [0, yMax * 1.1 || 1] },
             shapes: shapes,
             annotations: annotations,
             showlegend: false,
