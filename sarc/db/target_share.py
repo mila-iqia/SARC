@@ -176,11 +176,10 @@ def insert_target_shares() -> None:
 
 
 def budget_bounds():
-    """SQL: the target share's period ``[start, end)`` as epoch seconds
-    (float8 through ``date_part``, like ``job_span``)."""
+    """SQL: the target share's period ``[start, end)`` as epoch seconds."""
     return (
-        func.date_part("epoch", utc_midnight(col(TargetShareDB.start_date))),
-        func.date_part("epoch", utc_midnight(col(TargetShareDB.end_date))),
+        func.extract("epoch", utc_midnight(col(TargetShareDB.start_date))),
+        func.extract("epoch", utc_midnight(col(TargetShareDB.end_date))),
     )
 
 
