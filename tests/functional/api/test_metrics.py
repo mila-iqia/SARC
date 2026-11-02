@@ -1824,8 +1824,8 @@ def test_view_as_storage_key_is_distinct(app):
 
 # === RGU vs target share ======================================================
 # The admin-only /target_shares chart endpoint: per-bucket consumption of the
-# share's own allocation, the share's prorated target, and the picker list of
-# budgeted clusters.
+# drawn clusters' shares, their prorated target summed, and the cluster
+# filter's intersection with the budgeted ones.
 
 
 _TARGET_SHARES = "/dash/metrics/target_shares"
@@ -1855,14 +1855,14 @@ def test_target_shares_empty(dash_client):
     """The test config imports no allocations CSV, so the table is empty:
     nothing to pick, nothing to draw."""
     data = dash_client.get(_TARGET_SHARES, params=WINDOW).json()
-    assert data["clusters"] == []
+    assert data["budgeted"] == []
     assert data["periods"] == []
 
 
 @pytest.mark.usefixtures("read_only_db")
 def test_target_shares_unknown_cluster(dash_client):
     dash_client.get(
-        _TARGET_SHARES, params={**WINDOW, "cluster": "nope"}, expect_status=404
+        _TARGET_SHARES, params={**WINDOW, "clusters": "nope"}, expect_status=404
     )
 
 
@@ -1902,9 +1902,10 @@ def dash_db_budgeted(dash_db):
     return SimpleNamespace(cluster=cluster.name, total=total, account=job.account)
 
 
-def _target_shares(dash_client, cluster, **params) -> dict:
+def _target_shares(dash_client, *clusters: str, **params) -> dict:
     return dash_client.get(
-        _TARGET_SHARES, params={**QUIET, "period": "d", "cluster": cluster, **params}
+        _TARGET_SHARES,
+        params={**QUIET, "period": "d", "clusters": list(clusters), **params},
     ).json()
 
 
@@ -1915,15 +1916,18 @@ def test_target_shares_consumption_and_prorated_target(dash_client, dash_db_budg
     cluster = dash_db_budgeted.cluster
     data = _target_shares(dash_client, cluster)
 
-    assert data["clusters"] == [cluster]
-    assert data["cluster"] == cluster
+    assert data["budgeted"] == [cluster]
+    assert data["drawn"] == [cluster]
+    assert data["requested"] == [cluster]
     assert data["periods"][0]["period_start"] == "2023-02-01"
     assert len(data["periods"]) == _QUIET_DAYS
     assert data["consumed"] == pytest.approx(
         [0, 0, _RGU_PER_JOB * 24, _RGU_PER_JOB * 24, 0, 0, 0, 0, 0, 0]
     )
     assert data["target"] == [None, 24, 24, 24, 24, None, None, None, None, None]
-    assert data["labels"][2] == [{"label": dash_db_budgeted.account, "rgu_year": 1.0}]
+    assert data["labels"][2] == [
+        {"cluster": cluster, "label": dash_db_budgeted.account, "rgu_year": 1.0}
+    ]
     assert data["labels"][0] == []
 
 
@@ -1964,7 +1968,13 @@ def test_target_shares_null_allocation_budgets_the_whole_cluster(
         sess.commit()
     data = _target_shares(dash_client, dash_db_budgeted.cluster)
     assert sum(data["consumed"]) == pytest.approx(dash_db_budgeted.total)
-    assert data["labels"][2] == [{"label": "(all accounts)", "rgu_year": 1.0}]
+    assert data["labels"][2] == [
+        {
+            "cluster": dash_db_budgeted.cluster,
+            "label": "(all accounts)",
+            "rgu_year": 1.0,
+        }
+    ]
 
 
 def test_target_shares_job_states_filter_consumption_only(
@@ -2030,8 +2040,8 @@ def test_target_shares_bucket_straddling_two_shares(dash_client, dash_db_budgete
     assert weekly["consumed"][1] == 0.0
     # One label per covering share, in period order.
     assert weekly["labels"][0] == [
-        {"label": account, "rgu_year": 1.0},
-        {"label": account, "rgu_year": 2.0},
+        {"cluster": cluster, "label": account, "rgu_year": 1.0},
+        {"cluster": cluster, "label": account, "rgu_year": 2.0},
     ]
 
 
@@ -2054,7 +2064,7 @@ def test_target_shares_agrees_with_the_budget_report(dash_client, dash_db_budget
 def test_target_shares_cluster_without_a_budget_in_the_window(
     dash_client, dash_db_budgeted
 ):
-    """A known cluster with no share in the window answers the picker list
+    """A known cluster with no share in the window answers the budgeted list
     and empty data, not a 404: the window, not the name, is what moved."""
     with config.db.session() as sess:
         other = sess.exec(
@@ -2075,5 +2085,61 @@ def test_target_shares_cluster_without_a_budget_in_the_window(
         other_name = other.name
 
     data = _target_shares(dash_client, other_name)
-    assert data["clusters"] == [dash_db_budgeted.cluster]
+    assert data["budgeted"] == [dash_db_budgeted.cluster]
+    assert data["drawn"] == []
     assert data["periods"] == []
+
+
+def test_target_shares_default_sums_the_budgeted_clusters(
+    dash_client, dash_db_budgeted
+):
+    """No cluster filter: every budgeted cluster is drawn. The second one has
+    a share but no job, so the sum carries its target on top of the first
+    cluster's target and consumption — the attribution stays per cluster."""
+    cluster = dash_db_budgeted.cluster
+    with config.db.session() as sess:
+        other = sess.exec(
+            select(SlurmClusterDB).where(SlurmClusterDB.name != cluster)
+        ).first()
+        sess.add(
+            TargetShareDB(
+                cluster_id=other.id,
+                allocation=None,
+                start_date=date(2023, 2, 1),
+                end_date=date(2023, 2, 3),
+                rgu_year=1.0,
+            )
+        )
+        sess.commit()
+        other_name = other.name
+
+    data = _target_shares(dash_client)
+    assert sorted(data["budgeted"]) == sorted([cluster, other_name])
+    assert sorted(data["drawn"]) == sorted([cluster, other_name])
+    assert data["requested"] == []
+    # Days 02-01 and 02-02 belong to the second share too: 24 x 2 there,
+    # and 02-01 loses its null (a bucket is null only outside every budget).
+    assert data["target"] == [24, 48, 24, 24, 24, None, None, None, None, None]
+    assert data["consumed"] == pytest.approx(
+        [0, 0, _RGU_PER_JOB * 24, _RGU_PER_JOB * 24, 0, 0, 0, 0, 0, 0]
+    )
+    assert {l["cluster"] for l in data["labels"][1]} == {cluster, other_name}
+
+    # Selecting only the jobless budgeted cluster: its target, no consumption.
+    only_other = _target_shares(dash_client, other_name)
+    assert only_other["drawn"] == [other_name]
+    assert sum(only_other["consumed"]) == 0.0
+    assert sum(t for t in only_other["target"] if t) == pytest.approx(48.0)
+
+    # A mixed selection sums both, and echoes the filter so the tile can
+    # note that the selection also held un-budgeted clusters.
+    with config.db.session() as sess:
+        third_name = sess.exec(
+            select(SlurmClusterDB.name).where(
+                SlurmClusterDB.name.notin_([cluster, other_name])
+            )
+        ).first()
+    mixed = _target_shares(dash_client, cluster, other_name, third_name)
+    assert sum(t for t in mixed["target"] if t) == pytest.approx(144.0)  # 96 + 48
+    assert mixed["requested"] == [cluster, other_name, third_name]
+    assert len(mixed["drawn"]) == 2

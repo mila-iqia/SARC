@@ -1254,25 +1254,20 @@ def metrics_target_shares(
     start: date = Query(default=None),
     end: date = Query(default=None),
     period: str = Query(default=_DEFAULT_PERIOD),
-    cluster: str | None = Query(default=None),
+    clusters: list[str] = Query(default=[]),
     job_states: list[str] = Query(default=[]),
     sess: Session = Depends(session_dep),
 ):
-    """Per-bucket RGU.h consumed vs prorated target, for one budgeted cluster.
+    """Per-bucket RGU.h consumed vs prorated target, summed over the filtered
+    clusters that hold a target share in the window (no filter: all of them).
 
-    Admin-only: a target share is another group's budget. ``clusters`` lists
-    the clusters owning a target share that overlaps the window (the per-tile
-    picker's options); ``cluster`` picks which one to draw. Consumption is the
-    consumption of the share's own ``allocation`` (the account rule of
-    TargetShareDB), not the cluster's every job -- the target budgets those
-    jobs only. ``job_states`` filters that consumption scan (the dashboard's
-    Job-states picker), e.g. to hide phantom RUNNING jobs inflating the RGUs;
-    it leaves the target untouched. ``target`` prorates each share over the
-    hours of each bucket its period covers (rgu_year x hours, the
-    target_share_report rule), so a bucket crossing a period boundary sums
-    both shares and a bucket outside every period reads null, not 0. The
-    window's cluster/user filters deliberately do not apply: a budget
-    comparison is a fact about the whole cluster.
+    Admin-only: a target share is another group's budget. ``budgeted`` lists
+    the clusters with a share in the window, ``drawn`` those summed, and
+    ``requested`` echoes the filter. A share's consumption counts its own
+    allocation's jobs only (the account rule of TargetShareDB); ``job_states``
+    filters that consumption, not the target. A bucket outside every share's
+    period has a null target, not 0. No user filter: a target share budgets
+    the jobs of all users.
     """
     begin_dt, finish_dt = _date_range(start, end)
     parsed = _parse_period(period)
@@ -1280,40 +1275,40 @@ def metrics_target_shares(
     begin_s, end_s = begin_dt.timestamp(), finish_dt.timestamp()
     in_window = budget_in_window(begin_s, end_s)
 
-    budgeted = list(
-        sess.exec(
-            select(col(SlurmClusterDB.name))
-            .select_from(SlurmClusterDB)
-            .join(
-                TargetShareDB, col(TargetShareDB.cluster_id) == col(SlurmClusterDB.id)
-            )
-            .where(in_window)
-            .distinct()
-            .order_by(col(SlurmClusterDB.name))
-        ).all()
-    )
+    # 404 on an unknown name, None when the filter is unset (= all clusters).
+    selected_ids = _resolve_cluster_ids(sess, clusters)
+    budgeted_clusters = sess.exec(
+        select(SlurmClusterDB)
+        .select_from(SlurmClusterDB)
+        .join(TargetShareDB, col(TargetShareDB.cluster_id) == col(SlurmClusterDB.id))
+        .where(in_window)
+        .distinct()
+        .order_by(col(SlurmClusterDB.name))
+    ).all()
+    drawn = [
+        c for c in budgeted_clusters if selected_ids is None or c.id in selected_ids
+    ]
     payload: dict = {
-        "clusters": budgeted,
-        "cluster": cluster,
+        "budgeted": [c.name for c in budgeted_clusters],
+        "requested": clusters,
+        "drawn": [c.name for c in drawn],
         "periods": [],
         "consumed": [],
         "target": [],
         "labels": [],
     }
-    if cluster is None or _no_buckets(begin_dt, finish_dt):
-        return payload
-    cid = SlurmClusterDB.id_by_name(sess, cluster)
-    if cid is None:
-        raise HTTPException(status_code=404, detail=f"Unknown cluster {cluster!r}")
-    if cluster not in budgeted:
-        # Known cluster, no share in this window: empty periods, the picker
-        # list says where the budgets actually are.
+    # A persisted cluster's id is never None, like UserDB.id in
+    # _resolve_user_ids above.
+    drawn_ids: list[int] = [c.id for c in drawn]  # ty: ignore[invalid-assignment]
+    if not drawn_ids or _no_buckets(begin_dt, finish_dt):
         return payload
 
-    # /rgu_by_cluster's scan for one cluster, each job slice joined to the
-    # target share whose period it overlaps (hours > 0) and which takes its
-    # account: hours outside every share's period count for no share, and a
-    # slice crossing a period boundary splits between both shares.
+    # /rgu_by_cluster's scan over the drawn clusters, each job slice joined
+    # to the target share of its own cluster whose period it overlaps (hours
+    # > 0) and which takes its account: hours outside every share's period
+    # count for no share, and a slice crossing a period boundary splits
+    # between both shares. A job never joins another cluster's share, so the
+    # summed consumption attributes per cluster before summing.
     buckets = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
     hours = overlap_hours(
         JobSeriesTable, (buckets.c.bucket_start, buckets.c.bucket_end), budget_bounds()
@@ -1323,7 +1318,7 @@ def metrics_target_shares(
             buckets.c.bucket_index,
             func.sum(col(JobSeriesTable.allocated_rgu_drac) * hours).label("consumed"),
         ),
-        [cid],
+        drawn_ids,
         None,
         job_states,
         scope_user_id="admin",
@@ -1333,7 +1328,7 @@ def metrics_target_shares(
         .join(
             TargetShareDB,
             and_(
-                col(TargetShareDB.cluster_id) == cid,
+                col(TargetShareDB.cluster_id) == col(JobSeriesTable.cluster_id),
                 hours > 0,
                 charged_to_budget(col(JobSeriesTable.account)),
             ),
@@ -1345,14 +1340,15 @@ def metrics_target_shares(
     consumed = {i: float(v) for i, v in sess.exec(query)}
 
     shares = sess.exec(
-        select(TargetShareDB)
-        .where(col(TargetShareDB.cluster_id) == cid, in_window)
-        .order_by(col(TargetShareDB.start_date))
+        select(TargetShareDB, col(SlurmClusterDB.name))
+        .join(SlurmClusterDB, col(SlurmClusterDB.id) == col(TargetShareDB.cluster_id))
+        .where(col(TargetShareDB.cluster_id).in_(drawn_ids), in_window)
+        .order_by(col(SlurmClusterDB.name), col(TargetShareDB.start_date))
     ).all()
     for i, (ps, pe) in enumerate(_iter_buckets(begin_dt, finish_dt, parsed)):
         target = 0.0
         labels = []
-        for share in shares:
+        for share, cluster_name in shares:
             lo, hi = (
                 max(ps, _utc_midnight(share.start_date)),
                 min(pe, _utc_midnight(share.end_date)),
@@ -1361,6 +1357,7 @@ def metrics_target_shares(
                 target += share.rgu_year * (hi - lo).total_seconds() / 3600.0
                 labels.append(
                     {
+                        "cluster": cluster_name,
                         "label": share.allocation or "(all accounts)",
                         "rgu_year": share.rgu_year,
                     }
