@@ -13,6 +13,51 @@ from sarc.traces import trace_decorator
 logger = logging.getLogger(__name__)
 
 
+def _split_overspanned_bucket(
+    idxs: Sequence[int], spans: dict[int, tuple[datetime, datetime]], max_span: float
+) -> list[list[int]]:
+    """Split one duration bucket into sub-buckets whose bounding window fits `max_span`.
+
+    A bucket's subquery window spans its jobs from the earliest start to the
+    latest end, so jobs that ran far apart — typically old jobs pulled in by
+    a catch-up scrape — bound a window much longer than any of their
+    runtimes. Window / step then exceeds the number of points Prometheus
+    accepts per series (HTTP 422, "exceeded maximum resolution of points
+    per timeseries"). Jobs are swept in start-time order and packed
+    until the next one would widen the window past `max_span` seconds; the
+    step is unchanged, so each sub-bucket keeps its bucket's resolution.
+
+    Returns one list of job indexes per time window.
+    """
+    if not idxs:
+        return []
+    if (
+        max(spans[idx][1] for idx in idxs) - min(spans[idx][0] for idx in idxs)
+    ).total_seconds() <= max_span:
+        return [list(idxs)]
+
+    ordered = sorted(idxs, key=lambda idx: spans[idx][0])
+    chunk_start, chunk_end = spans[ordered[0]]
+    chunk: list[int] = [ordered[0]]
+    chunks: list[list[int]] = []
+    for idx in ordered[1:]:
+        start, end = spans[idx]
+        if (max(chunk_end, end) - chunk_start).total_seconds() <= max_span:
+            chunk.append(idx)
+            chunk_end = max(chunk_end, end)
+            continue
+        chunks.append(chunk)
+        chunk = [idx]
+        chunk_start, chunk_end = start, end
+    chunks.append(chunk)
+
+    logger.info(
+        f"split a prometheus bucket of {len(idxs)} jobs into {len(chunks)} "
+        f"time windows of at most {max_span:.0f}s to stay under the point limit"
+    )
+    return chunks
+
+
 @trace_decorator()
 def get_job_time_series_batched(
     jobs: Sequence[SlurmJobDB],
@@ -20,6 +65,7 @@ def get_job_time_series_batched(
     max_points: int = 100,
     min_interval: int = 30,
     bucket_ratio: float = 4.0,
+    max_query_points: int = 10_000,
 ) -> list[list]:
     """Fetch job metrics for a sequence of jobs in batched Prometheus queries.
 
@@ -30,7 +76,9 @@ def get_job_time_series_batched(
     ``max_points``, bounding every job of the group near ``max_points``
     points per series (within ``bucket_ratio`` of it). A group's time
     window only has to cover its jobs, so jobs that ran far apart still
-    batch together. Jobs whose runtime cannot exceed ``max_points``
+    batch together — as long as that window does not request more than
+    ``max_query_points`` points, over which the group is split into
+    narrower time windows. Jobs whose runtime cannot exceed ``max_points``
     points at the raw ``min_interval`` sampling are not downsampled and
     share one raw query.
 
@@ -45,6 +93,11 @@ def get_job_time_series_batched(
             samples and skew the statistics.
         bucket_ratio: Maximal max/min runtime ratio within a downsampled
             group.
+        max_query_points: Maximal number of points (window / step) one
+            subquery may request, kept under the 11,000 points per series
+            that Prometheus accepts (a longer window is refused with an
+            HTTP 422): a group whose jobs span more than this is split
+            into several time windows (see ``_split_overspanned_bucket``).
 
     Returns:
         A list of result lists corresponding positionally to each job in `jobs`.
@@ -58,8 +111,10 @@ def get_job_time_series_batched(
     for m in metrics:
         if m not in SLURM_JOB_METRIC_NAMES:
             raise ValueError(f"Unknown metric name: {m}")
-    if max_points < 1 or min_interval < 1:
-        raise ValueError("max_points and min_interval must be positive")
+    if max_points < 1 or min_interval < 1 or max_query_points < 1:
+        raise ValueError(
+            "max_points, min_interval and max_query_points must be positive"
+        )
 
     now = datetime.now(tz=UTC)
     results: list[list] = [[] for _ in jobs]
@@ -110,6 +165,20 @@ def get_job_time_series_batched(
         # the raw sampling interval and samples are never repeated.
         groups.append((long_idxs[start:end], -(-min_duration // max_points)))
         start = end
+
+    # The window of a group covers its jobs from the earliest start to the
+    # latest end: jobs that ran far apart make it request far more points
+    # than their runtimes would, past what Prometheus accepts. Split such a
+    # group into time windows capped at max_query_points * step points (a
+    # raw group, queried without an explicit step, is accounted at the raw
+    # sampling interval, its finest possible resolution).
+    groups = [
+        (chunk, step)
+        for idxs, step in groups
+        for chunk in _split_overspanned_bucket(
+            idxs, spans, max_query_points * (min_interval if step is None else step)
+        )
+    ]
 
     if len(metrics) == 1:
         prefix = metrics[0]
