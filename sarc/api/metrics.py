@@ -21,7 +21,7 @@ from sqlalchemy import (
 )
 from sqlalchemy.orm import aliased
 from sqlalchemy.sql.elements import Grouping
-from sqlmodel import Session, and_, case, col, func, or_, select
+from sqlmodel import Session, and_, case, col, func, select
 
 from sarc.api.v0 import Requestor, requestor, require_admin
 from sarc.config import config
@@ -35,7 +35,12 @@ from sarc.db.job_series import (
     overlap_hours,
     ran_between,
 )
-from sarc.db.target_share import TargetShareDB, utc_midnight
+from sarc.db.target_share import (
+    TargetShareDB,
+    budget_bounds,
+    budget_in_window,
+    charged_to_budget,
+)
 from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
 
@@ -1273,10 +1278,7 @@ def metrics_target_shares(
     parsed = _parse_period(period)
     fmt = _label_fmt(parsed)
     begin_s, end_s = begin_dt.timestamp(), finish_dt.timestamp()
-
-    budget_start = func.extract("epoch", utc_midnight(col(TargetShareDB.start_date)))
-    budget_end = func.extract("epoch", utc_midnight(col(TargetShareDB.end_date)))
-    in_window = and_(budget_start < end_s, budget_end > begin_s)
+    in_window = budget_in_window(begin_s, end_s)
 
     budgeted = list(
         sess.exec(
@@ -1308,43 +1310,37 @@ def metrics_target_shares(
         # list says where the budgets actually are.
         return payload
 
-    # The consumption scan is /rgu_by_cluster's for one cluster, with each
-    # slice also clipped to the target share its hours fall in (hours > 0 in
-    # the join: the whole cluster's hours outside every share's period budget
-    # no one, and a job crossing a period boundary splits between both).
+    # /rgu_by_cluster's scan for one cluster, each job slice joined to the
+    # target share whose period it overlaps (hours > 0) and which takes its
+    # account: hours outside every share's period count for no share, and a
+    # slice crossing a period boundary splits between both shares.
     buckets = _dash_bucket_table(JobSeriesTable, begin_dt, finish_dt, parsed)
     hours = overlap_hours(
-        JobSeriesTable,
-        (buckets.c.bucket_start, buckets.c.bucket_end),
-        (budget_start, budget_end),
+        JobSeriesTable, (buckets.c.bucket_start, buckets.c.bucket_end), budget_bounds()
     )
-    attribution = or_(
-        col(TargetShareDB.allocation).is_(None),
-        col(JobSeriesTable.account) == col(TargetShareDB.allocation),
-        col(JobSeriesTable.account)
-        == func.concat(col(TargetShareDB.allocation), "_gpu"),
-    )
-    rgu_hours = col(JobSeriesTable.allocated_rgu_drac) * hours
-    query = (
+    query = _apply_dash_base(
         select(
             buckets.c.bucket_index,
-            func.coalesce(
-                func.sum(case((attribution, rgu_hours), else_=0.0)), 0.0
-            ).label("consumed"),
-        )
-        .select_from(JobSeriesTable)
-        .join(buckets, true())
-        .join(TargetShareDB, and_(col(TargetShareDB.cluster_id) == cid, hours > 0))
-        .where(
-            *ELIGIBILITY_CLAUSES,
-            col(JobSeriesTable.cluster_id) == cid,
-            ran_between(JobSeriesTable, begin_s, end_s),
-        )
-        .group_by(buckets.c.bucket_index)
-        .order_by(buckets.c.bucket_index)
+            func.sum(col(JobSeriesTable.allocated_rgu_drac) * hours).label("consumed"),
+        ),
+        [cid],
+        None,
+        job_states,
+        scope_user_id="admin",
     )
-    if job_states:
-        query = query.where(col(JobSeriesTable.job_state).in_(job_states))
+    query = (
+        query.join(buckets, true())
+        .join(
+            TargetShareDB,
+            and_(
+                col(TargetShareDB.cluster_id) == cid,
+                hours > 0,
+                charged_to_budget(col(JobSeriesTable.account)),
+            ),
+        )
+        .where(ran_between(JobSeriesTable, begin_s, end_s))
+        .group_by(buckets.c.bucket_index)
+    )
     # Two columns, so the rows read as tuples.
     consumed = {i: float(v) for i, v in sess.exec(query)}
 

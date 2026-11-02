@@ -175,6 +175,32 @@ def insert_target_shares() -> None:
 # --------------------------------------------------------------------------- #
 
 
+def budget_bounds():
+    """SQL: the target share's period ``[start, end)`` as epoch seconds
+    (float8 through ``date_part``, like ``job_span``)."""
+    return (
+        func.date_part("epoch", utc_midnight(col(TargetShareDB.start_date))),
+        func.date_part("epoch", utc_midnight(col(TargetShareDB.end_date))),
+    )
+
+
+def budget_in_window(begin_s: float, end_s: float):
+    """SQL predicate: the target share's period meets ``[begin_s, end_s)``,
+    bounds in epoch seconds."""
+    budget_start, budget_end = budget_bounds()
+    return and_(budget_start < end_s, budget_end > begin_s)
+
+
+def charged_to_budget(account):
+    """SQL predicate: a job of this ``account`` counts against the target
+    share (the account rule of ``TargetShareDB.allocation``)."""
+    return or_(
+        col(TargetShareDB.allocation).is_(None),
+        account == col(TargetShareDB.allocation),
+        account == func.concat(col(TargetShareDB.allocation), "_gpu"),
+    )
+
+
 class BudgetConsumption(SQLModel):
     """One target share, in RGU-hours over its period within the report window:
     its prorated target, the consumption of its allocation, and the consumption
@@ -205,10 +231,7 @@ def target_share_report(
     if end <= begin:
         return []
     begin_s, end_s = begin.timestamp(), end.timestamp()
-
-    budget_start = func.extract("epoch", utc_midnight(col(TargetShareDB.start_date)))
-    budget_end = func.extract("epoch", utc_midnight(col(TargetShareDB.end_date)))
-    in_window = and_(budget_start < end_s, budget_end > begin_s)
+    budget_start, budget_end = budget_bounds()
 
     # Eligible GPU jobs running in the window, with the columns overlap_hours reads.
     job_wheres = [*ELIGIBILITY_CLAUSES, ran_between(JobSeriesTable, begin_s, end_s)]
@@ -233,11 +256,6 @@ def target_share_report(
         .subquery()
     )
 
-    attribution = or_(
-        col(TargetShareDB.allocation).is_(None),
-        jobs.c.account == col(TargetShareDB.allocation),
-        jobs.c.account == func.concat(col(TargetShareDB.allocation), "_gpu"),
-    )
     hours_in_budget = overlap_hours(
         jobs.c, (begin_s, end_s), (budget_start, budget_end)
     )
@@ -259,9 +277,9 @@ def target_share_report(
             col(TargetShareDB.end_date),
             col(TargetShareDB.rgu_year),
             prorated_target.label("target_rgu_hours"),
-            func.coalesce(func.sum(rgu_hours).filter(attribution), 0.0).label(
-                "consumed_rgu_hours"
-            ),
+            func.coalesce(
+                func.sum(rgu_hours).filter(charged_to_budget(jobs.c.account)), 0.0
+            ).label("consumed_rgu_hours"),
             func.coalesce(func.sum(rgu_hours), 0.0).label("cluster_rgu_hours"),
         )
         .join(SlurmClusterDB, col(SlurmClusterDB.id) == col(TargetShareDB.cluster_id))
@@ -271,7 +289,7 @@ def target_share_report(
                 jobs.c.cluster_id == col(TargetShareDB.cluster_id), hours_in_budget > 0
             ),
         )
-        .where(in_window, *clusters_where)
+        .where(budget_in_window(begin_s, end_s), *clusters_where)
         .group_by(
             col(TargetShareDB.cluster_id),
             col(TargetShareDB.start_date),

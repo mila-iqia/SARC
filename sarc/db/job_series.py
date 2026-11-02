@@ -855,9 +855,11 @@ def job_span(cols):
     """A job's run as epoch seconds: ``[start, start + elapsed)``.
 
     Anchored on ``elapsed_time``, not ``end_time``, so the slices add back up
-    to the cost columns, which are all built from elapsed.
+    to the cost columns, which are all built from elapsed. ``date_part``, not
+    ``extract``: since PostgreSQL 14 ``extract`` returns numeric, much slower
+    to compute with than ``date_part``'s float8.
     """
-    start = func.extract("epoch", cols.start_time)
+    start = func.date_part("epoch", cols.start_time)
     return start, start + cols.elapsed_time
 
 

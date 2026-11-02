@@ -1002,12 +1002,13 @@
     // Fill a tile's header "View:" picker. Called from the renderer, so only
     // once the data is in -- renderTile empties the slot while loading, which
     // also stops a second switch racing the first. One slot per tile.
-    function fillViewPicker(el, options, current, onPick) {
+    function fillViewPicker(el, options, current, onPick, title = '') {
       const slot = el?.closest('.tile')?.querySelector('.view-head-slot');
       if (!slot) return;
       slot.innerHTML = '';
       const lab = document.createElement('label');
       lab.textContent = 'View: ';
+      lab.title = title;
       const sel = document.createElement('select');
       sel.className = 'add-select';
       options.forEach(([v, t]) => {
@@ -2083,32 +2084,11 @@
       const sel = document.createElement('select');
       sel.className = 'add-select';
       lab.appendChild(sel);
-      const slot = el.closest('.tile')?.querySelector('.view-head-slot');
-      if (slot) {
-        slot.innerHTML = '';
-        // View picker first, like the other tiles. Cumulative re-renders
-        // from cache (a prefix sum of the fetched buckets), so the switch
-        // never refetches.
-        const vLab = document.createElement('label');
-        vLab.textContent = 'View: ';
-        vLab.title = 'Cumulative: each bucket shows consumption and prorated target summed from the window start to the end of that bucket.';
-        const vSel = document.createElement('select');
-        vSel.className = 'add-select';
-        [['per_period', 'Per period'], ['cumulative', 'Cumulative']].forEach(([v, t]) => {
-          const o = document.createElement('option');
-          o.value = v; o.textContent = t;
-          if (v === targetShareView) o.selected = true;
-          vSel.appendChild(o);
-        });
-        vLab.appendChild(vSel);
-        slot.appendChild(vLab);
-        slot.appendChild(lab);
-        vSel.addEventListener('change', () => {
-          targetShareView = vSel.value;
-          saveState();
-          draw();
-        });
-      }
+      fillViewPicker(el, [['per_period', 'Per period'], ['cumulative', 'Cumulative']],
+        targetShareView,
+        v => { targetShareView = v; saveState(); draw(); },
+        'Cumulative: each bucket shows consumption and prorated target summed from the window start to the end of that bucket.');
+      el.closest('.tile')?.querySelector('.view-head-slot')?.appendChild(lab);
 
       async function draw(retried) {
         Plotly.purge(plot);
@@ -3258,15 +3238,13 @@
         ...focusParams })), p);
     }
 
-    // /target_shares URL for the RGU-vs-target tile. Deliberately minimal
-    // (like comparisonURL stands apart): the tile's cluster is picked on the
-    // tile, and a budget is a fact of the whole cluster — the global cluster,
-    // user and job-state filters are not appended, and as_user would scope
-    // away the consumption the target was written against.
+    // /target_shares URL for the RGU-vs-target tile. The tile picks its own
+    // cluster and a budget is a fact of the whole cluster, so the global
+    // cluster and user filters stay out, and so does as_user, which would
+    // scope away the consumption the target was written against. Only the
+    // job-states filter travels: it hides e.g. phantom RUNNING jobs from the
+    // consumption; the calendar-based target ignores it.
     function targetSharesURL(p, cluster) {
-      // Only the job-states filter travels: it hides e.g. phantom RUNNING
-      // jobs from the consumption, while the calendar-based target is
-      // untouched. The cluster and user filters stay out (per-tile picker).
       return withClustersAndStates('/dash/metrics/target_shares?' + new URLSearchParams({
         start: p.start, end: p.end, period: p.period,
         ...(cluster ? { cluster } : {}),
