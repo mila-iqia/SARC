@@ -195,8 +195,8 @@ def main():
     parser.add_argument(
         "--dry-run",
         action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Do not write anything to the database (default: dry run).",
+        default=False,
+        help="Do not write anything to the database.",
     )
     args = parser.parse_args()
     # force=True: importing sarc modules already put a root handler in place at

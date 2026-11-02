@@ -7,16 +7,18 @@ On `jobless_read_write_db`: the seeded jobs of `read_write_db` include
 RUNNING rows of their own, and the tests want the rows they seed to be the
 only ones the scripts see.
 
-No heuristic is registered yet, so the estimation tests install their own
-`HEURISTICS` and check the mechanics of that registry: the order it is asked
-in, what makes a heuristic fall through, and how the per-job state override
-reaches the fix file.
+The registry tests install their own `HEURISTICS` and check the mechanics of
+that registry: the order it is asked in, what makes a heuristic fall through,
+and how the per-job state override reaches the fix file. The prometheus
+heuristic is asked through a fake `config`, its cluster answering range
+queries with hand-made series.
 """
 
 import importlib.util
 import json
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
+from types import SimpleNamespace
 
 import pytest
 from sqlmodel import select
@@ -72,14 +74,6 @@ def _stuck_job(job_id: int = 42, **overrides) -> "estimator.StuckJob":
         start_time=START,
         time_limit=3600,
         elapsed_time=10 * 86400,
-        latest_scraped_start=None,
-        latest_scraped_end=None,
-        array_job_id=None,
-        task_id=None,
-        partition="long",
-        account="mila",
-        cluster_user="petitbonhomme",
-        name="main.sh",
         nodes=("cn-c021",),
     )
     return estimator.StuckJob(**(fields | overrides))
@@ -190,9 +184,7 @@ def test_heuristics_are_asked_in_order_until_one_answers(monkeypatch):
 
 
 def test_job_no_heuristics_answer_is_left_out(monkeypatch):
-    monkeypatch.setattr(
-        estimator, "HEURISTICS", [lambda job, ctx: None, lambda job, ctx: None]
-    )
+    monkeypatch.setattr(estimator, "HEURISTICS", [lambda job: None, lambda job: None])
     job = _stuck_job()
     entries, no_estimate = estimator.estimate_durations([job], SlurmState.NODE_FAIL)
     assert entries == []
@@ -273,6 +265,180 @@ def test_load_fix_file_refuses_a_state_of_running(tmp_path):
     path.write_text(json.dumps({"version": 1, "jobs": [entry]}))
     with pytest.raises(SystemExit):
         fixer.load_fix_file(path)
+
+
+# The prometheus heuristic
+
+
+def _series(node: str, times: list[float], job_id: int = 42) -> dict:
+    """One raw series as `custom_query_range` returns it, instance and port."""
+    return {
+        "metric": {
+            "__name__": "slurm_job_core_usage",
+            "slurmjobid": str(job_id),
+            "instance": f"{node}:9250",
+        },
+        "values": [[t, "1.0"] for t in times],
+    }
+
+
+def _from_start(seconds: int, *, first: int = 0) -> list[float]:
+    """One sample every 30s over `seconds`, as absolute timestamps."""
+    return [START.timestamp() + first + s for s in range(0, seconds + 1, 30)]
+
+
+class _FakeProm:
+    """The one method of PrometheusConnect the heuristic calls."""
+
+    def __init__(self, series: list[dict]):
+        self.series = series
+        self.queries: list[tuple] = []
+
+    def custom_query_range(self, query, start_time, end_time, step, **kw):
+        self.queries.append((query, start_time, end_time, step))
+        return self.series
+
+
+def _prometheus(monkeypatch, series: list[dict]) -> _FakeProm:
+    """Give the raisin cluster a fake Prometheus answering with these series."""
+    prom = _FakeProm(series)
+    monkeypatch.setattr(
+        estimator,
+        "config",
+        SimpleNamespace(
+            clusters={
+                "raisin": SimpleNamespace(
+                    prometheus_url="http://prom.example", prometheus=prom
+                )
+            }
+        ),
+    )
+    monkeypatch.setattr(estimator, "PROM_FAILED", set())
+    return prom
+
+
+def test_heuristics_are_the_cache_then_prometheus():
+    assert estimator.HEURISTICS == [
+        estimator.closed_state_in_cache,
+        estimator.stopped_data_in_prometheus,
+    ]
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_end_is_where_the_samples_stop(monkeypatch):
+    prom = _prometheus(monkeypatch, [_series("cn-c021", _from_start(3600))])
+    estimate = estimator.stopped_data_in_prometheus(_stuck_job())
+    assert estimate is not None
+    assert estimate.duration == 3600.0
+    assert estimate.state is None  # when it ended is told, never how
+    assert "cn-c021" in estimate.note
+    # One hour limit plus one day of lookahead: the window fits one query.
+    assert len(prom.queries) == 1
+    query = prom.queries[0][0]
+    assert 'slurmjobid=~"^42$"' in query
+    assert "slurm_job_core_usage" in query
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_long_windows_are_cut_into_queries(monkeypatch):
+    prom = _prometheus(monkeypatch, [_series("cn-c021", _from_start(3600))])
+    # A week's window is more than one query's worth of 30s evaluations.
+    estimate = estimator.stopped_data_in_prometheus(_stuck_job(time_limit=6 * 86400))
+    assert estimate is not None
+    assert estimate.duration == 3600.0
+    assert len(prom.queries) == 2
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_multi_node_runs_until_the_last_node_falls_silent(monkeypatch):
+    _prometheus(
+        monkeypatch,
+        [_series("cn-c021", _from_start(3600)), _series("cn-c022", _from_start(5400))],
+    )
+    job = _stuck_job(nodes=("cn-c021", "cn-c022"))
+    estimate = estimator.stopped_data_in_prometheus(job)
+    assert estimate is not None
+    assert estimate.duration == 5400.0
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_a_requeue_on_other_nodes_ends_the_run(monkeypatch):
+    # The requeue starts 30s after the run stopped, a gap too small for the
+    # resolution to see -- but it landed on other nodes, and that switch is
+    # where this run's data ends.
+    _prometheus(
+        monkeypatch,
+        [
+            _series("cn-c021", _from_start(3600)),
+            _series("cn-l007", _from_start(3600, first=3630)),
+        ],
+    )
+    estimate = estimator.stopped_data_in_prometheus(_stuck_job())
+    assert estimate is not None
+    assert estimate.duration == 3600.0
+    assert "cn-l007" in estimate.note
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_a_requeue_on_the_same_nodes_breaks_on_the_gap(monkeypatch):
+    # Ten minutes of nothing between the samples: no scrape explains that, and
+    # the id reporting again there is a requeued run.
+    _prometheus(
+        monkeypatch,
+        [_series("cn-c021", _from_start(3600) + _from_start(3000, first=4200))],
+    )
+    estimate = estimator.stopped_data_in_prometheus(_stuck_job())
+    assert estimate is not None
+    assert estimate.duration == 3600.0
+    assert "same nodes" in estimate.note
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_still_reporting_says_nothing(monkeypatch):
+    # Samples until the very end of the window: no stopping to read an end
+    # out of, wherever the run really went.
+    _prometheus(monkeypatch, [_series("cn-c021", _from_start(93_540, first=-3600))])
+    assert estimator.stopped_data_in_prometheus(_stuck_job()) is None
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_no_samples_say_nothing(monkeypatch):
+    _prometheus(monkeypatch, [])
+    assert estimator.stopped_data_in_prometheus(_stuck_job()) is None
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_data_missing_the_start_says_nothing(monkeypatch):
+    # Only a later run of the id is left in the data: nothing ties it to the
+    # start this row claims.
+    _prometheus(monkeypatch, [_series("cn-c021", _from_start(3600, first=3660))])
+    assert estimator.stopped_data_in_prometheus(_stuck_job()) is None
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_data_on_other_nodes_is_another_run(monkeypatch):
+    # The id reported right at this row's start, but from nodes the row never
+    # had: that is another run's samples, not this one's.
+    _prometheus(monkeypatch, [_series("cn-l007", _from_start(3600))])
+    assert estimator.stopped_data_in_prometheus(_stuck_job()) is None
+
+
+@pytest.mark.time_machine(NOW, tick=False)
+def test_prometheus_unreadable_is_complained_about_once(monkeypatch):
+    prom = _prometheus(monkeypatch, [])
+
+    def boom(*args, **kwargs):
+        raise RuntimeError("prometheus is down")
+
+    monkeypatch.setattr(prom, "custom_query_range", boom)
+    assert estimator.stopped_data_in_prometheus(_stuck_job()) is None
+    assert estimator.PROM_FAILED == {"raisin"}
+    assert estimator.stopped_data_in_prometheus(_stuck_job()) is None
+
+
+def test_prometheus_a_cluster_without_it_says_nothing(monkeypatch):
+    monkeypatch.setattr(estimator, "config", SimpleNamespace(clusters={}))
+    assert estimator.stopped_data_in_prometheus(_stuck_job()) is None
 
 
 # Applying the fix file

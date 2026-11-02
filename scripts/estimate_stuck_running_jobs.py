@@ -32,6 +32,17 @@ record reporting a state the run cannot come back from, which gives both the
 duration and the state to close the row with. A job the cache never closes is
 left to the next heuristic.
 
+The second heuristic is Prometheus: what the cache lost, the cluster's own
+monitoring often still saw. The slurm-job-exporter samples every running job
+on the node hosting it, so the run's samples stopping is the run being over.
+Prometheus keys its data by job id and not by run though, and a requeued job
+inherits the id of the run the row is stuck on: the two runs' samples are told
+apart by the nodes they come from, since a requeue is allocated elsewhere --
+the run's own data is what its start-time nodes report, and it ends where they
+fall silent, or where they are left behind by nodes that never reported it. A
+run whose samples never fall silent, or that predates what Prometheus holds,
+is left without an estimate.
+
 The fix file is json: one entry per estimated job, the job identified by
 (cluster_name, job_id, submit_time) -- the database's own unique key, so one
 row matches each entry -- its duration in seconds, and the state to close it
@@ -55,7 +66,7 @@ with -- `Estimate.state` per job, else `--state`, NODE_FAIL by default:
     }
 
 Needs the configuration `sarc parse jobs` runs with: the database, and
-whatever the heuristics read (the jobs cache):
+whatever the heuristics read (the jobs cache, and the clusters' Prometheus):
 
     SARC_CONFIG=<file> uv run python scripts/estimate_stuck_running_jobs.py -o fix.json
 """
@@ -71,6 +82,7 @@ from datetime import UTC, datetime, timedelta
 from pathlib import Path
 from zipfile import ZipFile
 
+from prometheus_api_client.prometheus_connect import PrometheusConnect
 from sqlalchemy import func
 from sqlmodel import Session, col, select
 
@@ -158,6 +170,9 @@ class StuckJob:
     start_time: datetime
     time_limit: int | None
     elapsed_time: float
+    # The nodes the row says the run got: what the prometheus heuristic ties
+    # the run's samples to. Empty when the row never had any.
+    nodes: tuple[str, ...] = ()
 
     @property
     def key(self) -> JobKey:
@@ -224,9 +239,195 @@ def closed_state_in_cache(job: StuckJob) -> Estimate | None:
     )
 
 
+# --- What the cluster's Prometheus says about the run ------------------------
+
+# The metric families the slurm-job-exporter exports from every job's cgroup,
+# GPU job or not: wherever one of them has samples, the run was alive there.
+PROM_METRICS = ("slurm_job_core_usage", "slurm_job_memory_usage")
+
+# How far past its time limit the data of a run is looked for: slurm kills a
+# run at its limit, and a day covers the kill, the epilog and the exporter
+# noticing. Samples still coming at the end of the window say nothing about
+# an end, and the job is left to the next heuristic.
+PROM_LOOKAHEAD = timedelta(days=1)
+
+# Prometheus knows job ids, not runs: a requeued job inherits the id, and with
+# it the series of the run before it. The run's own share of the data is what
+# the nodes reporting within this much of its start keep reporting: a requeue
+# gets a fresh allocation and reports from other nodes, and that change of
+# node set is where the old run's data ends. Two minutes covers the time the
+# exporter takes to publish the job's first samples.
+PROM_SEED_WINDOW = 120.0  # seconds
+
+# The exporter is sampled about every 30s, so queries step at that interval:
+# a range query hands back what was the freshest sample at one of its
+# evaluations, so a coarser step would hide samples between two of them and
+# blur the end by as much. One query is cut into chunks of that many
+# evaluations, as Prometheus caps one at 20k points per series.
+PROM_STEP = 30.0  # seconds
+PROM_CHUNK_POINTS = 14_400  # evaluations per query, five days of them
+
+# The silence that ends the run: with samples every ~30s, minutes of nothing
+# is the exporter gone for good, not a scrape missed. What this cannot see is
+# the requeue that restarts on the very same nodes with less than that in
+# between -- its data simply continues, and the estimate runs long.
+PROM_END_GAP = 300.0  # seconds
+
+# The clusters whose Prometheus this run could not read, kept to only
+# complain once: every later job of theirs fails the very same query.
+PROM_FAILED: set[str] = set()
+
+
+def _prom_node(labels: dict) -> str | None:
+    """The node one series comes from: the exporter's instance, port dropped."""
+    instance = labels.get("instance") or labels.get("node")
+    if not instance:
+        return None
+    return instance.split(":")[0].casefold()
+
+
+def _prom_samples(
+    prom: PrometheusConnect, job_id: int, lo: datetime, hi: datetime
+) -> set[tuple[float, str]]:
+    """(time, node) of every sample Prometheus holds for a job id in [lo, hi].
+
+    Raises on any failed query: a cluster whose Prometheus does not answer is
+    not a cluster whose data can be estimated from.
+    """
+    selector = (
+        '{__name__=~"^(' + "|".join(PROM_METRICS) + f')$", slurmjobid=~"^{job_id}$"}}'
+    )
+    samples: set[tuple[float, str]] = set()
+    start = lo
+    while start < hi:
+        stop = min(start + timedelta(seconds=PROM_STEP * PROM_CHUNK_POINTS), hi)
+        for series in prom.custom_query_range(
+            selector, start, stop, step=f"{PROM_STEP:.0f}s"
+        ):
+            node = _prom_node(series.get("metric", {}))
+            if node is None:
+                continue  # a series that does not say what node it came from
+            samples.update((float(ts), node) for ts, _ in series.get("values", []))
+        start = stop
+    return samples
+
+
+def _run_end_in_samples(
+    job: StuckJob, samples: set[tuple[float, str]], lo_ts: float, hi_ts: float
+) -> tuple[float, set[str], set[str]] | None:
+    """Where the run's own samples fall silent: (last, its nodes, later ones).
+
+    None when the samples cannot say: none of them at the run's start, or none
+    of them from a node the row had, or none of them silent before the end of
+    the window -- a run still reporting there ended outside of it.
+    """
+    seed = {node for t, node in samples if t <= lo_ts + PROM_SEED_WINDOW}
+    if not seed:
+        # Data for the id, but none of it at the run's start: nothing ties it
+        # to this row -- a later requeue, or a scrape of the id's whole life
+        # that missed this run.
+        logger.debug(
+            f"{label(job)}: prometheus data for the id does not reach its start"
+        )
+        return None
+    if job.nodes and seed.isdisjoint({n.casefold() for n in job.nodes}):
+        # The id was reported at this row's start from nodes the row never
+        # had: that is another run of the id, not this one's data.
+        logger.debug(
+            f"{label(job)}: the data starts on {sorted(seed)}, "
+            f"not on the row's {sorted(job.nodes)}"
+        )
+        return None
+
+    # Walk the run's own samples from the start, and stop at the first silence
+    # no scrape explains: that is where the run ends.
+    times = sorted(t for t, node in samples if node in seed)
+    last = times[0]
+    for t in times[1:]:
+        if t - last > PROM_END_GAP:
+            break
+        last = t
+    if hi_ts - last <= PROM_END_GAP:
+        # Still reporting at the end of the window: an end is not in there --
+        # a requeued run without a visible seam, or a row not stuck at all.
+        return None
+    return last, seed, {node for t, node in samples if t > last + PROM_END_GAP}
+
+
+def stopped_data_in_prometheus(job: StuckJob) -> Estimate | None:
+    """Estimate the run ended when the cluster's Prometheus stopped seeing it.
+
+    The slurm-job-exporter samples every job's cgroup on the node hosting it,
+    GPU job or not: its samples falling silent is the run being over, whatever
+    the row still claims. Prometheus keys its data by job id and not by run
+    though, so a requeued job shares the series of the run this row is stuck
+    on; the run's own share of the data is the samples of the nodes it
+    reported from at its start, walked from the start until silence. A
+    requeue is allocated elsewhere and reports from other nodes, which do not
+    extend the run, and the rare one restarting on the same nodes is cut by
+    the silence its pending leaves. Samples that never fall silent end the run
+    nowhere, and the job is left without an estimate; so is one too old for
+    Prometheus to still hold its data, and so is one whose data the row's own
+    nodes do not appear in at all -- that data belongs to another run.
+
+    The state stays the default one: samples stopping says when the run ended,
+    never how.
+    """
+    cluster = config.clusters.get(job.cluster_name)
+    if cluster is None or cluster.prometheus_url is None:
+        return None
+    lo_ts = job.start_time.timestamp()
+    hi = min(
+        job.start_time + timedelta(seconds=job.time_limit or 0) + PROM_LOOKAHEAD,
+        datetime.now(UTC),
+    )
+    try:
+        samples = _prom_samples(cluster.prometheus, job.job_id, job.start_time, hi)
+    except Exception as e:
+        if job.cluster_name in PROM_FAILED:
+            logger.debug(f"{label(job)}: prometheus still unreadable: {e}")
+        else:
+            PROM_FAILED.add(job.cluster_name)
+            logger.warning(
+                f"[prometheus][{job.cluster_name}] cannot read the job series, "
+                f"e.g. on {label(job)}: {type(e).__name__}: {e}"
+            )
+        return None
+    # One step of tolerance before the start covers the scrape taken a moment
+    # before slurm stamped it; later data is bounded by the window itself.
+    samples = {
+        (t, node) for t, node in samples if lo_ts - PROM_STEP <= t <= hi.timestamp()
+    }
+    if not samples:
+        logger.debug(f"{label(job)}: prometheus has no samples for the id")
+        return None
+
+    seen = _run_end_in_samples(job, samples, lo_ts, hi.timestamp())
+    if seen is None:
+        return None
+    last, seed, resumed = seen
+    duration = last - lo_ts
+    if duration <= 0:
+        return None
+
+    nodes = ", ".join(sorted(seed))
+    ended = datetime.fromtimestamp(last, UTC).isoformat()
+    note = (
+        f"prometheus samples on the run's nodes ({nodes}) fall silent after "
+        f"{ended}, {duration:.0f}s after the start"
+    )
+    if resumed - seed:
+        note += f"; the id reports again on {', '.join(sorted(resumed - seed))}"
+    elif resumed:
+        note += (
+            "; the id keeps reporting from the same nodes, a requeue that did not move"
+        )
+    return Estimate(duration=duration, note=note)
+
+
 # Asked in order for every stuck job, the first estimate wins. Add heuristics
 # here, most trustworthy first. None means "cannot tell" and asks the next one.
-HEURISTICS: list[Heuristic] = [closed_state_in_cache]
+HEURISTICS: list[Heuristic] = [closed_state_in_cache, stopped_data_in_prometheus]
 
 
 def label(job: StuckJob) -> str:
@@ -282,6 +483,7 @@ def find_stuck_jobs(
                 start_time=row.start_time,
                 time_limit=row.time_limit,
                 elapsed_time=row.elapsed_time,
+                nodes=tuple(row.nodes or ()),
             )
         )
     return jobs
@@ -527,6 +729,11 @@ def log_report(
     if UNPARSABLE:
         examples = ", ".join(sorted(UNPARSABLE)[:NB_EXAMPLES])
         logger.warning(f"{len(UNPARSABLE)} cache values unparsable, e.g. {examples}")
+    if PROM_FAILED:
+        examples = ", ".join(sorted(PROM_FAILED)[:NB_EXAMPLES])
+        logger.warning(
+            f"prometheus unreadable on {len(PROM_FAILED)} clusters, e.g. {examples}"
+        )
     verb = "without an estimate" if no_estimate else "all estimated"
     logger.info(
         f"{len(jobs)} stuck rows, {len(entries)} estimated ({verb}), "
