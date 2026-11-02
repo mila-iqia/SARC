@@ -2091,8 +2091,10 @@
       const years = new Set(data.labels.flat().map(l => l.rgu_year));
       const yearSuffix = data.drawn.length === 1 && years.size === 1
         ? ' — ' + rguYearText([...years][0]) : '';
+      // One line per drawn cluster in the hover (<br> in customdata is a
+      // line break, verified against the pinned Plotly).
       const budgetLines = data.labels.map(ls => ls.map(
-        l => l.cluster + ' · ' + l.label + ' · ' + rguYearText(l.rgu_year)).join(', '));
+        l => l.cluster + ' · ' + l.label + ' · ' + rguYearText(l.rgu_year)).join('<br>'));
 
       const unit = rguUnit();
       const cum = targetShareView === 'cumulative';
@@ -2163,7 +2165,7 @@
           + '<br>Period: %{x}<br>' + (cum ? 'Cumulative ' : '') + unit.label
           + ': %{customdata[3]}<br>'
           + (cum ? 'Cumulative target' : 'Target') + ': %{customdata[1]}<br>'
-          + 'Budget: %{customdata[2]}<extra></extra>',
+          + '<b>Budget</b>:<br>%{customdata[2]}<extra></extra>',
       }];
       Plotly.react(plot, traces, pLayout({
         title: { text: 'RGU vs target share — ' + nameText + coverage + yearSuffix
