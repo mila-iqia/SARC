@@ -36,13 +36,9 @@ hides the `.current` file until it is complete).
 
 Needs the configuration `sarc parse jobs` runs with: the database to find
 the stuck rows, and the cache root and the cluster SSH configs to scrape
-into and through. Dry run by default:
+into and through. Scrape and cache with:
 
     SARC_CONFIG=<file> uv run python scripts/scrape_stuck_running_jobs.py
-
-Then scrape and cache with:
-
-    SARC_CONFIG=<file> uv run python scripts/scrape_stuck_running_jobs.py --no-dry-run
 
 and close the rows with a plain:
 

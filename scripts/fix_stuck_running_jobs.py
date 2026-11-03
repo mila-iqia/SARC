@@ -16,13 +16,9 @@ left alone: only RUNNING rows are closed, so re-applying a fix file is a
 no-op on everything it already fixed. Both cases are only counted.
 
 Needs the configuration `sarc parse jobs` runs with (the database).
-Dry run by default:
+Apply with:
 
     SARC_CONFIG=<file> uv run python scripts/fix_stuck_running_jobs.py fix.json
-
-Then apply with:
-
-    SARC_CONFIG=<file> uv run python scripts/fix_stuck_running_jobs.py fix.json --no-dry-run
 """
 
 import argparse
