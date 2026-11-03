@@ -108,6 +108,57 @@ def test_duration_buckets(prom_custom_query_mock, read_write_db):
     ]
 
 
+span_parameters = [
+    # Raw bucket (duration <= raw_cut = 3000s, no explicit step): the two
+    # short jobs ran ~10 days apart, and their shared window would request
+    # far more than max_query_points at the raw 30s resolution, so the
+    # bucket is split in two time windows.
+    {"job_id": 41, "duration": 600, "end_ago": 899_400},
+    {"job_id": 42, "duration": 600, "end_ago": 0},
+    # Downsampled bucket (step = ceil(4000 / 100) = 40s, window cap
+    # 300 * 40 = 12_000s): jobs 32 and 33 overlap and keep one window,
+    # job 31 ran long before them and gets its own.
+    {"job_id": 31, "duration": 4_000, "end_ago": 200_000},
+    {"job_id": 32, "duration": 5_000, "end_ago": 100_000},
+    {"job_id": 33, "duration": 4_500, "end_ago": 98_500},
+]
+
+
+@pytest.mark.time_machine(utc_test_time, tick=False)
+def test_split_overspanned_buckets(prom_custom_query_mock, read_write_db):
+    """A bucket whose jobs span more than max_query_points * step is split
+    into narrower time windows instead of getting a 422 from Prometheus."""
+    job_factory = JobFactory(clusters=[], users=[])
+    jobs = []
+    for params in span_parameters:
+        end_time = utc_test_time - timedelta(seconds=params["end_ago"])
+        start_time = end_time - timedelta(seconds=params["duration"])
+        job = job_factory.create_job(
+            job_id=params["job_id"],
+            submit_time=start_time,
+            start_time=start_time,
+            end_time=end_time,
+            cluster_id=1,
+            sarc_user_id=1,
+        )
+        read_write_db.add(job)
+        jobs.append(job)
+    read_write_db.flush()
+
+    assert get_job_time_series_batched(
+        jobs, "slurm_job_core_usage", max_query_points=300
+    ) == [[]] * len(jobs), "custom_query was not mocked properly"
+
+    queries = [call.args[0] for call in prom_custom_query_mock.call_args_list]
+    # Each window still carries its bucket's step, only the span shrinks.
+    assert queries == [
+        '(slurm_job_core_usage{slurmjobid=~"^41$"}[600s] offset 899400s)',
+        '(slurm_job_core_usage{slurmjobid=~"^42$"}[600s])',
+        '(slurm_job_core_usage{slurmjobid=~"^31$"}[4000s:40s] offset 200000s)',
+        '(slurm_job_core_usage{slurmjobid=~"^32|33$"}[6500s:40s] offset 98500s)',
+    ]
+
+
 no_duration_parameters = {
     "end_time_with_start_none": {
         "job_state": "CANCELLED",
