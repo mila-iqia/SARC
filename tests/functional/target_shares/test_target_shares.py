@@ -1,13 +1,14 @@
-from datetime import date
+from datetime import UTC, date, datetime
 
 import gifnoc
 from pytest import mark, raises
+from sqlalchemy import text
 from sqlalchemy.exc import ProgrammingError
 from sqlmodel import select
 
 from sarc.db import init_insert
 from sarc.db.cluster import SlurmClusterDB
-from sarc.db.target_share import TargetShareDB, insert_target_shares
+from sarc.db.target_share import TargetShareDB, budget_bounds, insert_target_shares
 
 # Real allocations.csv shape: the reader picks its five columns by name and
 # ignores the rest, so the fixtures carry the neighbouring columns too.
@@ -219,3 +220,37 @@ def test_empty_allocation_is_whole_cluster(tmp_path, empty_read_write_db):
         row.allocation for row in empty_read_write_db.exec(select(TargetShareDB))
     ] == [None]
     assert rows[0][4] == 1000
+
+
+def test_budget_bounds_ignore_session_time_zone(empty_read_write_db):
+    """Budget days are taken at midnight UTC whatever the session's TimeZone.
+
+    Our databases default to UTC, where a plain day::timestamptz cast gives
+    the right instant too: the session is switched to Montreal, where
+    midnight is 04:00 UTC in April.
+    """
+    sess = empty_read_write_db
+    fromage_id = sess.exec(
+        select(SlurmClusterDB.id).where(SlurmClusterDB.name == "fromage")
+    ).one()
+    sess.add(
+        TargetShareDB(
+            cluster_id=fromage_id,
+            allocation=None,
+            start_date=date(2026, 4, 1),
+            end_date=date(2027, 4, 1),
+            rgu_year=10,
+        )
+    )
+    sess.commit()
+
+    sess.connection().execute(text("SET LOCAL TIME ZONE 'America/Montreal'"))
+    # In this session, a plain cast lands at 04:00 UTC.
+    plain_cast = sess.connection().execute(
+        text("SELECT DATE '2026-04-01'::timestamptz")
+    )
+    assert plain_cast.scalar() == datetime(2026, 4, 1, 4, tzinfo=UTC)
+
+    start, end = sess.exec(select(*budget_bounds())).one()
+    assert start == datetime(2026, 4, 1, tzinfo=UTC).timestamp()
+    assert end == datetime(2027, 4, 1, tzinfo=UTC).timestamp()

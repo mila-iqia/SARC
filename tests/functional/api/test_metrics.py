@@ -19,7 +19,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, SlurmJobDB, SlurmState
 from sarc.db.job_series import JobSeriesTable
 from sarc.db.support import GpuRguDB
-from sarc.db.target_share import TargetShareDB, target_share_report
+from sarc.db.target_share import TargetShareDB
 from sarc.db.users import UserDB
 
 # Covers every factory-seeded job (submitted from 2023-02-14, +6h each).
@@ -1954,8 +1954,8 @@ def test_target_shares_attribution_rule(dash_client, dash_db_budgeted):
 def test_target_shares_null_allocation_budgets_the_whole_cluster(
     dash_client, dash_db_budgeted
 ):
-    """A NULL-allocation share attributes every account's hours, the rule
-    target_share_report applies to a whole-cluster budget."""
+    """A NULL-allocation share is a whole-cluster budget: every account's
+    hours count against it."""
     with config.db.session() as sess:
         share = sess.exec(select(TargetShareDB)).one()
         share.allocation = None
@@ -2043,22 +2043,6 @@ def test_target_shares_bucket_straddling_two_shares(dash_client, dash_db_budgete
         {"cluster": cluster, "label": account, "rgu_year": 1.0},
         {"cluster": cluster, "label": account, "rgu_year": 2.0},
     ]
-
-
-def test_target_shares_agrees_with_the_budget_report(dash_client, dash_db_budgeted):
-    """The chart and target_share_report are two views of one rule: summed
-    over the window, the buckets carry the report's prorated target and
-    attributed consumption."""
-    cluster = dash_db_budgeted.cluster
-    data = _target_shares(dash_client, cluster)
-    begin = datetime(2023, 2, 1, tzinfo=timezone.utc)
-    finish = begin + timedelta(days=_QUIET_DAYS)
-    with config.db.session() as sess:
-        (report,) = target_share_report(
-            sess, begin=begin, end=finish, cluster_name=cluster
-        )
-    assert sum(t for t in data["target"] if t) == pytest.approx(report.target_rgu_hours)
-    assert sum(data["consumed"]) == pytest.approx(report.consumed_rgu_hours)
 
 
 def test_target_shares_cluster_without_a_budget_in_the_window(

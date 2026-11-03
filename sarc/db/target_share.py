@@ -2,7 +2,7 @@
 
 import csv
 import logging
-from datetime import date, datetime
+from datetime import date
 from pathlib import Path
 from typing import Annotated
 
@@ -12,7 +12,6 @@ from sqlalchemy.dialects.postgresql import ExcludeConstraint
 from sqlmodel import Field, Session, col, delete, select
 
 from .cluster import SlurmClusterDB
-from .job_series import ELIGIBILITY_CLAUSES, JobSeriesTable, overlap_hours, ran_between
 from .sqlmodel import SQLModel
 
 logger = logging.getLogger(__name__)
@@ -198,106 +197,3 @@ def charged_to_budget(account):
         account == col(TargetShareDB.allocation),
         account == func.concat(col(TargetShareDB.allocation), "_gpu"),
     )
-
-
-class BudgetConsumption(SQLModel):
-    """One target share, in RGU-hours over its period within the report window:
-    its prorated target, the consumption of its allocation, and the consumption
-    of the whole cluster, whatever the account."""
-
-    cluster_name: str
-    allocation: str | None
-    start_date: date
-    end_date: date
-    rgu_year: float
-    target_rgu_hours: float
-    consumed_rgu_hours: float
-    cluster_rgu_hours: float
-
-
-def target_share_report(
-    sess: Session, *, begin: datetime, end: datetime, cluster_name: str | None = None
-) -> list[BudgetConsumption]:
-    """Compare GPU consumption with the target shares over ``[begin, end)``.
-
-    One row per target share intersecting the window, over the hours of the
-    window in its period: its target (rgu_year x those hours), the RGU-hours
-    its allocation's jobs spent there (account rule on
-    TargetShareDB.allocation), and those of all the cluster's jobs. A cluster
-    without a target share in the window has no row. ``begin``/``end`` must be
-    timezone-aware.
-    """
-    if end <= begin:
-        return []
-    begin_s, end_s = begin.timestamp(), end.timestamp()
-    budget_start, budget_end = budget_bounds()
-
-    # Eligible GPU jobs running in the window, with the columns overlap_hours reads.
-    job_wheres = [*ELIGIBILITY_CLAUSES, ran_between(JobSeriesTable, begin_s, end_s)]
-    if cluster_name is not None:
-        # For speed only: clusters_where, below, already limits the result to this cluster.
-        job_wheres.append(
-            col(JobSeriesTable.cluster_id).in_(
-                select(SlurmClusterDB.id)
-                .where(SlurmClusterDB.name == cluster_name)
-                .scalar_subquery()
-            )
-        )
-    jobs = (
-        select(  # ty:ignore[no-matching-overload]
-            col(JobSeriesTable.cluster_id).label("cluster_id"),
-            col(JobSeriesTable.account).label("account"),
-            col(JobSeriesTable.allocated_rgu_drac).label("rgu"),
-            col(JobSeriesTable.start_time),
-            col(JobSeriesTable.elapsed_time),
-        )
-        .where(*job_wheres)
-        .subquery()
-    )
-
-    hours_in_budget = overlap_hours(
-        jobs.c, (begin_s, end_s), (budget_start, budget_end)
-    )
-    rgu_hours = jobs.c.rgu * hours_in_budget
-    prorated_target = (
-        col(TargetShareDB.rgu_year)
-        * (func.least(budget_end, end_s) - func.greatest(budget_start, begin_s))
-        / 3600.0
-    )
-
-    clusters_where = []
-    if cluster_name is not None:
-        clusters_where.append(SlurmClusterDB.name == cluster_name)
-    budget_rows = sess.exec(
-        select(  # ty:ignore[no-matching-overload]
-            col(SlurmClusterDB.name).label("cluster_name"),
-            col(TargetShareDB.allocation),
-            col(TargetShareDB.start_date),
-            col(TargetShareDB.end_date),
-            col(TargetShareDB.rgu_year),
-            prorated_target.label("target_rgu_hours"),
-            func.coalesce(
-                func.sum(rgu_hours).filter(charged_to_budget(jobs.c.account)), 0.0
-            ).label("consumed_rgu_hours"),
-            func.coalesce(func.sum(rgu_hours), 0.0).label("cluster_rgu_hours"),
-        )
-        .join(SlurmClusterDB, col(SlurmClusterDB.id) == col(TargetShareDB.cluster_id))
-        .outerjoin(
-            jobs,
-            and_(
-                jobs.c.cluster_id == col(TargetShareDB.cluster_id), hours_in_budget > 0
-            ),
-        )
-        .where(budget_in_window(begin_s, end_s), *clusters_where)
-        .group_by(
-            col(TargetShareDB.cluster_id),
-            col(TargetShareDB.start_date),
-            col(SlurmClusterDB.name),
-        )
-        .order_by(
-            col(SlurmClusterDB.name),
-            col(TargetShareDB.start_date),
-            col(TargetShareDB.allocation),
-        )
-    ).all()
-    return [BudgetConsumption.model_validate(dict(row._mapping)) for row in budget_rows]
