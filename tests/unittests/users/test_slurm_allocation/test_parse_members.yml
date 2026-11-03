@@ -1,0 +1,65 @@
+- associated_accounts:
+    drac:
+      values:
+      - valid:
+          lower: null
+          upper: null
+        value: doej001
+  display_name: Jane Doe
+  email: jdoe@example.com
+  known_matches:
+  - mid: doej@mila.quebec
+    name: mila_ldap
+  - mid: '111'
+    name: mymila
+  matching_id:
+    mid: doej001
+    name: slurm_allocation_members
+  member_type:
+    values: []
+  sort_main: 0
+  sort_sub: 0
+  supervisors:
+    values: []
+- associated_accounts:
+    drac:
+      values:
+      - valid:
+          lower: null
+          upper: null
+        value: petitbonhomme
+  display_name: Petit Bonhomme
+  email: null
+  known_matches:
+  - mid: aaa-001
+    name: drac_member
+  - mid: petitbonhomme@mila.quebec
+    name: mila_ldap
+  matching_id:
+    mid: petitbonhomme
+    name: slurm_allocation_members
+  member_type:
+    values: []
+  sort_main: 0
+  sort_sub: 0
+  supervisors:
+    values: []
+- associated_accounts:
+    drac:
+      values:
+      - valid:
+          lower: null
+          upper: null
+        value: newuser
+  display_name: New User
+  email: null
+  known_matches: []
+  matching_id:
+    mid: newuser
+    name: slurm_allocation_members
+  member_type:
+    values: []
+  sort_main: 0
+  sort_sub: 0
+  supervisors:
+    values: []

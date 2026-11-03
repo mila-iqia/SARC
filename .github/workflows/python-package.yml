@@ -33,9 +33,9 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.2
+        uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.6"
+          version: "0.13.7"
 
       - name: Test with tox
         env:
@@ -49,9 +49,9 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.2
+        uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.6"
+          version: "0.13.7"
 
       - name: Check ruff
         run: uv run tox -e ruff
@@ -66,9 +66,9 @@ jobs:
       - uses: actions/checkout@v7
 
       - name: Set up uv
-        uses: astral-sh/setup-uv@v10.3.2
+        uses: astral-sh/setup-uv@v10.3.3
         with:
-          version: "0.13.6"
+          version: "0.13.7"
 
       - name: Install dependencies
         run: |

@@ -587,6 +587,146 @@ def test_convert_fast_none_values():
     assert job["nodes"] == []
 
 
+def _fast_entry(**overrides) -> dict:
+    """Minimal fastsacct job entry for _convert_json_fast."""
+    entry = {
+        "job_id": 123,
+        "array_job_id": None,
+        "array_task_id": None,
+        "name": "test_job",
+        "user": "toto",
+        "group": "toto_group",
+        "account": "toto_account",
+        "state": ["COMPLETED"],
+        "exitcode_return_code": 0,
+        "exitcode_signal": None,
+        "time_elapsed": 0,
+        "time_end": 1747064484,
+        "time_start": 1747064484,
+        "time_submit": 1747064484,
+        "time_timelimit": 4320,
+        "nodes": "None assigned",
+        "partition": "partition123",
+        "constraints": None,
+        "priority": 1,
+        "qos": "normal",
+        "resv_name": None,
+        "work_dir": "/home/toto/my_job_name",
+        "submit_line": "sbatch test_job.sh",
+        "flags": [],
+        "cluster": "test",
+    }
+    entry.update(overrides)
+    return entry
+
+
+@pytest.mark.parametrize(
+    "time_timelimit,expected",
+    [
+        pytest.param(None, None, id="null_from_fixed_fastsacct"),
+        pytest.param(0, None, id="infinite_collapsed_by_fastsacct"),
+        pytest.param(4320, 4320 * 60, id="normal"),
+        # Deployed fastsacct versions emitted the raw sentinels for a job
+        # with no time limit (the current source emits null instead).
+        pytest.param(0xFFFFFFFE, None, id="raw_no_val"),
+        pytest.param(0xFFFFFFFF, None, id="raw_infinite"),
+    ],
+)
+def test_convert_fast_time_limit_sentinels(time_timelimit, expected):
+    scraped_start = datetime(2025, 5, 12, tzinfo=UTC)
+    scraped_end = datetime(2025, 7, 7, tzinfo=UTC)
+    job = _convert_json_fast(
+        _fast_entry(time_timelimit=time_timelimit), "test", scraped_start, scraped_end
+    )
+    assert job["time_limit"] == expected
+
+
+def _json_job_entry(time_limit_minutes: int, *, envelope: bool) -> dict:
+    """Minimal slurm --json job entry for _convert_json_job.
+
+    With envelope=True, the >= 23.11 {"set","infinite","number"} envelope,
+    whose flags are deliberately misleading: the parser must key on
+    `number` alone, like it does for every other number field.
+    """
+    entry = {
+        "job_id": 123,
+        "nodes": "node123",
+        "name": "test_job",
+        "user": "toto",
+        "group": "toto_group",
+        "account": "toto_account",
+        "state": {"current": ["COMPLETED"], "reason": "None"},
+        "tres": {"allocated": [], "requested": []},
+        "exit_code": {"status": ["SUCCESS"], "return_code": 0, "signal": {}},
+        "array": {"job_id": 0, "task_id": 0},
+        "partition": "partition123",
+        "constraints": "",
+        "priority": 1,
+        "qos": "normal",
+        "working_directory": "/home/toto/my_job_name",
+        "time": {
+            "elapsed": 0,
+            "eligible": 1747064484,
+            "end": 0,
+            "start": 0,
+            "submission": 1747064484,
+            "suspended": 0,
+            "limit": time_limit_minutes,
+        },
+        "cluster": "test",
+        "flags": [],
+    }
+    if envelope:
+        entry["exit_code"]["return_code"] = {
+            "set": True,
+            "infinite": False,
+            "number": 0,
+        }
+        entry["exit_code"]["signal"] = {
+            "id": {"set": False, "infinite": False, "number": 0},
+            "name": "",
+        }
+        entry["array"]["task_id"] = {"set": False, "infinite": False, "number": 0}
+        entry["priority"] = {"set": True, "infinite": False, "number": 1}
+        entry["time"]["limit"] = {
+            "set": True,
+            "infinite": True,
+            "number": time_limit_minutes,
+        }
+    return entry
+
+
+@pytest.mark.parametrize(
+    "minutes,expected",
+    [
+        pytest.param(4320, 4320 * 60, id="normal"),
+        pytest.param(0, None, id="zero_no_limit"),
+        pytest.param(0xFFFFFFFF, None, id="infinite_as_null"),
+        pytest.param(0xFFFFFFFE, None, id="no_val_as_null"),
+    ],
+)
+def test_convert_json_job_time_limit_envelope(minutes, expected):
+    job = _convert_json_job(
+        _json_job_entry(minutes, envelope=True), "test", {"major": "24", "minor": "11"}
+    )
+    assert job["time_limit"] == expected
+
+
+@pytest.mark.parametrize(
+    "minutes,expected",
+    [
+        pytest.param(4320, 4320 * 60, id="normal"),
+        pytest.param(0xFFFFFFFF, None, id="infinite_as_zero"),
+        pytest.param(0xFFFFFFFE, None, id="no_val_as_null"),
+    ],
+)
+def test_convert_json_job_time_limit_pre23(minutes, expected):
+    job = _convert_json_job(
+        _json_job_entry(minutes, envelope=False), "test", {"major": "22", "minor": "05"}
+    )
+    assert job["time_limit"] == expected
+
+
 def test_convert_fast_cluster_mismatch_warning(caplog):
     entry = {
         "job_id": 123,
