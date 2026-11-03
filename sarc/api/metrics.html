@@ -651,6 +651,7 @@
           // Plot-local state
           {% if is_admin %}
           userRguTopN, userRguSortBy,
+          targetShareView,
           {% endif %}
           metricScatterMetric2,
           rguUsageView,
@@ -693,6 +694,7 @@
       {% if is_admin %}
       userRguTopN          = 16;
       userRguSortBy        = 'rgu_requested';
+      targetShareView      = 'per_period';
       {% endif %}
       metricScatterMetric2 = DEFAULT_METRIC2;
       rguUsageView         = 'per_period';
@@ -855,6 +857,7 @@
       density:           'Metric density',
       metric_comparison: 'Metric comparison',
       userrgu:           'RGU by user',
+      rgu_vs_target:     'RGU vs target share',
       {% endif %}
     };
     const PLOT_KEYS = Object.keys(PLOT_NAMES);
@@ -875,6 +878,7 @@
       heatmap_wait:    'heatmap',
       density:         'density',
       userrgu:         'user_rgu',
+      rgu_vs_target:   'target_shares',
       {% endif %}
     };
     // The renderers expect data under a per-endpoint key (e.g. d.job_counts,
@@ -890,6 +894,7 @@
       heatmap: 'heatmap',
       density: 'density',
       user_rgu: 'userrgu',
+      target_shares: 'rgu_vs_target',
       {% endif %}
     };
 
@@ -991,12 +996,13 @@
     // Fill a tile's header "View:" picker. Called from the renderer, so only
     // once the data is in -- renderTile empties the slot while loading, which
     // also stops a second switch racing the first. One slot per tile.
-    function fillViewPicker(el, options, current, onPick) {
+    function fillViewPicker(el, options, current, onPick, title = '') {
       const slot = el?.closest('.tile')?.querySelector('.view-head-slot');
       if (!slot) return;
       slot.innerHTML = '';
       const lab = document.createElement('label');
       lab.textContent = 'View: ';
+      lab.title = title;
       const sel = document.createElement('select');
       sel.className = 'add-select';
       options.forEach(([v, t]) => {
@@ -1136,6 +1142,8 @@
     // already-fetched rows — never triggers a refetch.
     // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured'
     let userRguSortBy = _saved.userRguSortBy || 'rgu_requested';
+    // RGU-vs-target view pick, module-scoped like the other plot-local state.
+    let targetShareView = _saved.targetShareView || 'per_period';
     {% endif %}
     // Job-table column keys hidden via the per-table column picker. Global (a
     // display preference shared by every job-table tile) so it survives
@@ -1152,7 +1160,7 @@
     let jobCountsView = _saved.jobCountsView || 'running';
     // The tiles whose header carries a "View:" picker, i.e. the ones that get a
     // .view-head-slot and are reloaded as a group when their view changes.
-    const VIEW_PICKER_TILES = new Set(['rgu_usage', 'job_counts']);
+    const VIEW_PICKER_TILES = new Set(['rgu_usage', 'job_counts', 'rgu_vs_target']);
 
     function layoutToParam(l) {
       return l.map(row => row.join(',')).join(';');
@@ -1498,6 +1506,7 @@
                    density: renderDensity,
                    metric_comparison: renderMetricComparison,
                    userrgu: renderUserRgu,
+                   rgu_vs_target: renderRguVsTarget,
                    {% endif %} }[type];
       if (fn) fn(id, d);
     }
@@ -2027,6 +2036,156 @@
     }
 
     {% if is_admin %}
+    // RGU vs target share: the tile follows the toolbar's cluster filter and
+    // sums the consumption and prorated target of every budgeted cluster it
+    // selects (empty filter = all). The bar is what the drawn clusters'
+    // shares took per bucket, the horizontal segment their prorated target
+    // for that bucket: above the bar while under budget, inside it once
+    // over; the consumed/target percentage reads inside the bar's top.
+    // Buckets outside every budget draw no segment (null target). A View
+    // picker switches between the per-bucket series and the same series
+    // prefix-summed from the window start: same URL, so the switch reloads
+    // from the endpoint cache without a fetch.
+    function renderRguVsTarget(id, d) {
+      const el = document.getElementById(id);
+      const data = d.rgu_vs_target;
+      if (!el) return;
+
+      // Box/plot layout, like rgu_usage.
+      el.innerHTML = '';
+      const box = document.createElement('div'); box.className = 'ms-box';
+      const plot = document.createElement('div'); plot.className = 'ms-plot';
+      box.appendChild(plot);
+      el.appendChild(box);
+
+      fillViewPicker(el, [['per_period', 'Per period'], ['cumulative', 'Cumulative']],
+        targetShareView,
+        v => { targetShareView = v; saveState(); reloadTilesOfType('rgu_vs_target'); },
+        'Cumulative: each bucket shows consumption and prorated target summed from the window start to the end of that bucket. The user filter does not apply here: a target share budgets the jobs of all users.');
+
+      if (!data.budgeted.length) {
+        showNoData(plot, 'No target shares in this window.');
+        return;
+      }
+      if (!data.drawn.length) {
+        showNoData(plot, 'None of the selected clusters holds a target share'
+          + ' in this window — budgeted: ' + data.budgeted.join(', ') + '.');
+        return;
+      }
+      if (!data.periods.length) { showNoData(plot); return; }
+
+      // Up to three drawn clusters named in the title, the rest counted;
+      // the hover's Budget lines carry every share per bucket anyway.
+      const nameText = data.drawn.length <= 3 ? data.drawn.join(' + ')
+        : data.drawn.slice(0, 3).join(' + ') + ' +' + (data.drawn.length - 3);
+      // The selection also held un-budgeted clusters: say so, or the
+      // summed ratio reads as if it covered the whole selection.
+      const coverage = data.requested.length && data.drawn.length < data.requested.length
+        ? ' (' + data.drawn.length + '/' + data.requested.length + ' selected)' : '';
+      // The annual rate is a single-budget fact only: one drawn cluster,
+      // one rate. Multi-budget windows give it per bucket in the hover.
+      const rguNum = v => (+v.toFixed(2)).toLocaleString('en-US');
+      const rguYearText = y => rguNum(y) + ' RGU·year';
+      const years = new Set(data.labels.flat().map(l => l.rgu_year));
+      const yearSuffix = data.drawn.length === 1 && years.size === 1
+        ? ' — ' + rguYearText([...years][0]) : '';
+      // One line per budget in the hover (<br> in customdata is a line
+      // break, verified against the pinned Plotly).
+      const budgetLines = data.labels.map(ls => ls.map(
+        l => l.cluster + ' · ' + l.label + ' · ' + rguYearText(l.rgu_year)).join('<br>'));
+
+      const unit = rguUnit();
+      const cum = targetShareView === 'cumulative';
+      const x = data.periods.map(p => p.period_start);
+      const ends = data.periods.map(p => p.period_end);
+      // Cumulative view: prefix sum of the same per-bucket series. Each
+      // job's hours are split additively at the bucket bounds, so the
+      // sum up to bucket k's end is exactly the time covered since the
+      // window start. A target-null bucket adds nothing but does not
+      // reset the running target: past the share period's end the
+      // segment goes flat instead of vanishing, and stays absent
+      // before any budget has started.
+      let consumed, targets;
+      if (cum) {
+        let run = 0, runT = 0;
+        consumed = data.consumed.map(v => (run += v) * unit.factor);
+        targets = data.target.map(t => {
+          runT += t || 0;
+          return runT > 0 ? runT * unit.factor : null;
+        });
+      } else {
+        consumed = data.consumed.map(v => v * unit.factor);
+        targets = data.target.map(t => t === null ? null : t * unit.factor);
+      }
+      const pcts = targets.map((t, i) => t === null ? null : consumed[i] / t * 100);
+      const opac = x.map(p => { const f = periodInFocus(p); return f === null ? 1 : f ? 1 : 0.35; });
+      const yMax = Math.max(0, ...consumed, ...targets.map(t => t || 0));
+      // A bar under ~6% of the y-range cannot hold the label; there it
+      // floats above the bar top (an empty bar: above the axis) instead.
+      const labelFloor = yMax * 0.06;
+      const shapes = [];
+      const annotations = [];
+      targets.forEach((t, i) => {
+        if (t === null) return;
+        // Category axis: shapes position on the category index, like the
+        // metric-trend focus band. Segment spans the bar's width.
+        shapes.push({
+          type: 'line', xref: 'x', yref: 'y',
+          x0: i - 0.45, x1: i + 0.45, y0: t, y1: t,
+          line: { color: '#111', width: 2.5 },
+        });
+        // Consumed/target as one readable figure inside the bar's top, so
+        // height and percentage read together (cumulative view: summed
+        // consumed / summed target). The ratio is unit-free and a
+        // non-null target is > 0, so it never divides by zero.
+        const pct = pcts[i];
+        const inside = consumed[i] > labelFloor;
+        annotations.push({
+          x: i, y: consumed[i], xref: 'x', yref: 'y',
+          text: (pct < 10 ? pct.toFixed(1) : Math.round(pct)) + ' %',
+          showarrow: false,
+          yanchor: inside ? 'top' : 'bottom', yshift: inside ? -3 : 3,
+          font: { size: 11, color: '#111' },
+          bgcolor: 'rgba(255,255,255,0.75)', borderpad: 2,
+        });
+      });
+      const traces = [{
+        type: 'bar', name: nameText, x: x, y: consumed,
+        customdata: ends.map((e, i) => [
+          e, targets[i] === null ? '' : rguNum(targets[i]), budgetLines[i],
+          rguNum(consumed[i]),
+        ]),
+        marker: {
+          color: data.drawn.length === 1 ? clusterColor(data.drawn[0]) : '#4c78a8',
+          opacity: opac,
+        },
+        hovertemplate: nameText
+          + '<br>Period: %{x}<br>' + (cum ? 'Cumulative ' : '') + unit.label
+          + ': %{customdata[3]}<br>'
+          + (cum ? 'Cumulative target' : 'Target') + ': %{customdata[1]}<br>'
+          + '<b>Budget</b>:<br>%{customdata[2]}<extra></extra>',
+      }];
+      Plotly.react(plot, traces, pLayout({
+        title: { text: 'RGU vs target share — ' + nameText + coverage + yearSuffix
+                 + (cum ? ' · cumulative' : '') + ' (click to focus)',
+                 font: { size: 16 }, y: 1, yanchor: 'top', pad: { t: 2 } },
+        xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
+        // Explicit range: shapes are left out of Plotly's y autorange, so
+        // a target above every bar would otherwise draw off-canvas.
+        yaxis: { title: { text: (cum ? 'Cumulative ' : 'Total ') + unit.label },
+                 range: [0, yMax * 1.1 || 1] },
+        shapes: shapes,
+        annotations: annotations,
+        showlegend: false,
+        margin: { l: 60, r: 20, t: 78, b: 100 },
+      }), { responsive: true }).then(gd => {
+        gd.removeAllListeners('plotly_click');
+        gd.on('plotly_click', evt => {
+          if (evt.points && evt.points.length) clickSetFocus(evt.points[0].x, evt.points[0].customdata[0]);
+        });
+      });
+    }
+
     function renderUserRgu(id, d) {
       const el = document.getElementById(id);
       if (!el) return;
@@ -3047,6 +3206,8 @@
         {% if is_admin %}
         case 'user_rgu':  return '/dash/metrics/rgu_by_user?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, min_usage: MIN_USAGE_EXPECTED_PERCENT / 100, ...focusParams }));
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period, ...(p.user_email ? { user_email: p.user_email } : {}) }));
+        // No user_email, no as_user: a target share budgets the jobs of all users.
+        case 'target_shares': return '/dash/metrics/target_shares?' + new URLSearchParams({ start: p.start, end: p.end, period: p.period });
         {% else %}
         case 'rgu_by_cluster': return '/dash/metrics/rgu_by_cluster?' + new URLSearchParams(withAsUser({ start: p.start, end: p.end, period: p.period }));
         {% endif %}
