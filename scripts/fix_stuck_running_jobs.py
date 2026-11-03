@@ -39,9 +39,18 @@ from pydantic import (
 from sqlmodel import Session, col, select
 
 from sarc.config import config
+from sarc.db import get_meta
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
 from sarc.models.job import SlurmState
+
+# Register every table on the shared metadata, as `sarc parse jobs` ends up
+# doing: flushing an UPDATE to slurm_jobs resolves all of the table's foreign
+# keys, and `gpurgudb` -- the target of harmonized_gpu_type -- lives in a model
+# module this script otherwise never imports. Without it, the commit dies with
+# NoReferencedTableError (a --dry-run, which rolls back instead of flushing,
+# never gets there -- which is how this hid).
+get_meta()
 
 logger = logging.getLogger("fix_stuck_running_jobs")
 
