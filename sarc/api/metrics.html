@@ -1142,11 +1142,9 @@
     // already-fetched rows — never triggers a refetch.
     // Values: 'rgu_requested' | 'rgu_used' | 'rgu_unused' | 'rgu_unmeasured'
     let userRguSortBy = _saved.userRguSortBy || 'rgu_requested';
-    {% endif %}
     // RGU-vs-target view pick, module-scoped like the other plot-local state.
-    // (The tile is admin-only, but this lives outside the Jinja admin block:
-    // saveState/loadCharts touch it from shared code paths.)
     let targetShareView = _saved.targetShareView || 'per_period';
+    {% endif %}
     // Job-table column keys hidden via the per-table column picker. Global (a
     // display preference shared by every job-table tile) so it survives
     // pagination, sorting and Update. Empty = all columns visible.
@@ -2091,8 +2089,8 @@
       const years = new Set(data.labels.flat().map(l => l.rgu_year));
       const yearSuffix = data.drawn.length === 1 && years.size === 1
         ? ' — ' + rguYearText([...years][0]) : '';
-      // One line per drawn cluster in the hover (<br> in customdata is a
-      // line break, verified against the pinned Plotly).
+      // One line per budget in the hover (<br> in customdata is a line
+      // break, verified against the pinned Plotly).
       const budgetLines = data.labels.map(ls => ls.map(
         l => l.cluster + ' · ' + l.label + ' · ' + rguYearText(l.rgu_year)).join('<br>'));
 
