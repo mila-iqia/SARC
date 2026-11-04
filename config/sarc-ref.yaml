@@ -40,6 +40,10 @@ sarc:
         - abc
         - def
       sacct_bin: "/opt/slurm/bin/sacct" # Path to the sacct binary on the cluster
+      sacct_states_filter: false # If true, the job fetch passes the list of job states
+      # (PD,R,S,CD,CA,F,TO,NF,PR,BF,DL,OOM,RQ,RS,RV) to sacct with -s/--states. slurm filters
+      # per state internally instead of with its default window query, which returns more jobs.
+      # Off by default.
       prometheus_url:
         http://prometheus01.server.mila.quebec:9090/ # Prometheus server with data from https://github.com/guilbaults/slurm-job-exporter,
         # can be ommited if there is no data

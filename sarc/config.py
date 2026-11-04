@@ -77,6 +77,7 @@ class ClusterConfig:
     prometheus_check_ssl: bool = True
     name: str | None = None
     sacct_bin: str = "sacct"
+    sacct_states_filter: bool = False
     ignore_tz_utc: bool = False
     accounts: list[str] | None = None
     diskusage: list[DiskUsageConfig] | None = None
