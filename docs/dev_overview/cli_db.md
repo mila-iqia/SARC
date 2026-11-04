@@ -43,6 +43,21 @@ The automatic interval feature will fetch all completed intervals that are not a
 
 Note that to import the jobs into the database they must have a matching user, but they will be stored into the cache as raw data, regardless.
 
+## Sampled GPU accounting
+
+Set `sacct_gpu_accounting: true` on an existing cluster to collect Slurm/NVML task peaks through `fetch jobs` and `parse jobs`. It defaults to false and requires no Prometheus URL. The existing query includes steps instead of using `-X`, so the cluster must return native Slurm JSON; fastsacct flat/JSONL formats are rejected when enabled. Recorded Fir Slurm 26.05.4 JSON is covered.
+
+Old allocation-only caches remain usable and leave accounting values intact. To acquire peaks, fetch the desired UTC interval again, then parse the new capture:
+
+```sh
+SARC_CONFIG=config_file.yaml sarc fetch jobs -c fir -i 2026-10-01T00:00-2026-10-02T00:00
+SARC_CONFIG=config_file.yaml sarc parse jobs
+```
+
+Step-bearing captures use the normal cache entry with a `_with_steps` key suffix; only those entries are ingested for accounting while the flag is enabled. Jobs require matching SARC users. Parsing's `--since` selects cache capture dates, not job dates. The job API exposes `/v0/job/query?cluster_name=fir&extra_fields=statistics` with `sacct_gpu_memory_task_peak_bytes` and `sacct_gpu_sm_task_peak_percent`, each stored only in `max`; other statistic columns are null.
+
+Each value is the maximum sampled task peak across all steps. A task can use multiple GPUs, so SM percentages can exceed 100. These are not simultaneous whole-job peaks or time averages. Missing and unavailable values are omitted; measured zero remains zero and does not establish full-run idleness. Successful refreshes replace only these accounting statistics; failed captures preserve accepted data. DCGM metrics and underusage decisions keep their existing sources.
+
 # prometheus
 
 To fetch prometheus data for jobs, run:

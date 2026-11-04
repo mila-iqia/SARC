@@ -40,6 +40,7 @@ sarc:
         - abc
         - def
       sacct_bin: "/opt/slurm/bin/sacct" # Path to the sacct binary on the cluster
+      sacct_gpu_accounting: false # Opt in to separate sampled sacct GPU statistics
       prometheus_url:
         http://prometheus01.server.mila.quebec:9090/ # Prometheus server with data from https://github.com/guilbaults/slurm-job-exporter,
         # can be ommited if there is no data
