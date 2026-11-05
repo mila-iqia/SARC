@@ -620,3 +620,77 @@ def test_member_type_promotion_replaced_in_place(read_write_db):
         select(SupervisorsDB).where(SupervisorsDB.user_id == db_student.id)
     ).all()
     assert [(s.valid.lower, s.valid.upper) for s in sups_db] == [(start, phd_end)]
+
+
+def _user_with_ids(sess, display_name: str, email: str, *ids: MatchID) -> UserDB:
+    user = UserDB(display_name=display_name, email=email)
+    sess.add(user)
+    sess.flush()
+    for mid in ids:
+        sess.add(MatchingID(user_id=user.id, plugin_name=mid.name, match_id=mid.mid))
+    sess.flush()
+    return user
+
+
+def test_update_user_secondary_source_keeps_reference_identity(read_write_db):
+    """A DRAC-only update must not replace the name/email of a reference source.
+
+    Parsing a cache entry that holds only drac_member data used to overwrite
+    the users' LDAP/MyMila names and emails with the DRAC ones (often personal
+    emails), and each change rewrote the user's rows in job_series.
+    """
+    drac_id = MatchID(name="drac_member", mid="abc-123")
+    user = _user_with_ids(
+        read_write_db, "Alice Reference", "alice@mila.quebec", drac_id
+    )
+
+    um = UserMatch(
+        display_name="Alice DRAC",
+        email="alice@gmail.com",
+        sort_sub=0,
+        matching_id=drac_id,
+    )
+    update_user(read_write_db, um)
+    read_write_db.flush()
+    read_write_db.refresh(user)
+
+    assert user.display_name == "Alice Reference"
+    assert user.email == "alice@mila.quebec"
+
+
+def test_update_user_secondary_source_fills_missing_identity(read_write_db):
+    """A secondary source still fills in a name/email nobody else provided."""
+    alloc_id = MatchID(name="slurm_allocation_members", mid="bob")
+    user = _user_with_ids(read_write_db, "", "", alloc_id)
+
+    um = UserMatch(
+        display_name="Bob Allocation",
+        email="bob@example.com",
+        sort_sub=0,
+        matching_id=alloc_id,
+    )
+    update_user(read_write_db, um)
+    read_write_db.flush()
+    read_write_db.refresh(user)
+
+    assert user.display_name == "Bob Allocation"
+    assert user.email == "bob@example.com"
+
+
+def test_update_user_reference_source_overwrites_identity(read_write_db):
+    """A reference source (any source not flagged otherwise) still updates them."""
+    ldap_id = MatchID(name="mila_ldap", mid="carol@mila.quebec")
+    user = _user_with_ids(read_write_db, "Carol Old", "carol.old@mila.quebec", ldap_id)
+
+    um = UserMatch(
+        display_name="Carol New",
+        email="carol@mila.quebec",
+        sort_sub=0,
+        matching_id=ldap_id,
+    )
+    update_user(read_write_db, um)
+    read_write_db.flush()
+    read_write_db.refresh(user)
+
+    assert user.display_name == "Carol New"
+    assert user.email == "carol@mila.quebec"
