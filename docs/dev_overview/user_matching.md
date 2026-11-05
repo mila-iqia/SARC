@@ -110,6 +110,25 @@ Like the `Pairs` list, you can load/save the ignore list. DRAC accounts are iden
 > Some DRAC profiles may be present in the SARC database, with no LDAP corresponding entry. Usually it is due to an old DRAC user import, with already expired accounts, not present anymore in the LDAP before SARC even started gathering it.
 > You can determine if this is an obsolete account by searching in the [Mila directory](https://mila.quebec/en/directory), and if it is an "alumni" account, then you can put them in the "ignore list" without guilt.
 
+# Pre-generating pairs (optional)
+
+Before pairing by hand, `scripts/usermatch/prematch.py` can write a first version of the matching file, so that the interface only has to handle the leftovers:
+
+```bash
+SARC_CONFIG=cloudsql_db.yaml uv run python scripts/usermatch/prematch.py \
+    --out usermatches_prematch.json --report prematch.md
+```
+
+It starts from the same two lists as the `Match DRAC` page, and pairs a DRAC account with an LDAP account when both the name and the group agree:
+
+- the group of a DRAC account is the list of `aip-*` allocations it is a member of on tamia, and their PIs. The script asks the cluster for the allocations and their members (`sacctmgr`) and for the full name of every PI (`getent passwd`), reusing the `~/.ssh/cm-tamia` control master, like `scripts/generate_drac_users_aip.py`. Allocations are not stored in SARC, so this step needs the cluster;
+- the group of an LDAP account is its supervisors in SARC (`user_supervisors`, fed by MyMila);
+- a pair is kept when the PI of one of the DRAC allocations is one of the supervisors of the LDAP account — the same person, matched by SARC user id when the PI's DRAC username is known and by name otherwise — and the two display names look like the same person (same family name plus at least one given name). A DRAC account that is the PI of its own allocation (`aip-<username>`) is paired with the supervisor-less LDAP account of the same name.
+
+Accounts that share an email address are paired first, as in the interface. Only unambiguous pairs (the best candidate in both directions) are written to the JSON: ties, and pairs with a single clue (compatible names but no known shared group, or a shared group but only the family name in common), are listed in the `--report` markdown instead, to be decided in the interface.
+
+The output file has the format of the [matching file](#matching-file) above and is loaded with the `Load from file...` button.
+
 # Apply matching file to SARC
 
 > [!warning]
