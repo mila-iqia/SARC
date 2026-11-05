@@ -73,6 +73,14 @@ class UserMatch(BaseModel):
 # plugins are run in the order they are defined in the config file and the first plugin to define a value wins.
 class UserScraper[T](Protocol):
     config_type: Type[T]
+    # Whether this source's display_name and email are the reference ones. A
+    # source that only mirrors identities from elsewhere (e.g. the DRAC member
+    # list, with personal emails and differently spelled names) sets this to
+    # False: it then only fills in a missing name/email and never replaces one
+    # set by a reference source. Otherwise, parsing an entry holding only such
+    # a source overwrites the reference values, which the next full entry sets
+    # back, and each change rewrites the user's rows in job_series.
+    provides_reference_identity: bool = True
 
     def validate_config(self, config_data: Any) -> T:
         return deserialize(
@@ -258,6 +266,14 @@ def lookup_match_id(sess: Session, match_id: MatchID) -> Sequence[UserDB]:
     ).all()
 
 
+def _provides_reference_identity(scraper_name: str) -> bool:
+    try:
+        scraper = get_user_scraper(scraper_name)
+    except KeyError:
+        return True
+    return getattr(scraper, "provides_reference_identity", True)
+
+
 @trace_decorator()
 def update_user(sess: Session, user: UserMatch) -> None:
     matches = user.known_matches.union((user.matching_id,))
@@ -281,9 +297,13 @@ def update_user(sess: Session, user: UserMatch) -> None:
             merge_users(sess, db_user, db_extra)
         sess.flush()
 
-        if user.display_name is not None:
+        # The merged UserMatch's name/email come from its matching_id's source,
+        # the highest-priority source of the cache entry that knows this user
+        # (or from a lower one, only where that source had none).
+        overwrite = _provides_reference_identity(user.matching_id.name)
+        if user.display_name is not None and (overwrite or not db_user.display_name):
             db_user.display_name = user.display_name
-        if user.email is not None:
+        if user.email is not None and (overwrite or not db_user.email):
             db_user.email = user.email
         for mid in user.known_matches.union((user.matching_id,)):
             if mid.name not in db_user.matching_ids:
