@@ -8,6 +8,7 @@ from sarc.cache import Cache
 from sarc.config import UTC
 from sarc.scraping.jobs import fetch_jobs
 from sarc.scraping.jobs_utils import (
+    SACCT_STATES,
     JobConversionError,
     _convert_json_fast,
     _convert_json_job,
@@ -85,6 +86,40 @@ def test_fetch_raw2(test_config, remote):
         start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
     ) == '{ "value": 2 }'.encode("utf-8")
+
+
+@pytest.mark.usefixtures("no_pkey")
+@pytest.mark.parametrize(
+    "test_config",
+    [
+        {
+            "clusters": {
+                "test": {
+                    "host": "patate",
+                    "private_key": {"file": "tests/id_test", "password": "12345"},
+                    "user_domain": "drac",
+                    "sacct_states_filter": True,
+                }
+            }
+        }
+    ],
+    indirect=True,
+)
+def test_fetch_raw_states_filter(test_config, remote):
+    # With sacct_states_filter, the list of job states goes to sacct with -s so
+    # that slurm filters per state internally. Clusters without the option get
+    # no -s at all (see test_fetch_raw), leaving sacct's default window query in
+    # charge.
+    remote.expect(
+        host="patate",
+        cmd=f"export TZ=UTC && sacct -s {','.join(SACCT_STATES)} -X -S {_dtfmt(2023, 2, 28)} -E {_dtfmt(2023, 3, 1)} --allusers --json --duplicates",
+        out=b"{}",
+    )
+    assert fetch_raw(
+        cluster=test_config.clusters["test"],
+        start=datetime(2023, 2, 28, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 3, 1, tzinfo=MTL).astimezone(UTC),
+    ) == "{}".encode("utf-8")
 
 
 @pytest.mark.usefixtures("no_pkey")

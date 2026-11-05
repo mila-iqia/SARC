@@ -26,6 +26,29 @@ DATE_FORMAT_HOUR = "%Y-%m-%dT%H:%M"
 FASTSACCT_FLAT_SCHEMA = "fastsacct-flat-v1"
 FASTSACCT_JSONL_SCHEMA = "fastsacct-jsonl-v1"
 
+# Job states passed to sacct with -s/--states when a cluster enables the
+# `sacct_states_filter` config option. Uses the compact (2-letter) state names,
+# which sacct accepts along with the long ones.
+#
+# This list was checked to be complete for slurm versions 24.05 to 26.05
+SACCT_STATES: tuple[str, ...] = (
+    "PD",  # PENDING
+    "R",  # RUNNING
+    "S",  # SUSPENDED
+    "CD",  # COMPLETED
+    "CA",  # CANCELLED
+    "F",  # FAILED
+    "TO",  # TIMEOUT
+    "NF",  # NODE_FAIL
+    "PR",  # PREEMPTED
+    "BF",  # BOOT_FAIL
+    "DL",  # DEADLINE
+    "OOM",  # OUT_OF_MEMORY
+    "RQ",  # REQUEUED
+    "RS",  # RESIZING
+    "RV",  # REVOKED
+)
+
 
 class JobConversionError(Exception):
     """Exception raised when there's an error converting a job entry from sacct."""
@@ -142,7 +165,13 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     end_str = end.strftime(fmt)
     accounts = ",".join(cluster.accounts) if cluster.accounts else None
     accounts_option = f"-A {accounts} " if accounts else ""
-    cmd = f"{cluster.sacct_bin} {accounts_option}-X -S {start_str} -E {end_str} --allusers --json --duplicates"
+    states_option = (
+        f"-s {','.join(SACCT_STATES)} " if cluster.sacct_states_filter else ""
+    )
+    cmd = (
+        f"{cluster.sacct_bin} {accounts_option}{states_option}"
+        f"-X -S {start_str} -E {end_str} --allusers --json --duplicates"
+    )
     logger.debug(f"{cluster.name} $ {cmd}")
     if cluster.host == "localhost":
         results: subprocess.CompletedProcess[str] | Result = subprocess.run(
