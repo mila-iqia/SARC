@@ -466,6 +466,47 @@ class UserScrapingConfig:
 
 
 @dataclass
+class ReportUploadConfig:
+    """
+    Settings for the public ``POST /upload-report`` endpoint
+    (see ``sarc.api.reports``).
+    """
+
+    subdirectory: str = "user-reports"
+    """Directory under ``cache`` where uploaded reports are stored."""
+
+    categories: list[str] = field(default_factory=lambda: ["general"])
+    """Whitelist of the ``category`` values the upload endpoint accepts; each
+    becomes a subdirectory of ``subdirectory``. The request must always carry
+    one of them explicitly, and entries must be plain directory names (no
+    path separators)."""
+
+    max_size: int = 200 * 1024
+    """Largest report accepted, in bytes."""
+
+    max_per_ip: int = 1
+    """Upload attempts allowed from a single client IP within
+    ``window_seconds``. Failed attempts (e.g. oversize) count too."""
+
+    max_total: int = 30
+    """Upload attempts allowed from all clients combined within
+    ``window_seconds``."""
+
+    window_seconds: float = 60.0
+    """Sliding window over which the two rate limits above are measured."""
+
+    def __post_init__(self) -> None:
+        # Fail fast on a whitelist the endpoint could never honor: categories
+        # are directory names, so none may traverse or hide.
+        for category in self.categories:
+            if category in (".", "..") or Path(category).name != category:
+                raise ConfigurationError(
+                    f"Invalid report category name: {category!r} "
+                    "(must be a plain directory name)"
+                )
+
+
+@dataclass
 class ServerConfig:
     """
     Configuration for Python REST server
@@ -473,6 +514,8 @@ class ServerConfig:
 
     # Authentication manager
     auth: OAuthManager | None = None
+
+    report_upload: ReportUploadConfig = field(default_factory=ReportUploadConfig)
 
 
 @dataclass
