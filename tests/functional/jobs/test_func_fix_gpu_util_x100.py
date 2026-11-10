@@ -5,8 +5,11 @@ One cache entry holds the raw series of a contaminated job (x100 values,
 before the 0.5.1 release), of an ambiguous one (samples at 100 only, one at
 or after the release) and of a clean saturated one (a sample at 57 rules out
 exporter 0.5.0). The contaminated and ambiguous rows are seeded with the
-inflated statistics the corrupted parse stored. Two more candidates have no
-raw series to find: their key in the cache entry, and the cache entry itself.
+inflated statistics the corrupted parse stored, and every fetch record points
+to its job's row, as the parse leaves it. The ambiguous job also has a
+gpu_power row, for its fetch record to point to once its gpu_utilization row
+is deleted. Two more candidates have no raw series to find: their key in the
+cache entry, and the cache entry itself.
 
 On `jobless_read_write_db`: the seeded jobs of `read_write_db` would widen
 the candidate set the tests count.
@@ -67,23 +70,35 @@ def _seed(sess, job_ids: list[int]) -> dict[int, SlurmJobDB]:
     return {job.job_id: job for job in factory.jobs}
 
 
+def _seed_stat(
+    sess, job: SlurmJobDB, name: str, mean: float, max_: float
+) -> JobStatisticDB:
+    stat = JobStatisticDB(
+        job_id=job.id,
+        name=name,
+        mean=mean,
+        std=None,
+        q05=None,
+        q25=None,
+        median=None,
+        q75=None,
+        max=max_,
+    )
+    sess.add(stat)
+    sess.commit()
+    return stat
+
+
 def _seed_stat_and_fetch_date(
     sess, job: SlurmJobDB, mean: float, max_: float, fetch_date: datetime
 ) -> None:
+    """The job's gpu_utilization row, and its fetch record pointing to it."""
+    stat = _seed_stat(sess, job, "gpu_utilization", mean, max_)
     sess.add(
-        JobStatisticDB(
-            job_id=job.id,
-            name="gpu_utilization",
-            mean=mean,
-            std=None,
-            q05=None,
-            q25=None,
-            median=None,
-            q75=None,
-            max=max_,
+        JobStatisticsFetchDateDB(
+            job_id=job.id, fetch_date=fetch_date, jobstatistic_id=stat.id
         )
     )
-    sess.add(JobStatisticsFetchDateDB(job_id=job.id, fetch_date=fetch_date))
     sess.commit()
 
 
@@ -121,6 +136,15 @@ def _util(sess, job: SlurmJobDB) -> JobStatisticDB | None:
     ).one_or_none()
 
 
+def _fetch_pointer(sess, job: SlurmJobDB) -> int | None:
+    """The statistic the job's fetch record points to."""
+    return sess.exec(
+        select(JobStatisticsFetchDateDB.jobstatistic_id).where(
+            JobStatisticsFetchDateDB.job_id == job.id
+        )
+    ).one()
+
+
 def _process(sess, cache: Cache, entry_time: datetime, dry_run: bool) -> dict[str, str]:
     candidates = fixer.load_candidates(sess)[entry_time]
     results = fixer.process_entry(sess, cache, entry_time, candidates, dry_run=dry_run)
@@ -135,6 +159,7 @@ def test_fix_rescales_drops_and_leaves(jobless_read_write_db, enabled_cache):
 
     _seed_stat_and_fetch_date(sess, contaminated, 50.0, 100.0, FETCH)
     _seed_stat_and_fetch_date(sess, ambiguous, 0.5, 1.0, FETCH)
+    power = _seed_stat(sess, ambiguous, "gpu_power", 200.0, 300.0)
     _seed_stat_and_fetch_date(sess, saturated, 0.785, 1.0, FETCH)
     _seed_stat_and_fetch_date(sess, missing_key, 0.5, 1.0, FETCH)
     _seed_stat_and_fetch_date(sess, missing_entry, 1.5, 3.0, FETCH_NO_ENTRY)
@@ -188,16 +213,19 @@ def test_fix_rescales_drops_and_leaves(jobless_read_write_db, enabled_cache):
         100.0,
     )
     assert _util(sess, ambiguous) is not None
+    assert _fetch_pointer(sess, ambiguous) == _util(sess, ambiguous).id
 
     statuses = _process(sess, cache, ENTRY, dry_run=False)
     _process(sess, cache, FETCH_NO_ENTRY, dry_run=False)
     assert statuses[_label(missing_key)] == fixer.STATUS_MISSING_KEY
 
     # The contaminated row comes back divided by 100, the ambiguous row is
-    # gone, the rows the parse judges clean -- or cannot reach -- are untouched.
+    # gone (its fetch record now on the statistic left), the rows the parse
+    # judges clean -- or cannot reach -- are untouched.
     sess.expire_all()
     assert (_util(sess, contaminated).mean, _util(sess, contaminated).max) == (0.5, 1.0)
     assert _util(sess, ambiguous) is None
+    assert _fetch_pointer(sess, ambiguous) == power.id
     assert (_util(sess, saturated).mean, _util(sess, saturated).max) == (0.785, 1.0)
     assert (_util(sess, missing_key).mean, _util(sess, missing_key).max) == (0.5, 1.0)
     assert (_util(sess, missing_entry).mean, _util(sess, missing_entry).max) == (

@@ -14,9 +14,10 @@ key "<cluster>$<job_id>$<submit_time>".
 For each candidate the script re-runs the parse-time judgement on the raw
 series: a rescaled series is rewritten through the regular parse code
 (parse_prometheus_ce), an ambiguous one -- a sample at 100 may be 1 % or
-100 % -- gets its gpu_utilization row deleted, which is what the fixed parse
-stores for a fresh job, and a clean one is left alone, without a write. The
-job_series triggers mirror the deletes and the updates.
+100 % -- gets its gpu_utilization row deleted and its fetch record pointed to
+a statistic the job still has, which is what the fixed parse stores for a
+fresh job, and a clean one is left alone, without a write. The job_series
+triggers mirror the deletes and the updates.
 
 Run where the prometheus file cache and the database are reachable, the way
 `sarc fetch/parse prometheus` runs:
@@ -34,7 +35,7 @@ from datetime import UTC, datetime, timedelta
 from math import isnan
 from zipfile import ZIP_LZMA, ZipFile
 
-from sqlmodel import Session, and_, col, select
+from sqlmodel import Session, and_, col, func, select
 from tqdm import tqdm
 
 from sarc.cache import Cache, CacheEntry
@@ -199,9 +200,13 @@ def process_entry(
     for candidate in ambiguous:
         # The fixed parse computes no gpu_utilization for this job, and an
         # upsert never deletes: remove the stale row here. The job_series
-        # delete trigger nulls the pivot columns and the fetchdate FK
-        # (ON DELETE SET NULL) drops its pointer on their own.
+        # delete trigger nulls the pivot columns on its own.
         sess.delete(candidate.stat)
+    # The deletes null the fetch records' pointer (ON DELETE SET NULL), and a
+    # NULL pointer means a fetch that produced no statistics.
+    sess.flush()
+    for candidate in ambiguous:
+        _repoint_fetch_record(sess, candidate.job)
 
     if dry_run:
         sess.rollback()  # _reparse flushed its writes; this undoes them all
@@ -272,6 +277,19 @@ def _reparse_keys(
         parse_prometheus_ce(sess, ce)
     finally:
         ce.close()
+
+
+def _repoint_fetch_record(sess: Session, job: SlurmJobDB) -> None:
+    """Point the job's fetch record to a statistic the job still has, NULL if none."""
+    remaining_id = sess.exec(
+        select(func.min(col(JobStatisticDB.id))).where(JobStatisticDB.job_id == job.id)
+    ).one()
+    fetch_record = sess.exec(
+        select(JobStatisticsFetchDateDB).where(
+            JobStatisticsFetchDateDB.job_id == job.id
+        )
+    ).one()
+    fetch_record.jobstatistic_id = remaining_id
 
 
 def log_report(results: list[tuple[Candidate, str]], dry_run: bool) -> None:
