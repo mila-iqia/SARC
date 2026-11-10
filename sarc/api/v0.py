@@ -3,7 +3,7 @@ from collections.abc import Generator
 from dataclasses import dataclass
 from datetime import datetime, timedelta
 from functools import reduce
-from typing import Annotated
+from typing import Annotated, Literal
 
 from fastapi import APIRouter, Depends, HTTPException, Path, Query, Request, status
 from pydantic import AfterValidator, BaseModel, Field
@@ -82,6 +82,22 @@ class Requestor:
     email: str
     user: UserDB | None = None
     is_admin: bool = False
+
+    def scope(self) -> int | Literal["admin"]:
+        """Non-admin → their own UserDB id, used to restrict every query to
+        their rows; admin (or auth off, where requestor yields admin) → the
+        sentinel ``"admin"``, no scoping. A string rather than None on purpose: a forgotten
+        return then yields None, a type error caught by the checker, instead of
+        silently masquerading as admin and granting full scope. Passed explicitly to
+        the filter helpers, mirroring how /v0 uses the requestor — no implicit/global
+        state. ``req.user`` is non-None for a non-admin (requestor raises 403
+        otherwise)."""
+        if self.is_admin:
+            return "admin"
+        # requestor guarantees a non-admin has a DB-loaded user (403 otherwise), and a
+        # persisted UserDB always has an int id (Optional only before insert).
+        assert self.user is not None and self.user.id is not None
+        return self.user.id
 
 
 def is_admin(
@@ -181,9 +197,11 @@ class JobQuery(BaseModel):
     requestor: Requestor
 
     def get_query[T: SelectOfScalar](self, query: T) -> T:
-        if not self.requestor.is_admin:
-            # TODO: implement query for general users
-            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+        scope = self.requestor.scope()
+        if scope != "admin":
+            query = query.where(SlurmJobDB.sarc_user_id == scope)
+        elif self.sarc_user_id is not None:
+            query = query.where(SlurmJobDB.sarc_user_id == self.sarc_user_id)
 
         if self.cluster_name is not None:
             query = query.join(SlurmClusterDB).where(
@@ -198,8 +216,6 @@ class JobQuery(BaseModel):
             query = query.where(SlurmJobDB.job_state == self.job_state)
         if self.cluster_user is not None:
             query = query.where(SlurmJobDB.cluster_user == self.cluster_user)
-        if self.sarc_user_id is not None:
-            query = query.where(SlurmJobDB.sarc_user_id == self.sarc_user_id)
         if self.email is not None:
             query = query.where(
                 SlurmJobDB.sarc_user_id == UserDB.id, UserDB.email == self.email
@@ -292,8 +308,11 @@ class JobSeriesQuery(BaseModel):
     requestor: Requestor
 
     def apply_filters[T: SelectOfScalar](self, query: T) -> T:
-        if not self.requestor.is_admin:
-            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+        scope = self.requestor.scope()
+        if scope != "admin":
+            query = query.where(JobSeriesDB.sarc_user_id == scope)
+        elif self.sarc_user_id is not None:
+            query = query.where(JobSeriesDB.sarc_user_id == self.sarc_user_id)
 
         if self.cluster_name is not None:
             query = query.where(JobSeriesDB.cluster_name == self.cluster_name)
@@ -306,8 +325,6 @@ class JobSeriesQuery(BaseModel):
             query = query.where(JobSeriesDB.job_state == self.job_state)
         if self.cluster_user is not None:
             query = query.where(JobSeriesDB.cluster_user == self.cluster_user)
-        if self.sarc_user_id is not None:
-            query = query.where(JobSeriesDB.sarc_user_id == self.sarc_user_id)
         if self.email is not None:
             query = query.where(JobSeriesDB.email == self.email)
         if self.end is not None:
@@ -403,9 +420,9 @@ class UserQuery(BaseModel):
             start = datetime.now(tz=UTC)
             end = start + timedelta(microseconds=1)
 
-        if not self.requestor.is_admin:
-            # TODO: implement query for general users
-            raise HTTPException(status_code=status.HTTP_501_NOT_IMPLEMENTED)
+        scope = self.requestor.scope()
+        if scope != "admin":
+            query = query.where(col(UserDB.id) == scope)
 
         if self.display_name is not None:
             query = query.where(

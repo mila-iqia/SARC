@@ -38,8 +38,9 @@ def queries(**endpoints):
     return pytest.mark.parametrize("query", expanded, ids=[q.id for q in expanded])
 
 
-# Endpoints using `requestor` + `get_query()` (raises 501 for non-admin):
-#   admin=200, user=501, not_in_db=403, guest=401
+# Endpoints using `requestor` + `get_query()` (non-admin queries are scoped to
+# the caller's own rows):
+#   admin=200, user=200, not_in_db=403, guest=401
 #
 # Endpoints using only `dependencies=[Depends(requestor)]` (no admin check in handler):
 #   admin=200/404, user=200/404, not_in_db=403, guest=401
@@ -55,10 +56,13 @@ def queries(**endpoints):
         "/v0/gpu/rgu", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}
     ),
     job_list=Endpoint(
-        "/v0/job/query", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
+        "/v0/job/query", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}
     ),
     job_count=Endpoint(
-        "/v0/job/count", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
+        "/v0/job/count", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}
+    ),
+    job_series=Endpoint(
+        "/v0/job/series", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}
     ),
     job_id=Endpoint(
         # Use a valid-format but nonexistent ObjectId to distinguish auth failures
@@ -67,7 +71,7 @@ def queries(**endpoints):
         {"admin": 404, "user": 403, "not_in_db": 403, "guest": 401},
     ),
     user_list=Endpoint(
-        "/v0/user/query", {"admin": 200, "user": 501, "not_in_db": 403, "guest": 401}
+        "/v0/user/query", {"admin": 200, "user": 200, "not_in_db": 403, "guest": 401}
     ),
     user_id=Endpoint(
         # Valid format, nonexistent user.

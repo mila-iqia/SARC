@@ -720,6 +720,70 @@ def test_health_list_with_states(empty_read_write_db, client):
     assert data[1]["last_message"] == "OK"
 
 
+_SCOPED_USER = "petitbonhomme@mila.quebec"  # UserDB id 9, owns 21 jobs
+_SCOPED_OTHER = "beaubonhomme@mila.quebec"  # UserDB id 10, owns 1 job
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_non_admin_job_query_is_scoped_to_self(app):
+    user = app.client(_SCOPED_USER)
+    jobs = user.get("/v0/job/query", expect_status=200).json()["results"]
+    assert len(jobs) == 21
+    assert all(j["sarc_user_id"] == 9 for j in jobs)
+    assert user.get("/v0/job/count", expect_status=200).json() == 21
+
+    # The admin still sees every user's jobs.
+    admin = app.client("admin@admin.admin")
+    assert admin.get("/v0/job/count", expect_status=200).json() > 21
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_non_admin_job_query_cannot_widen_scope(app):
+    """Another user's filters only narrow the scope (to nothing), never escape it."""
+    user = app.client(_SCOPED_USER)
+    for params in (
+        {"email": _SCOPED_OTHER},
+        {"sarc_user_id": 10},
+        {"cluster_user": "beaubonhomme"},
+    ):
+        jobs = user.get("/v0/job/query", params=params, expect_status=200).json()[
+            "results"
+        ]
+        assert jobs == []
+        assert user.get("/v0/job/count", params=params, expect_status=200).json() == 0
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_non_admin_series_query_is_scoped_to_self(app):
+    user = app.client(_SCOPED_USER)
+    series = user.get("/v0/job/series", expect_status=200).json()["results"]
+    assert len(series) == 21
+    assert all(s["sarc_user_id"] == 9 for s in series)
+
+    series = user.get(
+        "/v0/job/series", params={"email": _SCOPED_OTHER}, expect_status=200
+    ).json()["results"]
+    assert series == []
+
+
+@pytest.mark.usefixtures("read_only_db")
+def test_non_admin_user_query_sees_only_self(app):
+    user = app.client(_SCOPED_USER)
+    users = user.get("/v0/user/query", expect_status=200).json()["results"]
+    assert [u["email"] for u in users] == [_SCOPED_USER]
+
+    users = user.get(
+        "/v0/user/query", params={"email": _SCOPED_OTHER}, expect_status=200
+    ).json()["results"]
+    assert users == []
+
+    # A user with no matching filters of their own still only sees themselves.
+    users = user.get(
+        "/v0/user/query", params={"display_name": "Bonhomme"}, expect_status=200
+    ).json()["results"]
+    assert [u["email"] for u in users] == [_SCOPED_USER]
+
+
 def test_health_list_with_error_trace(empty_read_write_db, client):
     hc = BeanCheck(name="evil_check", active=True, beans=666)
     result = hc()
