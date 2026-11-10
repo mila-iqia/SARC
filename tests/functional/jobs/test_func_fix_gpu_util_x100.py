@@ -18,6 +18,8 @@ the candidate set the tests count.
 
 import importlib.util
 import json
+import logging
+import sys
 from datetime import UTC, datetime, timedelta
 from pathlib import Path
 
@@ -234,3 +236,25 @@ def test_fix_rescales_drops_and_leaves(
     assert (_util(sess, contaminated).mean, _util(sess, contaminated).max) == (0.5, 1.0)
     assert _util(sess, ambiguous) is None
     assert (_util(sess, saturated).mean, _util(sess, saturated).max) == (0.785, 1.0)
+
+
+def test_main_reports(jobless_read_write_db, enabled_cache, monkeypatch, caplog):
+    # The report reads jobs that main()'s last rollback expired.
+    monkeypatch.setattr(sys, "argv", ["fix_gpu_util_x100.py"])
+    # Keep main() from reconfiguring logging for the rest of the test run.
+    monkeypatch.setattr(logging, "basicConfig", lambda **_: None)
+    sess = jobless_read_write_db
+    job = _seed(sess, [4001])[4001]
+    _seed_stat_and_fetch_date(sess, job, 50.0, 100.0, FETCH)
+    t0 = X100_SINCE + 3600
+    with Cache("prometheus").create_entry(FETCH) as ce:
+        ce.add_value(
+            _key(job),
+            json.dumps(_dcgm_series(4001, [(t0, 5000), (t0 + 30, 0)])).encode(),
+        )
+
+    with caplog.at_level(logging.INFO):
+        fixer.main()
+
+    assert f"rescaled, e.g. {_label(job)}" in caplog.text
+    assert "1 candidates: 1 would be rescaled, 0 would be dropped" in caplog.text

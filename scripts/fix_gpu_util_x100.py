@@ -114,7 +114,8 @@ def main():
             results += process_entry(
                 sess, cache, entry_time, candidates, dry_run=args.dry_run
             )
-    log_report(results, args.dry_run)
+        # In the session: the report reloads jobs the last commit or rollback expired.
+        log_report(results, args.dry_run)
 
 
 def load_candidates(sess: Session) -> dict[datetime, list[Candidate]]:
