@@ -223,12 +223,12 @@ async def upload_report(
                 detail=f"Report larger than {cfg.max_size} bytes",
             )
 
-    if config.cache is None:
+    if config.storage is None:
         raise HTTPException(
             status_code=status.HTTP_503_SERVICE_UNAVAILABLE,
             detail="Cache directory not configured; cannot store reports",
         )
-    reports_dir = config.cache / cfg.subdirectory / category
+    reports_dir = config.storage / "reports" / cfg.subdirectory / category
     reports_dir.mkdir(parents=True, exist_ok=True)
 
     stamp = datetime.now(UTC).strftime("%Y%m%dT%H%M%S")

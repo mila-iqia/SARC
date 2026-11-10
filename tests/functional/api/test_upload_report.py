@@ -17,9 +17,10 @@ def fresh_limiter():
 
 @pytest.fixture
 def reports_dir(tmp_path):
-    """Point the cache at ``tmp_path`` and return the report directory."""
-    with gifnoc.overlay({"sarc.cache": str(tmp_path)}):
-        yield tmp_path / "user-reports"
+    """Point the storage directory at ``tmp_path`` and return the report
+    directory (``<storage>/reports/user-reports``, where uploads land)."""
+    with gifnoc.overlay({"sarc.storage": str(tmp_path)}):
+        yield tmp_path / "reports" / "user-reports"
 
 
 @pytest.fixture
@@ -154,8 +155,9 @@ def test_rejects_oversize(anon_client, reports_dir):
     assert response.status_code == 429
 
 
-def test_rejects_when_cache_disabled(anon_client, disabled_cache):
-    response = post_report(anon_client)
+def test_rejects_when_storage_disabled(anon_client):
+    with gifnoc.overlay({"sarc.storage": None}):
+        response = post_report(anon_client)
     assert response.status_code == 503
 
 
