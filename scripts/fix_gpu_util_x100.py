@@ -20,9 +20,11 @@ fresh job, and a clean one is left alone, without a write. The job_series
 triggers mirror the deletes and the updates.
 
 Run where the prometheus file cache and the database are reachable, the way
-`sarc fetch/parse prometheus` runs:
+`sarc fetch/parse prometheus` runs. The dry run, the default, writes nothing;
+--no-dry-run writes:
 
     SARC_CONFIG=<file> uv run python scripts/fix_gpu_util_x100.py --dry-run
+    SARC_CONFIG=<file> uv run python scripts/fix_gpu_util_x100.py --no-dry-run
 """
 
 import argparse
