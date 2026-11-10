@@ -444,7 +444,9 @@ def compute_job_statistics(
         metric_to_data[result["metric"]["__name__"]].append(result)
 
     sm_active_series, utilization_series = gpu_activity_series(metric_to_data)
-    utilization_series = rescale_gpu_utilization(utilization_series, metric_to_data)
+    utilization_series = rescale_gpu_utilization(
+        utilization_series, metric_to_data, job.cluster.name
+    )
     if utilization_series is None:
         # A sample at 100 may be 1 % or 100 %: store no utilization rather
         # than a possibly false one.

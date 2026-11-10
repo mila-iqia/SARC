@@ -181,7 +181,9 @@ def process_entry(
             if candidate is None:
                 continue
             found.add(ref)
-            status = judge_raw_series(json.loads(value.decode("utf-8")))
+            status = judge_raw_series(
+                json.loads(value.decode("utf-8")), candidate.cluster_name
+            )
             statuses.append((candidate, status))
             if status == STATUS_RESCALED:
                 rescaled_keys.append((key, value))
@@ -239,7 +241,7 @@ def _ref_of_key(key: str) -> tuple[str, int, datetime]:
     )
 
 
-def judge_raw_series(prom_stats: list[dict]) -> str:
+def judge_raw_series(prom_stats: list[dict], cluster_name: str) -> str:
     """What the parse-time judgement does with one job's raw series."""
     metric_to_data: dict[str, list[dict]] = {
         metric: [] for metric in JOB_STATISTICS_METRIC_NAMES
@@ -247,7 +249,7 @@ def judge_raw_series(prom_stats: list[dict]) -> str:
     for result in prom_stats:
         metric_to_data[result["metric"]["__name__"]].append(result)
     _, utilization = gpu_activity_series(metric_to_data)
-    rescaled = rescale_gpu_utilization(utilization, metric_to_data)
+    rescaled = rescale_gpu_utilization(utilization, metric_to_data, cluster_name)
     if rescaled is None:
         return STATUS_AMBIGUOUS
     if _samples_changed(utilization, rescaled):

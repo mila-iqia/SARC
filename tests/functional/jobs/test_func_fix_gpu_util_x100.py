@@ -2,9 +2,10 @@
 no package to live in).
 
 One cache entry holds the raw series of a contaminated job (x100 values,
-before the 0.5.1 release), of an ambiguous one (samples at 100 only, one at
-or after the release) and of a clean saturated one (a sample at 57 rules out
-exporter 0.5.0). The contaminated and ambiguous rows are seeded with the
+before the 0.5.1 release), of an ambiguous one (samples at 0 and 100 only,
+the test cluster raisin being given rorqual's X100_UNTIL) and of a clean
+saturated one (a sample at 57 rules out exporter 0.5.0). The contaminated
+and ambiguous rows are seeded with the
 inflated statistics the corrupted parse stored, and every fetch record points
 to its job's row, as the parse leaves it. The ambiguous job also has a
 gpu_power row, for its fetch record to point to once its gpu_utilization row
@@ -26,7 +27,7 @@ from sarc.cache import Cache
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.db.users import UserDB
-from sarc.scraping.gpu_util_x100 import FIXED_SINCE, X100_SINCE
+from sarc.scraping.gpu_util_x100 import X100_SINCE, X100_UNTIL
 from tests.db.factory import JobFactory
 
 
@@ -151,7 +152,10 @@ def _process(sess, cache: Cache, entry_time: datetime, dry_run: bool) -> dict[st
     return {_label(c.job): status for c, status in results}
 
 
-def test_fix_rescales_drops_and_leaves(jobless_read_write_db, enabled_cache):
+def test_fix_rescales_drops_and_leaves(
+    jobless_read_write_db, enabled_cache, monkeypatch
+):
+    monkeypatch.setitem(X100_UNTIL, "raisin", X100_UNTIL["rorqual"])
     sess = jobless_read_write_db
     jobs = _seed(sess, [4001, 4002, 4003, 4004, 4005])
     contaminated, ambiguous, saturated = jobs[4001], jobs[4002], jobs[4003]
@@ -175,17 +179,7 @@ def test_fix_rescales_drops_and_leaves(jobless_read_write_db, enabled_cache):
         )
         ce.add_value(
             _key(ambiguous),
-            json.dumps(
-                _dcgm_series(
-                    4002,
-                    [
-                        (t0, 0),
-                        (t0 + 30, 100),
-                        (FIXED_SINCE + 30, 0),
-                        (FIXED_SINCE + 60, 100),
-                    ],
-                )
-            ).encode(),
+            json.dumps(_dcgm_series(4002, [(t0, 0), (t0 + 30, 100)])).encode(),
         )
         ce.add_value(
             _key(saturated),
