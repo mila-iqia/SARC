@@ -85,9 +85,9 @@ def test_0_5_0_divided():
 )
 def test_x100_outside_x100_until_logged(caplog, cluster, start, logged):
     with caplog.at_level(logging.WARNING):
-        values = _rescale(_series(UTIL, [4000], start), cluster=cluster)
-    # Divided anyway: only 0.5.0 sends more than 100.
-    assert values == [40]
+        values = _rescale(_series(UTIL, [4000, 100], start), cluster=cluster)
+    # Divided anyway: only 0.5.0 sends more than 100, so the 100 is 1 %.
+    assert values == [40, 1]
     assert ("outside X100_UNTIL" in caplog.text) == logged
 
 
@@ -116,6 +116,12 @@ def test_hundreds_after_x100_until_kept():
 def test_hundreds_on_cluster_without_x100_kept():
     values = _rescale(_series(UTIL, [100, 0], DURING_X100), cluster="mila")
     assert values == [100, 0]
+
+
+def test_hundreds_after_x100_until_kept_beside_x100():
+    # A steady 100 % across the upgrade: 10000 on 0.5.0, then 100 on 0.5.1.
+    start = X100_UNTIL["rorqual"] - 30
+    assert _rescale(_series(UTIL, [10000, 100, 100], start)) == [100, 100, 100]
 
 
 def test_dcgm_blank_untouched():

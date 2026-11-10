@@ -133,14 +133,16 @@ def rescale_gpu_utilization(
         # Not 0.5.0, or a job mixing versions: only the values above 100
         # come from 0.5.0.
         return _divide_series(utilization, only_above_100=True)
+    until = X100_UNTIL.get(cluster_name)
     if any(v > 100 for v in values):
-        # Multiples of 100, one above 100: 0.5.0.
-        return _divide_series(utilization)
+        # Multiples of 100, one above 100: 0.5.0. From X100_UNTIL on, its
+        # samples at 100 are 0.5.1's (100 %), unless the job also sent more
+        # than 100 there.
+        return _divide_series(utilization, until=until if unexpected is None else None)
     hundreds = [t for t, v in recent if v == 100]
     if not hundreds:
         # Zeros only.
         return utilization
-    until = X100_UNTIL.get(cluster_name)
     if until is None or all(t >= until for t in hundreds):
         # Zeros and 100, none while the cluster ran 0.5.0: 100 %.
         return utilization
@@ -164,24 +166,33 @@ def _nvml(metric_to_data: dict[str, list[dict]]) -> bool:
     )
 
 
-def _divide_series(utilization: list[dict], only_above_100: bool = False) -> list[dict]:
-    """Divide by 100 the real values 0.5.0 may have sent, or only those above 100."""
+def _divide_series(
+    utilization: list[dict], only_above_100: bool = False, until: float | None = None
+) -> list[dict]:
+    """Divide by 100 the real values 0.5.0 may have sent, or only those above 100.
+
+    Values up to 100 taken from `until` on are kept.
+    """
     return [
         {
             **s,
             "values": [
-                [t, _divide(float(t), float(v), only_above_100)] for t, v in s["values"]
+                [t, _divide(float(t), float(v), only_above_100, until)]
+                for t, v in s["values"]
             ],
         }
         for s in utilization
     ]
 
 
-def _divide(timestamp: float, value: float, only_above_100: bool) -> float:
+def _divide(
+    timestamp: float, value: float, only_above_100: bool, until: float | None
+) -> float:
     if (
         timestamp < X100_SINCE
         or value >= DCGM_FP64_BLANK
         or (only_above_100 and value <= 100)
+        or (until is not None and timestamp >= until and value <= 100)
     ):
         return value
     return value / 100
