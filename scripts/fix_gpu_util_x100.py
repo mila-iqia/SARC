@@ -1,4 +1,4 @@
-"""Re-repair gpu_utilization statistics stored during the exporter 0.5.0 x100.
+"""Repair gpu_utilization statistics stored during the exporter 0.5.0 x100.
 
 slurm-job-exporter 0.5.0 in DCGM mode published the GPU utilization x100 (see
 sarc/scraping/gpu_util_x100): jobs parsed while a cluster ran it are stored
@@ -314,10 +314,9 @@ def log_report(results: list[tuple[Candidate, str]], dry_run: bool) -> None:
 
     rescaled = sum(s == STATUS_RESCALED for _, s in results)
     dropped = sum(s == STATUS_AMBIGUOUS for _, s in results)
-    verb = "would be" if dry_run else ""
+    verb = "would be " if dry_run else ""
     logger.info(
-        f"{len(results)} candidates: {rescaled} {verb} rescaled, "
-        f"{dropped} {verb} dropped"
+        f"{len(results)} candidates: {rescaled} {verb}rescaled, {dropped} {verb}dropped"
     )
 
 

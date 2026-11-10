@@ -87,8 +87,8 @@ logger = logging.getLogger(__name__)
 # the fix, was published on 2026-10-07 15:04:01 UTC.
 X100_SINCE = datetime(2026, 9, 24, 17, 16, 4, tzinfo=UTC).timestamp()
 # The clusters that ran 0.5.0, each with a time from which none of its nodes
-# did. Elsewhere, or from that time on, a sample at 100 is 100 %, and a sample
-# above 100 is logged.
+# did. Elsewhere, or from that time on, a sample at 100 is 100 %; a sample
+# above 100 is divided and logged, and forfeits that reading for its job.
 X100_UNTIL: dict[str, float] = {
     "rorqual": datetime(2026, 10, 8, tzinfo=UTC).timestamp()
 }
