@@ -16,7 +16,9 @@ from datetime import UTC, datetime
 from sarc.scraping.dcgm import DCGM_FP64_BLANK
 
 # Publication times of slurm-job-exporter 0.5.0 (the x100) and 0.5.1 (its
-# fix): clusters are assumed to run official releases only.
+# fix): clusters are assumed to run official releases only, so samples
+# before X100_SINCE are not 0.5.0's. FIXED_SINCE decides nothing: zeros and
+# 100 are undecided wherever they fall.
 X100_SINCE = datetime(2026, 9, 24, 17, 16, 4, tzinfo=UTC).timestamp()
 FIXED_SINCE = datetime(2026, 10, 7, 15, 4, 1, tzinfo=UTC).timestamp()
 
@@ -59,9 +61,8 @@ def rescale_gpu_utilization(
     if not hundreds:
         # Zeros only.
         return utilization
-    if all(t < FIXED_SINCE for t in hundreds):
-        # Zeros and 100 before 0.5.1 existed: 0.5.0.
-        return _divide_series(utilization)
+    # Only zeros and 100. Unable to determine if we are before 0.5.0, in 0.5.0, or in 0.5.1.
+    # Let's just return nothing (no data).
     return None
 
 

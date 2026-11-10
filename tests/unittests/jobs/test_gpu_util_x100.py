@@ -75,17 +75,13 @@ def test_zeros_only_untouched():
 
 
 @pytest.mark.parametrize("prof", [True, False])
-def test_hundreds_before_fix_divided(prof):
-    series = [_series(UTIL, [100, 0], BEFORE_FIX)]
+@pytest.mark.parametrize("start", [BEFORE_FIX, AFTER_FIX, FIXED_SINCE - 30])
+def test_hundreds_undecided(prof, start):
+    # Zeros and 100 only: no scale is ruled out, wherever in the window.
+    series = [_series(UTIL, [100, 0], start)]
     if prof:
-        series.append(_series(SM_ACTIVE, [1, 1], BEFORE_FIX))
-    assert _rescale(*series) == [1, 0]
-
-
-@pytest.mark.parametrize("start", [AFTER_FIX, FIXED_SINCE - 30])
-def test_hundreds_after_fix_undecided(start):
-    # From FIXED_SINCE - 30, only the second 100 is after the fix.
-    assert _rescale(_series(UTIL, [100, 100], start)) is None
+        series.append(_series(SM_ACTIVE, [1, 1], start))
+    assert _rescale(*series) is None
 
 
 def test_dcgm_blank_untouched():
