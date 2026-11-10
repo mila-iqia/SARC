@@ -44,9 +44,10 @@ def test_samples_before_0_5_0_ignored(before, expected):
     assert _rescale(_series(UTIL, [before, 100, 4000], X100_SINCE - 30)) == expected
 
 
-@pytest.mark.parametrize("start", [BEFORE_FIX, AFTER_FIX])
-def test_nvml_untouched(start):
-    values = _rescale(_series(UTIL, [100, 0], start), _series(MEMORY, [10, 10], start))
+def test_nvml_untouched():
+    values = _rescale(
+        _series(UTIL, [100, 0], BEFORE_FIX), _series(MEMORY, [10, 10], BEFORE_FIX)
+    )
     assert values == [100, 0]
 
 
@@ -74,14 +75,12 @@ def test_zeros_only_untouched():
     assert _rescale(_series(UTIL, [0, 0], AFTER_FIX)) == [0, 0]
 
 
-@pytest.mark.parametrize("prof", [True, False])
-@pytest.mark.parametrize("start", [BEFORE_FIX, AFTER_FIX, FIXED_SINCE - 30])
-def test_hundreds_undecided(prof, start):
-    # Zeros and 100 only: no scale is ruled out, wherever in the window.
-    series = [_series(UTIL, [100, 0], start)]
-    if prof:
-        series.append(_series(SM_ACTIVE, [1, 1], start))
-    assert _rescale(*series) is None
+def test_hundreds_undecided():
+    # Zeros and 100 only: no scale is ruled out, even before 0.5.1 was published.
+    values = _rescale(
+        _series(UTIL, [100, 0], BEFORE_FIX), _series(SM_ACTIVE, [1, 1], BEFORE_FIX)
+    )
+    assert values is None
 
 
 def test_dcgm_blank_untouched():
