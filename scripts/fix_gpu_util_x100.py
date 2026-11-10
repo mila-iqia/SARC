@@ -75,6 +75,45 @@ class Candidate:
         return f"{self.cluster_name}:{self.job.job_id}@{self.job.submit_time.isoformat(timespec='seconds')}"
 
 
+def main():
+    parser = argparse.ArgumentParser(
+        description=(
+            "Re-judge the stored gpu_utilization statistics of the jobs fetched "
+            "while slurm-job-exporter 0.5.0 could have published them x100."
+        )
+    )
+    parser.add_argument(
+        "--dry-run",
+        action=argparse.BooleanOptionalAction,
+        default=True,
+        help="Judge and report, write nothing to the database.",
+    )
+    args = parser.parse_args()
+    # force=True: importing sarc modules already put a root handler in place at
+    # WARNING level, which would silently swallow this script's INFO report.
+    logging.basicConfig(
+        level=logging.INFO,
+        format="%(asctime)s::%(levelname)s::%(name)s::%(message)s",
+        force=True,
+    )
+
+    with config.db.session() as sess:
+        candidates_by_entry = load_candidates(sess)
+        total = sum(len(candidates) for candidates in candidates_by_entry.values())
+        logger.info(
+            f"{total} candidate rows across {len(candidates_by_entry)} cache entries"
+        )
+        cache = Cache("prometheus")
+        results: list[tuple[Candidate, str]] = []
+        for entry_time, candidates in tqdm(
+            sorted(candidates_by_entry.items()), desc="read cache"
+        ):
+            results += process_entry(
+                sess, cache, entry_time, candidates, dry_run=args.dry_run
+            )
+    log_report(results, args.dry_run)
+
+
 def load_candidates(sess: Session) -> dict[datetime, list[Candidate]]:
     """The rows to re-judge, grouped by the cache entry that holds their raw series."""
     since = datetime.fromtimestamp(X100_SINCE, tz=UTC)
@@ -114,31 +153,6 @@ def load_candidates(sess: Session) -> dict[datetime, list[Candidate]]:
 def _cache_entry_time(fetch_date: datetime) -> datetime:
     """The cache entry a fetch_date names: the filename keeps milliseconds only."""
     return fetch_date.replace(microsecond=fetch_date.microsecond // 1000 * 1000)
-
-
-def judge_raw_series(prom_stats: list[dict]) -> str:
-    """What the parse-time judgement does with one job's raw series."""
-    metric_to_data: dict[str, list[dict]] = {
-        metric: [] for metric in JOB_STATISTICS_METRIC_NAMES
-    }
-    for result in prom_stats:
-        metric_to_data[result["metric"]["__name__"]].append(result)
-    _, utilization = gpu_activity_series(metric_to_data)
-    rescaled = rescale_gpu_utilization(utilization, metric_to_data)
-    if rescaled is None:
-        return STATUS_AMBIGUOUS
-    if _samples_changed(utilization, rescaled):
-        return STATUS_RESCALED
-    return STATUS_UNCHANGED
-
-
-def _samples_changed(before: list[dict], after: list[dict]) -> bool:
-    """Whether the rescale divided any value; rescale returns `before` itself when it divides none."""
-    old = [float(v) for s in before for _, v in s["values"]]
-    new = [float(v) for s in after for _, v in s["values"]]
-    return len(old) != len(new) or any(
-        x != y and not (isnan(x) and isnan(y)) for x, y in zip(old, new, strict=True)
-    )
 
 
 def process_entry(
@@ -183,10 +197,10 @@ def process_entry(
     if rescaled_keys:
         _reparse_keys(sess, entry_time, rescaled_keys)
     for candidate in ambiguous:
-        # The parse upserts what it computes and never deletes: the row the
-        # fixed parse would not store must go. The job_series delete trigger
-        # nulls the pivot columns, and jobstatistics_fetchdate's foreign key
-        # (ON DELETE SET NULL) drops its pointer.
+        # The fixed parse computes no gpu_utilization for this job, and an
+        # upsert never deletes: remove the stale row here. The job_series
+        # delete trigger nulls the pivot columns and the fetchdate FK
+        # (ON DELETE SET NULL) drops its pointer on their own.
         sess.delete(candidate.stat)
 
     if dry_run:
@@ -217,6 +231,31 @@ def _ref_of_key(key: str) -> tuple[str, int, datetime]:
         cluster_name,
         int(job_id),
         datetime.fromisoformat(submit_time).astimezone(UTC),
+    )
+
+
+def judge_raw_series(prom_stats: list[dict]) -> str:
+    """What the parse-time judgement does with one job's raw series."""
+    metric_to_data: dict[str, list[dict]] = {
+        metric: [] for metric in JOB_STATISTICS_METRIC_NAMES
+    }
+    for result in prom_stats:
+        metric_to_data[result["metric"]["__name__"]].append(result)
+    _, utilization = gpu_activity_series(metric_to_data)
+    rescaled = rescale_gpu_utilization(utilization, metric_to_data)
+    if rescaled is None:
+        return STATUS_AMBIGUOUS
+    if _samples_changed(utilization, rescaled):
+        return STATUS_RESCALED
+    return STATUS_UNCHANGED
+
+
+def _samples_changed(before: list[dict], after: list[dict]) -> bool:
+    """Whether the rescale divided any value; rescale returns `before` itself when it divides none."""
+    old = [float(v) for s in before for _, v in s["values"]]
+    new = [float(v) for s in after for _, v in s["values"]]
+    return len(old) != len(new) or any(
+        x != y and not (isnan(x) and isnan(y)) for x, y in zip(old, new, strict=True)
     )
 
 
@@ -257,45 +296,6 @@ def log_report(results: list[tuple[Candidate, str]], dry_run: bool) -> None:
         f"{len(results)} candidates: {rescaled} {verb} rescaled, "
         f"{dropped} {verb} dropped"
     )
-
-
-def main():
-    parser = argparse.ArgumentParser(
-        description=(
-            "Re-judge the stored gpu_utilization statistics of the jobs fetched "
-            "while slurm-job-exporter 0.5.0 could have published them x100."
-        )
-    )
-    parser.add_argument(
-        "--dry-run",
-        action=argparse.BooleanOptionalAction,
-        default=True,
-        help="Judge and report, write nothing to the database.",
-    )
-    args = parser.parse_args()
-    # force=True: importing sarc modules already put a root handler in place at
-    # WARNING level, which would silently swallow this script's INFO report.
-    logging.basicConfig(
-        level=logging.INFO,
-        format="%(asctime)s::%(levelname)s::%(name)s::%(message)s",
-        force=True,
-    )
-
-    with config.db.session() as sess:
-        candidates_by_entry = load_candidates(sess)
-        total = sum(len(candidates) for candidates in candidates_by_entry.values())
-        logger.info(
-            f"{total} candidate rows across {len(candidates_by_entry)} cache entries"
-        )
-        cache = Cache("prometheus")
-        results: list[tuple[Candidate, str]] = []
-        for entry_time, candidates in tqdm(
-            sorted(candidates_by_entry.items()), desc="read cache"
-        ):
-            results += process_entry(
-                sess, cache, entry_time, candidates, dry_run=args.dry_run
-            )
-    log_report(results, args.dry_run)
 
 
 if __name__ == "__main__":
