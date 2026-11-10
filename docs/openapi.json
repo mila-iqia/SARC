@@ -1080,7 +1080,7 @@
   "/upload-report": {
    "post": {
     "summary": "Upload Report",
-    "description": "Upload a Markdown report; anyone may post one.\n\nThe report must be a ``.md`` file of at most ``max_size`` bytes.\n``category`` is required and selects the subdirectory the report lands\nin; it must be one of ``categories``. An unknown or non-whitelisted\ncategory is refused with a 400, and \u2014 like any other failed upload \u2014 it\nspends the caller's slot; an omitted category is a plain 422. Each\nclient IP may upload ``max_per_ip`` reports per ``window_seconds``, and\nno more than ``max_total`` per window are accepted overall; a\nrate-limited request gets a 429 with a ``Retry-After`` header. Uploads\nrejected for size still consume the caller's slot, so spamming oversized\nfiles is no cheaper than uploading. The report is saved in\n``<storage>/reports/<subdirectory>/<category>/`` under a unique name\nderived from the uploaded filename.",
+    "description": "Upload a Markdown report; anyone may post one.\n\nThe report must be a ``.md`` file of at most ``max_size`` bytes.\n``category`` is required and selects the subdirectory the report lands\nin; it must be one of ``categories``. An unknown or non-whitelisted\ncategory is refused with a 400, and \u2014 like any other failed upload \u2014 it\nspends the caller's slot; an omitted category is a plain 422. Each\nclient IP may upload ``max_per_ip`` reports per ``window_seconds``, and\nno more than ``max_total`` per window are accepted overall; a\nrate-limited request gets a 429 with a ``Retry-After`` header. Uploads\nrejected for size still consume the caller's slot, so spamming oversized\nfiles is no cheaper than uploading. The report is saved in\n``<storage>/<subdirectory>/<category>/`` under a unique name\nderived from the uploaded filename.",
     "operationId": "upload_report_upload_report_post",
     "parameters": [
      {
@@ -1113,6 +1113,124 @@
         "schema": {
          "$ref": "#/components/schemas/UploadReportResponse"
         }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/reports": {
+   "get": {
+    "summary": "Browse Reports",
+    "description": "Serve the report browser: one page, three modes picked by the query\nparameters, so the whole interface is two links deep with no client-side\nstate.\n\n* ``/reports`` \u2014 the categories present on disk (one appears when its\n  first report is uploaded), with report counts and last-upload times.\n* ``/reports?category=...`` \u2014 that category's reports, newest first.\n* ``/reports?category=...&file=...`` \u2014 one report rendered from Markdown;\n  ``/reports/download`` serves the file itself.\n\nAdmin-only through the router's dependencies.",
+    "operationId": "browse_reports_reports_get",
+    "parameters": [
+     {
+      "name": "category",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Category (subdirectory) to list.",
+       "title": "Category"
+      },
+      "description": "Category (subdirectory) to list."
+     },
+     {
+      "name": "file",
+      "in": "query",
+      "required": false,
+      "schema": {
+       "anyOf": [
+        {
+         "type": "string"
+        },
+        {
+         "type": "null"
+        }
+       ],
+       "description": "Report (.md file) to view; needs a category.",
+       "title": "File"
+      },
+      "description": "Report (.md file) to view; needs a category."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "text/html": {
+        "schema": {
+         "type": "string"
+        }
+       }
+      }
+     },
+     "422": {
+      "description": "Validation Error",
+      "content": {
+       "application/json": {
+        "schema": {
+         "$ref": "#/components/schemas/HTTPValidationError"
+        }
+       }
+      }
+     }
+    }
+   }
+  },
+  "/reports/download": {
+   "get": {
+    "summary": "Download Report",
+    "description": "Serve one stored report as a file attachment; the page above renders\nit instead. Admin-only like the rest of the router.",
+    "operationId": "download_report_reports_download_get",
+    "parameters": [
+     {
+      "name": "category",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "description": "Category (subdirectory) of the report.",
+       "title": "Category"
+      },
+      "description": "Category (subdirectory) of the report."
+     },
+     {
+      "name": "file",
+      "in": "query",
+      "required": true,
+      "schema": {
+       "type": "string",
+       "description": "Report (.md file) to download.",
+       "title": "File"
+      },
+      "description": "Report (.md file) to download."
+     }
+    ],
+    "responses": {
+     "200": {
+      "description": "Successful Response",
+      "content": {
+       "application/json": {
+        "schema": {}
        }
       }
      },

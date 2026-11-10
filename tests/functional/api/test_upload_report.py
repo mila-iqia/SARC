@@ -17,10 +17,13 @@ def fresh_limiter():
 
 @pytest.fixture
 def reports_dir(tmp_path):
-    """Point the storage directory at ``tmp_path`` and return the report
-    directory (``<storage>/reports/user-reports``, where uploads land)."""
+    """Point the storage directory at ``tmp_path`` and return the directory
+    uploads land in (``<storage>/<report_upload.subdirectory>``; derived from
+    the config so a default change cannot silently desync this fixture)."""
+    from sarc.config import config
+
     with gifnoc.overlay({"sarc.storage": str(tmp_path)}):
-        yield tmp_path / "reports" / "user-reports"
+        yield tmp_path / config.server.report_upload.subdirectory
 
 
 @pytest.fixture

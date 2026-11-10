@@ -29,6 +29,7 @@ def oauth_mock(oauth_port):
 @pytest.fixture(scope="function")
 def app(oauth_mock, oauth_port):
     from sarc.api.metrics import router as metrics_router
+    from sarc.api.reports import browser_router as reports_browser_router
     from sarc.api.reports import router as reports_router
     from sarc.api.v0 import router
 
@@ -50,8 +51,11 @@ def app(oauth_mock, oauth_port):
         # The /dash router shares the same OAuth gate (Depends(requestor)); mount
         # it here so test_metrics can reuse app.client(email) for the three roles.
         app.include_router(metrics_router)
-        # Public report uploads (no auth gate), exercised by test_upload_report.
+        # Public report uploads (no auth gate) and the admin-only /reports
+        # browse interface, exercised by test_upload_report and
+        # test_reports_browser.
         app.include_router(reports_router)
+        app.include_router(reports_browser_router)
         server_config = config.server
         assert server_config is not None
         if server_config.auth is not None:

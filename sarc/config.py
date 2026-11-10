@@ -472,8 +472,9 @@ class ReportUploadConfig:
     (see ``sarc.api.reports``).
     """
 
-    subdirectory: str = "user-reports"
-    """Directory under ``cache`` where uploaded reports are stored."""
+    subdirectory: str = "reports"
+    """Directory under ``storage`` where uploaded reports are stored
+    (see ``sarc.api.reports``)."""
 
     categories: list[str] = field(default_factory=lambda: ["general"])
     """Whitelist of the ``category`` values the upload endpoint accepts; each
