@@ -199,8 +199,12 @@ class JobQuery(BaseModel):
     def get_query[T: SelectOfScalar](self, query: T) -> T:
         scope = self.requestor.scope()
         if scope != "admin":
+            # A non-admin only ever sees their own jobs; the filters below
+            # (sarc_user_id, email, cluster_user, ...) can only narrow this
+            # scope further (to nothing for someone else's jobs), never widen
+            # it or be overridden by them.
             query = query.where(SlurmJobDB.sarc_user_id == scope)
-        elif self.sarc_user_id is not None:
+        if self.sarc_user_id is not None:
             query = query.where(SlurmJobDB.sarc_user_id == self.sarc_user_id)
 
         if self.cluster_name is not None:
@@ -310,8 +314,9 @@ class JobSeriesQuery(BaseModel):
     def apply_filters[T: SelectOfScalar](self, query: T) -> T:
         scope = self.requestor.scope()
         if scope != "admin":
+            # Non-admins see only their own series, like JobQuery above.
             query = query.where(JobSeriesDB.sarc_user_id == scope)
-        elif self.sarc_user_id is not None:
+        if self.sarc_user_id is not None:
             query = query.where(JobSeriesDB.sarc_user_id == self.sarc_user_id)
 
         if self.cluster_name is not None:
