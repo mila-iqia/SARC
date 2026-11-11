@@ -229,9 +229,11 @@ def test_fix_rescales_drops_and_leaves(
         3.0,
     )
 
-    # Re-running converges: the rescaled row is still a candidate (its divided
-    # max is exactly 1.0) but lands on the same statistics.
-    _process(sess, cache, ENTRY, dry_run=False)
+    # Re-running changes nothing: the rescaled row is still a candidate (its
+    # divided max is exactly 1.0), but it already holds the rescaled statistics.
+    statuses = _process(sess, cache, ENTRY, dry_run=False)
+    assert statuses[_label(contaminated)] == fixer.STATUS_UNCHANGED
+    assert _label(ambiguous) not in statuses
     sess.expire_all()
     assert (_util(sess, contaminated).mean, _util(sess, contaminated).max) == (0.5, 1.0)
     assert _util(sess, ambiguous) is None

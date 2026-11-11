@@ -12,12 +12,13 @@ entry per fetch run, the filename truncated to the millisecond), under the
 key "<cluster>$<job_id>$<submit_time>".
 
 For each candidate the script re-runs the parse-time judgement on the raw
-series: a rescaled series is rewritten through the regular parse code
-(parse_prometheus_ce), an ambiguous one -- a sample at 100 may be 1 % or
-100 % -- gets its gpu_utilization row deleted and its fetch record pointed to
-a statistic the job still has, which is what the fixed parse stores for a
-fresh job, and a clean one is left alone, without a write. The job_series
-triggers mirror the deletes and the updates.
+series. When the rescale divides samples, the row gets the statistics the
+fixed parse computes from them, unless it already holds them (a re-run, or a
+job parsed after the fix). An ambiguous series -- a sample at 100 may be 1 %
+or 100 % -- gets its gpu_utilization row deleted and its fetch record pointed
+to a statistic the job still has, which is what the fixed parse stores for a
+fresh job. Any other row is left alone. The job_series triggers mirror the
+deletes and the updates.
 
 Run where the prometheus file cache and the database are reachable, the way
 `sarc fetch/parse prometheus` runs. The dry run, the default, writes nothing;
@@ -28,31 +29,28 @@ Run where the prometheus file cache and the database are reachable, the way
 """
 
 import argparse
-import io
 import json
 import logging
 from collections import Counter, defaultdict
 from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from math import isnan
-from zipfile import ZIP_LZMA, ZipFile
 
 from sqlmodel import Session, and_, col, func, select
 from tqdm import tqdm
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import config
-from sarc.db import get_meta
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
 from sarc.scraping.gpu_util_x100 import X100_SINCE, rescale_gpu_utilization
-from sarc.scraping.prometheus import parse_prometheus_ce
-from sarc.scraping.series import JOB_STATISTICS_METRIC_NAMES, gpu_activity_series
-
-# Register every table on the shared metadata, as `sarc parse prometheus` ends
-# up doing: the parse updates slurm_jobs.gpu_type, whose foreign key targets
-# `gpurgudb`, a model module this script otherwise never imports.
-get_meta()
+from sarc.scraping.series import (
+    JOB_STATISTICS_METRIC_NAMES,
+    STATS,
+    _percent,
+    compute_metric_statistics,
+    gpu_activity_series,
+)
 
 logger = logging.getLogger("fix_gpu_util_x100")
 
@@ -174,7 +172,6 @@ def process_entry(
         return [(candidate, STATUS_MISSING_ENTRY) for candidate in candidates]
 
     statuses: list[tuple[Candidate, str]] = []
-    rescaled_keys: list[tuple[str, bytes]] = []
     ambiguous: list[Candidate] = []
     found: set[tuple[str, int, datetime]] = set()
     try:
@@ -184,13 +181,16 @@ def process_entry(
             if candidate is None:
                 continue
             found.add(ref)
-            status = judge_raw_series(
-                json.loads(value.decode("utf-8")), candidate.cluster_name
+            status, stats = judge_raw_series(
+                candidate.stat,
+                json.loads(value.decode("utf-8")),
+                candidate.cluster_name,
             )
             statuses.append((candidate, status))
-            if status == STATUS_RESCALED:
-                rescaled_keys.append((key, value))
-            elif status == STATUS_AMBIGUOUS:
+            if stats is not None:
+                for name, stat_value in stats.items():
+                    setattr(candidate.stat, name, stat_value)
+            if status == STATUS_AMBIGUOUS:
                 ambiguous.append(candidate)
     finally:
         ce.close()
@@ -200,8 +200,6 @@ def process_entry(
         if ref not in found
     ]
 
-    if rescaled_keys:
-        _reparse_keys(sess, entry_time, rescaled_keys)
     for candidate in ambiguous:
         # The fixed parse computes no gpu_utilization for this job, and an
         # upsert never deletes: remove the stale row here. The job_series
@@ -214,7 +212,7 @@ def process_entry(
         _repoint_fetch_record(sess, candidate.job)
 
     if dry_run:
-        sess.rollback()  # _reparse flushed its writes; this undoes them all
+        sess.rollback()
     else:
         sess.commit()
     return statuses
@@ -244,8 +242,10 @@ def _ref_of_key(key: str) -> tuple[str, int, datetime]:
     )
 
 
-def judge_raw_series(prom_stats: list[dict], cluster_name: str) -> str:
-    """What the parse-time judgement does with one job's raw series."""
+def judge_raw_series(
+    stat: JobStatisticDB, prom_stats: list[dict], cluster_name: str
+) -> tuple[str, STATS | None]:
+    """The row's status, with the statistics to write into it when it is rescaled."""
     metric_to_data: dict[str, list[dict]] = {
         metric: [] for metric in JOB_STATISTICS_METRIC_NAMES
     }
@@ -254,10 +254,16 @@ def judge_raw_series(prom_stats: list[dict], cluster_name: str) -> str:
     _, utilization = gpu_activity_series(metric_to_data)
     rescaled = rescale_gpu_utilization(utilization, metric_to_data, cluster_name)
     if rescaled is None:
-        return STATUS_AMBIGUOUS
-    if _samples_changed(utilization, rescaled):
-        return STATUS_RESCALED
-    return STATUS_UNCHANGED
+        return STATUS_AMBIGUOUS, None
+    if not _samples_changed(utilization, rescaled):
+        return STATUS_UNCHANGED, None
+    # As compute_job_statistics computes gpu_utilization.
+    stats = compute_metric_statistics(rescaled, normalization=_percent)
+    assert stats is not None  # a divided sample is a real one
+    if _same_statistics(stat, stats):
+        # Written by an earlier run, or by the fixed parse.
+        return STATUS_UNCHANGED, None
+    return STATUS_RESCALED, stats
 
 
 def _samples_changed(before: list[dict], after: list[dict]) -> bool:
@@ -269,19 +275,9 @@ def _samples_changed(before: list[dict], after: list[dict]) -> bool:
     )
 
 
-def _reparse_keys(
-    sess: Session, entry_time: datetime, entries: list[tuple[str, bytes]]
-) -> None:
-    """Feed the rescaled candidates' raw series back through the regular parse."""
-    buffer = io.BytesIO()
-    zf = ZipFile(buffer, mode="w", compression=ZIP_LZMA)
-    for key, value in entries:
-        zf.writestr(key, value)
-    ce = CacheEntry(zf, entry_time)
-    try:
-        parse_prometheus_ce(sess, ce)
-    finally:
-        ce.close()
+def _same_statistics(stat: JobStatisticDB, stats: STATS) -> bool:
+    """Whether the row holds exactly `stats`: same samples, same computation."""
+    return all(getattr(stat, name) == value for name, value in stats.items())
 
 
 def _repoint_fetch_record(sess: Session, job: SlurmJobDB) -> None:
