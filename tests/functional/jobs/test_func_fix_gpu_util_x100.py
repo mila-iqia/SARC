@@ -240,6 +240,29 @@ def test_fix_rescales_drops_and_leaves(
     assert (_util(sess, saturated).mean, _util(sess, saturated).max) == (0.785, 1.0)
 
 
+def _candidate_job_ids(sess) -> list[int]:
+    return sorted(
+        c.job.job_id
+        for candidates in fixer.load_candidates(sess).values()
+        for c in candidates
+    )
+
+
+def test_max_at_1_candidate_only_on_x100_until_clusters(
+    jobless_read_write_db, monkeypatch
+):
+    # A max of 1.0 is a sample at 100: 100 % unless the cluster ran 0.5.0.
+    sess = jobless_read_write_db
+    jobs = _seed(sess, [4001, 4002, 4003])
+    _seed_stat_and_fetch_date(sess, jobs[4001], 0.25, 0.5, FETCH)
+    _seed_stat_and_fetch_date(sess, jobs[4002], 0.5, 1.0, FETCH)
+    _seed_stat_and_fetch_date(sess, jobs[4003], 1.5, 3.0, FETCH)
+
+    assert _candidate_job_ids(sess) == [4003]
+    monkeypatch.setitem(X100_UNTIL, "raisin", X100_UNTIL["rorqual"])
+    assert _candidate_job_ids(sess) == [4002, 4003]
+
+
 def test_main_reports(jobless_read_write_db, enabled_cache, monkeypatch, caplog):
     # The report reads jobs that main()'s last rollback expired.
     monkeypatch.setattr(sys, "argv", ["fix_gpu_util_x100.py"])

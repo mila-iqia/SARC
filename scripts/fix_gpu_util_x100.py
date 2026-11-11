@@ -4,12 +4,14 @@ slurm-job-exporter 0.5.0 in DCGM mode published the GPU utilization x100 (see
 sarc/scraping/gpu_util_x100): jobs parsed while a cluster ran it are stored
 inflated, and the rescale at parse time only helps jobs parsed after the fix.
 
-Candidates are the `gpu_utilization` rows with `max >= 1.0` fetched from
-X100_SINCE on: the rescale only changes a stored statistic when a divided
-sample lands at >= 1.0, and it never divides samples before X100_SINCE. The
-row's fetch_date names the cache entry that holds the job's raw series (one
-entry per fetch run, the filename truncated to the millisecond), under the
-key "<cluster>$<job_id>$<submit_time>".
+Candidates are the `gpu_utilization` rows fetched from X100_SINCE on, as the
+rescale never divides earlier samples, and whose max is:
+- above 1.0: a raw sample above 100, divided on any cluster;
+- exactly 1.0 on a cluster of X100_UNTIL: a sample at 100 that may be 1 %.
+Elsewhere a sample at 100 is 100 %, and the rescale leaves the row as it is.
+The row's fetch_date names the cache entry that holds the job's raw series
+(one entry per fetch run, the filename truncated to the millisecond), under
+the key "<cluster>$<job_id>$<submit_time>".
 
 For each candidate the script re-runs the parse-time judgement on the raw
 series. When the rescale divides samples, the row gets the statistics the
@@ -36,14 +38,14 @@ from dataclasses import dataclass
 from datetime import UTC, datetime, timedelta
 from math import isnan
 
-from sqlmodel import Session, and_, col, func, select
+from sqlmodel import Session, and_, col, func, or_, select
 from tqdm import tqdm
 
 from sarc.cache import Cache, CacheEntry
 from sarc.config import config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import JobStatisticDB, JobStatisticsFetchDateDB, SlurmJobDB
-from sarc.scraping.gpu_util_x100 import X100_SINCE, rescale_gpu_utilization
+from sarc.scraping.gpu_util_x100 import X100_SINCE, X100_UNTIL, rescale_gpu_utilization
 from sarc.scraping.series import (
     JOB_STATISTICS_METRIC_NAMES,
     STATS,
@@ -138,7 +140,16 @@ def load_candidates(sess: Session) -> dict[datetime, list[Candidate]]:
             JobStatisticsFetchDateDB,
             col(JobStatisticsFetchDateDB.job_id) == col(SlurmJobDB.id),
         )
-        .where(JobStatisticDB.max >= 1.0, JobStatisticsFetchDateDB.fetch_date >= since)
+        .where(
+            JobStatisticsFetchDateDB.fetch_date >= since,
+            or_(
+                col(JobStatisticDB.max) > 1.0,
+                and_(
+                    col(JobStatisticDB.max) == 1.0,
+                    col(SlurmClusterDB.name).in_(list(X100_UNTIL)),
+                ),
+            ),
+        )
         .order_by(col(JobStatisticsFetchDateDB.fetch_date))
     ).all()
     candidates_by_entry: dict[datetime, list[Candidate]] = defaultdict(list)
