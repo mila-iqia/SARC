@@ -253,6 +253,10 @@ _HTML = """\
   .pair-name  { color: #e6edf3; }
   .pair-mid   { color: #8b949e; font-size: 11px; }
 
+  th.sortable { cursor: pointer; user-select: none; }
+  th.sortable:hover { color: #c9d1d9; }
+  .sort-arrow { color: #58a6ff; }
+
   .hidden { display: none; }
 </style>
 </head>
@@ -276,7 +280,7 @@ _HTML = """\
   <table>
     <thead>
       <tr>
-        <th>Display name</th>
+        <th class="sortable" id="th-all-name">Display name <span class="sort-arrow" id="arrow-all-name">▲</span></th>
         <th>Email</th>
         <th>Match IDs</th>
       </tr>
@@ -309,7 +313,7 @@ _HTML = """\
       <div class="match-col-inner">
         <table>
           <thead>
-            <tr><th>Display name</th><th>Email</th><th>DRAC username</th><th>CCI</th><th>Action</th></tr>
+            <tr><th class="sortable" id="th-drac-name">Display name <span class="sort-arrow" id="arrow-drac-name">▲</span></th><th>Email</th><th>DRAC username</th><th>CCI</th><th>Action</th></tr>
           </thead>
           <tbody id="tbody-drac"></tbody>
         </table>
@@ -326,7 +330,7 @@ _HTML = """\
       <div class="match-col-inner">
         <table>
           <thead>
-            <tr><th>Display name</th><th>Email</th><th>LDAP ID</th></tr>
+            <tr><th class="sortable" id="th-ldap-name">Display name <span class="sort-arrow" id="arrow-ldap-name">▲</span></th><th>Email</th><th>LDAP ID</th></tr>
           </thead>
           <tbody id="tbody-ldap"></tbody>
         </table>
@@ -406,15 +410,22 @@ function refKey(ref) { return `${ref.name}:${ref.mid}`; }
 (function() {
   const tbody = document.getElementById("tbody-all");
   const countEl = document.getElementById("count-all");
+  let sortAsc = true;
+
+  function byName(a, b) {
+    return a.display_name.localeCompare(b.display_name, undefined, { sensitivity: "base" });
+  }
 
   function render(q) {
     q = q.trim().toLowerCase();
     let n = 0;
-    tbody.innerHTML = USERS.filter(u => {
+    const filtered = USERS.filter(u => {
       const flat = `${u.display_name} ${u.email} ${u.drac_username || ""} ` +
         Object.entries(u.matching_ids).map(([p,m]) => `${p} ${m}`).join(" ");
       return !q || flat.toLowerCase().includes(q);
-    }).map(u => {
+    });
+    filtered.sort((a, b) => sortAsc ? byName(a, b) : byName(b, a));
+    tbody.innerHTML = filtered.map(u => {
       n++;
       const badges = Object.entries(u.matching_ids).map(([p,m]) => badge(p,m)).join("") +
         usernameBadge(u);
@@ -428,6 +439,11 @@ function refKey(ref) { return `${ref.name}:${ref.mid}`; }
   }
 
   document.getElementById("search-all").addEventListener("input", e => render(e.target.value));
+  document.getElementById("th-all-name").addEventListener("click", () => {
+    sortAsc = !sortAsc;
+    document.getElementById("arrow-all-name").textContent = sortAsc ? "▲" : "▼";
+    render(document.getElementById("search-all").value);
+  });
   render("");
 })();
 
@@ -441,6 +457,19 @@ function refKey(ref) { return `${ref.name}:${ref.mid}`; }
     u.drac_username && !("mila_ldap" in u.matching_ids));
   const ldapOnly = USERS.filter(u =>
     "mila_ldap" in u.matching_ids && !u.drac_username);
+
+  // Sort the two pools by display name (arrays are sorted in place, so the
+  // rendered tables and the auto-pair/load logic keep that order).
+  let dracSortAsc = true;
+  let ldapSortAsc = true;
+  function byName(a, b) {
+    return a.display_name.localeCompare(b.display_name, undefined, { sensitivity: "base" });
+  }
+  function sortByName(arr, asc) {
+    arr.sort((a, b) => asc ? byName(a, b) : byName(b, a));
+  }
+  sortByName(dracOnly, dracSortAsc);
+  sortByName(ldapOnly, ldapSortAsc);
 
   const pairs = [];         // [{drac: user, ldap: user}]
   // Ignored DRAC users: refKey → matching id ({name, mid}), see dracRef
@@ -808,6 +837,20 @@ function refKey(ref) { return `${ref.name}:${ref.mid}`; }
   // ---- search wiring ---------------------------------------------------
   document.getElementById("search-drac").addEventListener("input", e => renderDrac(e.target.value));
   document.getElementById("search-ldap").addEventListener("input", e => renderLdap(e.target.value));
+
+  // ---- sort by display name --------------------------------------------
+  document.getElementById("th-drac-name").addEventListener("click", () => {
+    dracSortAsc = !dracSortAsc;
+    document.getElementById("arrow-drac-name").textContent = dracSortAsc ? "▲" : "▼";
+    sortByName(dracOnly, dracSortAsc);
+    renderDrac(document.getElementById("search-drac").value);
+  });
+  document.getElementById("th-ldap-name").addEventListener("click", () => {
+    ldapSortAsc = !ldapSortAsc;
+    document.getElementById("arrow-ldap-name").textContent = ldapSortAsc ? "▲" : "▼";
+    sortByName(ldapOnly, ldapSortAsc);
+    renderLdap(document.getElementById("search-ldap").value);
+  });
 
   // ---- init ------------------------------------------------------------
   renderAll();
