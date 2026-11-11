@@ -3,7 +3,7 @@
 In DCGM mode, 0.5.0 publishes `slurm_job_utilization_gpu` as DCGM's integer
 percentage times 100 (0, 100, ..., 10000); 0.5.1 (#73) and the NVML mode
 publish the percentage itself. The exporter exposes no version, so the job
-is judged by its values: only DCGM 0.5.0 sends more than 100, and it sends
+is judged by its values: only 0.5.0 sends more than 100, and it sends
 multiples of 100 only. A job sampled only at 0 and 100 stays undecided where
 and while a cluster ran 0.5.0 (X100_UNTIL). The exporter's mode is not a
 judgement input: NVML never published a value above 100, and only clusters

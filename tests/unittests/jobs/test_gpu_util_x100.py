@@ -45,8 +45,8 @@ def test_0_5_1_untouched():
 
 
 def test_mixed_versions_only_above_100_divided():
-    # 0.5.0 then 0.5.1: the 100 may be 1 %, but is kept.
-    start = X100_UNTIL["rorqual"] - 30
+    # 0.5.0 then 0.5.1: the 100, sent before X100_UNTIL, may be 1 %, but is kept.
+    start = X100_UNTIL["rorqual"] - 60
     assert _rescale(_series(UTIL, [4000, 100, 37], start)) == [40, 100, 37]
 
 

@@ -11,9 +11,6 @@ to its job's row, as the parse leaves it. The ambiguous job also has a
 gpu_power row, for its fetch record to point to once its gpu_utilization row
 is deleted. Two more candidates have no raw series to find: their key in the
 cache entry, and the cache entry itself.
-
-On `jobless_read_write_db`: the seeded jobs of `read_write_db` would widen
-the candidate set the tests count.
 """
 
 import importlib.util

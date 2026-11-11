@@ -278,7 +278,7 @@ def judge_raw_series(
 
 
 def _samples_changed(before: list[dict], after: list[dict]) -> bool:
-    """Whether the rescale divided any value; rescale returns `before` itself when it divides none."""
+    """Whether the rescale divided any value; it may return an undivided copy."""
     old = [float(v) for s in before for _, v in s["values"]]
     new = [float(v) for s in after for _, v in s["values"]]
     return len(old) != len(new) or any(

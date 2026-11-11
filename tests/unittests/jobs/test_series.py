@@ -290,7 +290,7 @@ def test_compute_job_statistics_rescales_exporter_0_5_0_utilization():
 
 
 def test_compute_job_statistics_drops_undecided_utilization(caplog):
-    # While rorqual ran 0.5.0: a 100 may be 1 % (0.5.0) or 100 % (0.5.1).
+    # While rorqual ran 0.5.0: a 100 may be 1 % (0.5.0) or 100 %.
     series = [
         _series(
             [100, 0],
