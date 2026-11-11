@@ -5,7 +5,9 @@ percentage times 100 (0, 100, ..., 10000); 0.5.1 (#73) and the NVML mode
 publish the percentage itself. The exporter exposes no version, so the job
 is judged by its values: only DCGM 0.5.0 sends more than 100, and it sends
 multiples of 100 only. A job sampled only at 0 and 100 stays undecided where
-and while a cluster ran 0.5.0 (X100_UNTIL).
+and while a cluster ran 0.5.0 (X100_UNTIL). The exporter's mode is not a
+judgement input: NVML never published a value above 100, and only clusters
+that ran 0.5.0 have an X100_UNTIL entry.
 
 Like gpu_activity_series, the job is judged as a whole: in a job spanning
 nodes on different exporter versions, or an exporter upgrade, the samples
@@ -46,30 +48,18 @@ X100_UNTIL: dict[str, float] = {
     "rorqual": datetime(2026, 10, 8, tzinfo=UTC).timestamp()
 }
 
-_MEMORY = "slurm_job_utilization_gpu_memory"
-# Published in DCGM mode only, when profiling is readable. _MEMORY is left
-# out: it is a profiling metric in DCGM mode, but NVML mode publishes it too.
-_DCGM_ONLY = (
-    "slurm_job_sm_active_gpu",
-    "slurm_job_sm_occupancy_gpu",
-    "slurm_job_fp16_gpu",
-    "slurm_job_fp32_gpu",
-    "slurm_job_fp64_gpu",
-)
-
 
 def rescale_gpu_utilization(
-    utilization: list[dict], metric_to_data: dict[str, list[dict]], cluster_name: str
+    utilization: list[dict], cluster_name: str
 ) -> list[dict] | None:
     """Divide by 100 the samples of `utilization` that exporter 0.5.0 sent.
 
-    `utilization` holds the job's true utilization series, `metric_to_data`
-    all its series by metric name. Returns None when the job's samples at
-    100 may be 1 % or 100 %.
+    `utilization` holds the job's true utilization series. Returns None when
+    the job's samples at 100 may be 1 % or 100 %.
     """
     samples = [(float(t), float(v)) for s in utilization for t, v in s["values"]]
     recent = [(t, v) for t, v in samples if _may_be_x100(t, v)]
-    if not recent or _is_nvml(metric_to_data):
+    if not recent:
         return utilization
     # A cluster absent from X100_UNTIL never ran 0.5.0.
     x100_until = X100_UNTIL.get(cluster_name, X100_SINCE)
@@ -118,13 +108,6 @@ def _first_unexpected_x100(
     cluster ran no 0.5.0."""
     times = [t for t, v in recent if v > 100 and t >= x100_until]
     return min(times, default=None)
-
-
-def _is_nvml(metric_to_data: dict[str, list[dict]]) -> bool:
-    """NVML mode always publishes the memory utilization, never a DCGM-only one."""
-    return bool(metric_to_data.get(_MEMORY)) and not any(
-        metric_to_data.get(name) for name in _DCGM_ONLY
-    )
 
 
 def _divide_series(utilization: list[dict], x100_until: float) -> list[dict]:

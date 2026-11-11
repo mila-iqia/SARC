@@ -1,5 +1,4 @@
 import logging
-from collections import defaultdict
 
 import pytest
 
@@ -12,8 +11,6 @@ DURING_X100 = X100_SINCE + 86400
 AFTER_X100 = X100_UNTIL["rorqual"] + 86400
 
 UTIL = "slurm_job_utilization_gpu"
-SM_ACTIVE = "slurm_job_sm_active_gpu"
-MEMORY = "slurm_job_utilization_gpu_memory"
 
 
 def _series(name, values, start, instance="cn-a001", delta=30):
@@ -25,10 +22,7 @@ def _series(name, values, start, instance="cn-a001", delta=30):
 
 def _rescale(*series, cluster="rorqual"):
     """The job's rescaled utilization values, or None."""
-    metric_to_data = defaultdict(list)
-    for s in series:
-        metric_to_data[s["metric"]["__name__"]].append(s)
-    rescaled = rescale_gpu_utilization(metric_to_data[UTIL], metric_to_data, cluster)
+    rescaled = rescale_gpu_utilization(list(series), cluster)
     if rescaled is None:
         return None
     return [float(v) for s in rescaled for _, v in s["values"]]
@@ -46,19 +40,8 @@ def test_samples_before_0_5_0_ignored(before, expected):
     assert _rescale(_series(UTIL, [before, 100, 4000], X100_SINCE - 30)) == expected
 
 
-def test_nvml_untouched():
-    values = _rescale(
-        _series(UTIL, [100, 0], DURING_X100), _series(MEMORY, [10, 10], DURING_X100)
-    )
-    assert values == [100, 0]
-
-
 def test_0_5_1_untouched():
-    values = _rescale(
-        _series(UTIL, [100, 37, 0], AFTER_X100),
-        _series(SM_ACTIVE, [1, 1, 1], AFTER_X100),
-    )
-    assert values == [100, 37, 0]
+    assert _rescale(_series(UTIL, [100, 37, 0], AFTER_X100)) == [100, 37, 0]
 
 
 def test_mixed_versions_only_above_100_divided():
@@ -68,11 +51,7 @@ def test_mixed_versions_only_above_100_divided():
 
 
 def test_0_5_0_divided():
-    values = _rescale(
-        _series(UTIL, [100, 4000, 0], DURING_X100),
-        _series(SM_ACTIVE, [1, 1, 1], DURING_X100),
-    )
-    assert values == [1, 40, 0]
+    assert _rescale(_series(UTIL, [100, 4000, 0], DURING_X100)) == [1, 40, 0]
 
 
 @pytest.mark.parametrize(
@@ -97,10 +76,7 @@ def test_zeros_only_untouched():
 
 def test_hundreds_undecided():
     # Zeros and 100 only, while rorqual ran 0.5.0: no scale is ruled out.
-    values = _rescale(
-        _series(UTIL, [100, 0], DURING_X100), _series(SM_ACTIVE, [1, 1], DURING_X100)
-    )
-    assert values is None
+    assert _rescale(_series(UTIL, [100, 0], DURING_X100)) is None
 
 
 def test_hundreds_straddling_x100_until_undecided():
@@ -114,6 +90,7 @@ def test_hundreds_after_x100_until_kept():
 
 
 def test_hundreds_on_cluster_without_x100_kept():
+    # A cluster absent from X100_UNTIL never ran 0.5.0, NVML mode or not.
     values = _rescale(_series(UTIL, [100, 0], DURING_X100), cluster="mila")
     assert values == [100, 0]
 

@@ -113,8 +113,9 @@ def _series(job_id: int, name: str, samples: list[tuple[float, float]]) -> dict:
 
 
 def _dcgm_series(job_id: int, samples: list[tuple[float, float]]) -> list[dict]:
-    """The utilization series plus the PROF metrics ruling out NVML mode
-    (sarc.scraping.gpu_util_x100._is_nvml), the PROF ones undivided."""
+    """The utilization series plus the exporter 0.5 sm_active and sm_occupancy
+    series (what makes gpu_activity_series hand back the utilization as the
+    true one), the PROF ones never divided."""
     return [
         _series(job_id, "slurm_job_utilization_gpu", samples),
         _series(job_id, "slurm_job_sm_active_gpu", samples),

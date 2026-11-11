@@ -263,7 +263,7 @@ def judge_raw_series(
     for result in prom_stats:
         metric_to_data[result["metric"]["__name__"]].append(result)
     _, utilization = gpu_activity_series(metric_to_data)
-    rescaled = rescale_gpu_utilization(utilization, metric_to_data, cluster_name)
+    rescaled = rescale_gpu_utilization(utilization, cluster_name)
     if rescaled is None:
         return STATUS_AMBIGUOUS, None
     if not _samples_changed(utilization, rescaled):
