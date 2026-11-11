@@ -1,0 +1,79 @@
+{#
+  Jinja2 template — rendered by browse_reports() in reports.py; NOT a static
+  file. Keep the .html extension: Starlette uses select_autoescape, so HTML
+  auto-escaping is ON for .html but OFF for .j2 / .html.j2 (renaming would
+  expose category and file names to XSS). The rendered report body is the
+  one `| safe` value, and it is safe because mistune ran with escape=True
+  (see _markdown in reports.py): reports are uploaded by anyone, and this
+  page is read by admins.
+-#}
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8" />
+  <title>Reports{% if mode == "category" %} — {{ category }}{% elif mode == "report" %} — {{ report.name }}{% endif %}</title>
+  <style>
+    :root { color-scheme: light; }
+    body { font-family: system-ui, sans-serif; margin: 32px; color: #222; }
+    h1 { margin: 0 0 2px; font-size: 1.35em; font-weight: 600; }
+    h1 a { color: inherit; text-decoration: none; }
+    h1 .crumb { color: #999; font-weight: 400; }
+    .sub { color: #777; font-size: 0.85em; margin: 0 0 18px; }
+    table { border-collapse: collapse; }
+    th, td { text-align: left; padding: 4px 22px 4px 0; font-size: 14px; }
+    th { color: #555; font-size: 11px; text-transform: uppercase;
+         letter-spacing: 0.05em; border-bottom: 1px solid #ddd; }
+    .num { text-align: right; }
+    a { color: #1a6fd4; }
+    .empty { color: #777; font-size: 14px; }
+    article.report { max-width: 860px; font-size: 15px; line-height: 1.5; }
+    article.report pre { background: #f5f5f5; padding: 10px; border-radius: 6px;
+                         overflow-x: auto; }
+    article.report code { background: #f0f0f0; padding: 1px 4px; border-radius: 3px; }
+    article.report pre code { background: none; padding: 0; }
+    article.report table { border-collapse: collapse; margin: 8px 0; }
+    article.report th, article.report td { border: 1px solid #ddd;
+                                           padding: 3px 10px; font-size: 14px; }
+  </style>
+</head>
+<body>
+  {% if mode == "home" %}
+  <h1>Reports</h1>
+  <p class="sub">Markdown reports uploaded through <code>POST /upload-report</code>; times are UTC.</p>
+    {% if categories %}
+  <table>
+    <tr><th>Category</th><th class="num">Reports</th><th>Last upload</th></tr>
+    {% for c in categories %}
+    <tr><td><a href="{{ c.url }}">{{ c.name }}</a></td><td class="num">{{ c.count }}</td><td>{{ c.latest }}</td></tr>
+    {% endfor %}
+  </table>
+    {% else %}
+  <p class="empty">No reports uploaded yet.</p>
+    {% endif %}
+
+  {% elif mode == "category" %}
+  <h1><a href="/reports">Reports</a> <span class="crumb">/ {{ category }}</span></h1>
+  <p class="sub">{{ files|length }} report(s), newest first; times are UTC.</p>
+    {% if files %}
+  <table>
+    <tr><th>Report</th><th class="num">Size</th><th>Uploaded</th><th></th></tr>
+    {% for f in files %}
+    <tr>
+      <td><a href="{{ f.view_url }}">{{ f.name }}</a></td>
+      <td class="num">{{ f.size }}</td>
+      <td>{{ f.mtime }}</td>
+      <td><a href="{{ f.download_url }}">download</a></td>
+    </tr>
+    {% endfor %}
+  </table>
+    {% else %}
+  <p class="empty">No reports in this category.</p>
+    {% endif %}
+
+  {% else %}
+  <h1><a href="/reports">Reports</a> <span class="crumb">/ <a href="{{ category_url }}">{{ category }}</a> / {{ report.name }}</span></h1>
+  <p class="sub"><a href="{{ report.download_url }}">Download</a> &middot; {{ report.size }} &middot; uploaded {{ report.mtime }} UTC</p>
+  <article class="report">{{ report.html|safe }}</article>
+  {% endif %}
+</body>
+</html>
