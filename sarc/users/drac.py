@@ -30,6 +30,8 @@ class DRACMemberConfig:
 
 class DRACMemberScraper(UserScraper[DRACMemberConfig]):
     config_type = DRACMemberConfig
+    # DRAC names and emails (often personal) only fill in missing values.
+    provides_reference_identity = False
 
     def get_user_data(self, config: DRACMemberConfig) -> bytes:
         return json.dumps(
