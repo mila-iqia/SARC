@@ -674,12 +674,7 @@ function refKey(ref) { return `${ref.name}:${ref.mid}`; }
 
   btnDownloadIgnore.addEventListener("click", () => {
     const data = Array.from(ignored.values()).map(ref => ({ matching_id: ref }));
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "drac_ignored.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    saveJson(data, "drac_ignored.json");
   });
 
   btnLoadIgnore.addEventListener("click", () => fileInputIgnore.click());
@@ -789,17 +784,42 @@ function refKey(ref) { return `${ref.name}:${ref.mid}`; }
   });
 
   // ---- download --------------------------------------------------------
+  // Save JSON to a file: prefer the File System Access API (pick location and
+  // name); fall back to a prompt + classic browser download (Safari, Firefox).
+  async function saveJson(data, suggestedName) {
+    const json = JSON.stringify(data, null, 2);
+    if (window.showSaveFilePicker) {
+      try {
+        const handle = await showSaveFilePicker({
+          suggestedName,
+          types: [{ description: "JSON file", accept: { "application/json": [".json"] } }],
+        });
+        const writable = await handle.createWritable();
+        await writable.write(json);
+        await writable.close();
+        return;
+      } catch (err) {
+        if (err.name === "AbortError") return;  // user cancelled the dialog
+      }
+    }
+    const name = prompt("Save file as:", suggestedName);
+    if (name === null) return;
+    let filename = name.trim() || suggestedName;
+    if (!/\\.json$/i.test(filename)) filename += ".json";
+    const blob = new Blob([json], { type: "application/json" });
+    const a = document.createElement("a");
+    a.href = URL.createObjectURL(blob);
+    a.download = filename;
+    a.click();
+    URL.revokeObjectURL(a.href);
+  }
+
   btnDownload.addEventListener("click", () => {
     const data = pairs.map(p => ({
       matching_id: dracRef(p.drac),
       known_matches: [{ name: "mila_ldap", mid: p.ldap.matching_ids.mila_ldap }],
     }));
-    const blob = new Blob([JSON.stringify(data, null, 2)], { type: "application/json" });
-    const a = document.createElement("a");
-    a.href = URL.createObjectURL(blob);
-    a.download = "usermatches.json";
-    a.click();
-    URL.revokeObjectURL(a.href);
+    saveJson(data, "usermatches.json");
   });
 
   // ---- auto-pair by email ----------------------------------------------
