@@ -45,23 +45,6 @@ from sarc.db.users import MatchingID, UserDB
 from sarc.models.job import SlurmState
 
 
-def _scope(req: Requestor) -> int | Literal["admin"]:
-    """Non-admin → their own UserDB id, used to restrict every /dash query to
-    their jobs; admin (or auth off, where requestor yields admin) → the sentinel
-    ``"admin"``, no scoping. A string rather than None on purpose: a forgotten
-    return then yields None, a type error caught by the checker, instead of
-    silently masquerading as admin and granting full scope. Passed explicitly to
-    the filter helpers, mirroring how /v0 uses the requestor — no implicit/global
-    state. ``req.user`` is non-None for a non-admin (requestor raises 403
-    otherwise)."""
-    if req.is_admin:
-        return "admin"
-    # requestor guarantees a non-admin has a DB-loaded user (403 otherwise), and a
-    # persisted UserDB always has an int id (Optional only before insert).
-    assert req.user is not None and req.user.id is not None
-    return req.user.id
-
-
 def _find_user_by_email(sess: Session, email: str) -> UserDB | None:
     """mila_ldap email -> UserDB row, or None if unknown. Mirrors the lookup in
     ``requestor()``; used to resolve an admin's ``as_user`` override."""
@@ -75,12 +58,12 @@ def _find_user_by_email(sess: Session, email: str) -> UserDB | None:
 def _scope_or_view_as(
     sess: Session, req: Requestor, as_user: str | None
 ) -> int | Literal["admin"]:
-    """Scope for a /dash data query: ``_scope(req)`` by default, or — admin
+    """Scope for a /dash data query: ``req.scope()`` by default, or — admin
     only — the impersonated user's id when ``as_user`` is set (the dashboard's
     "view as user" preview). Fails closed: 403 for a non-admin, 404 for an
     unknown email, never a silent fallback to the admin's full view."""
     if as_user is None:
-        return _scope(req)
+        return req.scope()
     if not req.is_admin:
         raise HTTPException(status_code=403, detail="as_user is admin-only")
     target = _find_user_by_email(sess, as_user)
