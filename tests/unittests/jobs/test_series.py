@@ -12,26 +12,31 @@ from sarc.scraping.dcgm import (
     DCGM_FP64_NOT_PERMISSIONED,
     DCGM_FP64_NOT_SUPPORTED,
 )
+from sarc.scraping.gpu_util_x100 import X100_SINCE
 from sarc.scraping.series import compute_job_statistics, compute_metric_statistics
 from tests.db.factory import base_job
 
 T0 = int(datetime(2023, 1, 1, tzinfo=UTC).timestamp())
 
 
-def _series(values, delta=30, name="some_metric", **labels):
+def _series(values, delta=30, name="some_metric", start=T0, **labels):
     """One raw Prometheus series as returned by custom_query."""
     return {
         "metric": {"__name__": name, **labels},
-        "values": [[T0 + i * delta, str(v)] for i, v in enumerate(values)],
+        "values": [[start + i * delta, str(v)] for i, v in enumerate(values)],
     }
 
 
-def _job(**patch):
+def _job(cluster_name="raisin", **patch):
     """A detached SlurmJobDB built from the factory's base fields."""
     fields = {k: v for k, v in base_job.items() if k != "cluster_name"}
     fields.update(cluster_id=1, sarc_user_id=1, job_state=SlurmState.CANCELLED)
     fields.update(patch)
-    return SlurmJobDB(**fields)
+    job = SlurmJobDB(**fields)
+    job.cluster = SlurmClusterDB(
+        name=cluster_name, domain="mila.quebec", start_date=date(2020, 1, 1)
+    )
+    return job
 
 
 def test_compute_metric_statistics(captrace):
@@ -186,19 +191,11 @@ def _prof_blackout_series():
     ]
 
 
-def _job_with_cluster():
-    job = _job()
-    job.cluster = SlurmClusterDB(
-        name="raisin", domain="mila.quebec", start_date=date(2020, 1, 1)
-    )
-    return job
-
-
 def test_compute_job_statistics_drops_prof_family_on_blackout(caplog):
     # Zero occupancy AND zero DRAM activity on a job that drew 200 W: the
     # PROF family lies (blocked hardware counters), only DEV power survives.
     with caplog.at_level(logging.WARNING):
-        stats = compute_job_statistics(_job_with_cluster(), _prof_blackout_series())
+        stats = compute_job_statistics(_job(), _prof_blackout_series())
     assert set(stats) == {"gpu_power"}
     assert "DCGM PROF blackout" in caplog.text
     assert "dropping stats: gpu_sm_active, gpu_sm_occupancy" in caplog.text
@@ -212,7 +209,7 @@ def test_compute_job_statistics_keeps_prof_family_when_dram_moved(caplog):
         if s["metric"]["__name__"] == "slurm_job_utilization_gpu_memory":
             s["values"][1][1] = "0.05"
     with caplog.at_level(logging.WARNING):
-        stats = compute_job_statistics(_job_with_cluster(), series)
+        stats = compute_job_statistics(_job(), series)
     assert "gpu_sm_occupancy" in stats
     assert "gpu_memory" in stats
     assert "DCGM PROF blackout" not in caplog.text
@@ -266,3 +263,44 @@ def test_compute_job_statistics_gpu_utilization_without_prof():
     stats = compute_job_statistics(job, series)
     assert stats["gpu_utilization"].mean == pytest.approx(0.55)
     assert "gpu_sm_active" not in stats
+
+
+def test_compute_job_statistics_rescales_exporter_0_5_0_utilization():
+    # slurm-job-exporter 0.5.0 sent the utilization x100.
+    start = X100_SINCE + 86400
+    series = [
+        _series(
+            [4000, 6000],
+            name="slurm_job_utilization_gpu",
+            start=start,
+            instance="cn-c002",
+            gpu="0",
+        ),
+        _series(
+            [30.0, 40.0],
+            name="slurm_job_sm_active_gpu",
+            start=start,
+            instance="cn-c002",
+            gpu="0",
+        ),
+    ]
+    stats = compute_job_statistics(_job(cluster_name="rorqual"), series)
+    assert stats["gpu_utilization"].mean == pytest.approx(0.5)
+    assert stats["gpu_sm_active"].mean == pytest.approx(0.35)
+
+
+def test_compute_job_statistics_drops_undecided_utilization(caplog):
+    # While rorqual ran 0.5.0: a 100 may be 1 % (0.5.0) or 100 %.
+    series = [
+        _series(
+            [100, 0],
+            name="slurm_job_utilization_gpu",
+            start=X100_SINCE + 86400,
+            instance="cn-c002",
+            gpu="0",
+        )
+    ]
+    with caplog.at_level(logging.WARNING):
+        stats = compute_job_statistics(_job(cluster_name="rorqual"), series)
+    assert "gpu_utilization" not in stats
+    assert "gpu_utilization samples at 100 may be 1 %" in caplog.text

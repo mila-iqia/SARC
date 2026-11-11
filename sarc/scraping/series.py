@@ -8,6 +8,7 @@ import numpy as np
 from sarc.config import config
 from sarc.db.job import JobStatisticDB, SlurmJobDB
 from sarc.scraping.dcgm import DCGM_FP64_BLANK, dcgm_prof_blackout
+from sarc.scraping.gpu_util_x100 import rescale_gpu_utilization
 from sarc.traces import trace_decorator
 
 logger = logging.getLogger(__name__)
@@ -399,8 +400,9 @@ def gpu_activity_series(
     What slurm_job_utilization_gpu measures depends on the slurm-job-exporter
     version and mode, and the exporter exposes neither:
     - < 0.5, DCGM mode: SM_ACTIVE, a DCGM profiling (PROF) field.
-    - >= 0.5, DCGM mode: the true utilization (DEV GPU_UTIL); SM_ACTIVE
-      moved to slurm_job_sm_active_gpu.
+    - >= 0.5, DCGM mode: the true utilization (DEV GPU_UTIL, x100 in 0.5.0:
+      see sarc.scraping.gpu_util_x100); SM_ACTIVE moved to
+      slurm_job_sm_active_gpu.
     - NVML mode, any version: the true utilization; no PROF field at all.
     """
     utilization = metric_to_data["slurm_job_utilization_gpu"]
@@ -442,6 +444,16 @@ def compute_job_statistics(
         metric_to_data[result["metric"]["__name__"]].append(result)
 
     sm_active_series, utilization_series = gpu_activity_series(metric_to_data)
+    utilization_series = rescale_gpu_utilization(utilization_series, job.cluster.name)
+    if utilization_series is None:
+        # A sample at 100 may be 1 % or 100 %: store no utilization rather
+        # than a possibly false one.
+        logger.warning(
+            f"job {job.job_id} (cluster {job.cluster.name}): gpu_utilization "
+            f"samples at 100 may be 1 % (slurm-job-exporter 0.5.0) or 100 %, "
+            f"dropping gpu_utilization"
+        )
+        utilization_series = []
     gpu_sm_active = compute_metric_statistics(sm_active_series, normalization=_percent)
     gpu_utilization = compute_metric_statistics(
         utilization_series, normalization=_percent
