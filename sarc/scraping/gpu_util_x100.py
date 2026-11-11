@@ -13,22 +13,15 @@ at 100 may be misread.
 
 X100_UNTIL comes from the prod database, queried on 2026-11-10 before any
 rescale, where a gpu_utilization max above 1.0 is a raw sample above 100.
-Only rorqual ever sent the x100, last in a job ended 2026-10-07 21:17:52 UTC:
+Only rorqual ever sent the x100, last in a job ended 2026-10-07 21:17:52 UTC,
+though it kept storing gpu_utilization after that date:
 
     SELECT c.name, max(j.end_time) AS last_x100_end
     FROM slurm_jobs j
     JOIN clusters c ON c.id = j.cluster_id
     JOIN jobstatisticdb s ON s.job_id = j.id AND s.name = 'gpu_utilization'
-    WHERE s.max > 1.0 AND s.max <> 'NaN'::float8
-      AND j.end_time >= '2026-09-24 17:16:04+00'
+    WHERE s.max > 1.0 AND j.end_time >= '2026-09-24 17:16:04+00'
     GROUP BY c.name;
-
-though rorqual kept storing gpu_utilization after that date. A rorqual node's
-first job whose max lies strictly between 0 and 1.0 (a raw value 0.5.0 cannot
-send) came as late as 2026-11-02, but every such late node had run dozens of
-jobs since without one x100: on 0.5.0, those before that first job would all
-have peaked at 1 % or less. Nodes with no single-node job since, such as
-rg12901 and rg12803, have an unproven version.
 
 X100_UNTIL takes the midnight after rorqual's last x100.
 """
