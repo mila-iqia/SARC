@@ -13,64 +13,22 @@ at 100 may be misread.
 
 X100_UNTIL comes from the prod database, queried on 2026-11-10 before any
 rescale, where a gpu_utilization max above 1.0 is a raw sample above 100.
-Only rorqual ever sent the x100:
+Only rorqual ever sent the x100, last in a job ended 2026-10-07 21:17:52 UTC:
 
-    SELECT c.name, count(*) AS x100_jobs, max(j.end_time) AS last_x100_end
+    SELECT c.name, max(j.end_time) AS last_x100_end
     FROM slurm_jobs j
     JOIN clusters c ON c.id = j.cluster_id
     JOIN jobstatisticdb s ON s.job_id = j.id AND s.name = 'gpu_utilization'
     WHERE s.max > 1.0 AND s.max <> 'NaN'::float8
       AND j.end_time >= '2026-09-24 17:16:04+00'
-    GROUP BY c.name
-    ORDER BY c.name;
+    GROUP BY c.name;
 
-      name   | x100_jobs |     last_x100_end
-    ---------+-----------+------------------------
-     rorqual |      1071 | 2026-10-07 21:17:52+00
-
-though the GPU utilization kept being collected after that date:
-
-    SELECT c.name, count(*) AS util_jobs, max(j.end_time) AS last_end
-    FROM slurm_jobs j
-    JOIN clusters c ON c.id = j.cluster_id
-    JOIN jobstatisticdb s ON s.job_id = j.id AND s.name = 'gpu_utilization'
-    WHERE j.end_time >= '2026-09-24 17:16:04+00'
-    GROUP BY c.name
-    ORDER BY c.name;
-
-      name   | util_jobs |        last_end
-    ---------+-----------+------------------------
-     mila    |    309105 | 2026-11-10 17:02:26+00
-     narval  |       268 | 2026-11-09 13:22:55+00
-     rorqual |     18424 | 2026-11-10 17:02:15+00
-
-On rorqual, a node's first job whose max lies strictly between 0 and 1.0 (a
-raw value 0.5.0 cannot send) came up to weeks after 2026-10-07. But every
-such late node had run dozens of jobs since without one x100: on 0.5.0, those
-before that first job would all have peaked at 1 % or less. Single-node jobs:
-
-    WITH per_node AS (
-      SELECT j.nodes->>0 AS node,
-             count(*) FILTER (WHERE j.end_time > '2026-10-07 21:17:52+00') AS jobs_after_last_x100,
-             min(j.end_time) FILTER (WHERE s.max > 0 AND s.max < 1.0
-                                       AND j.end_time >= '2026-10-07 15:04:01+00') AS first_proof_end
-      FROM slurm_jobs j
-      JOIN clusters c ON c.id = j.cluster_id
-      JOIN jobstatisticdb s ON s.job_id = j.id AND s.name = 'gpu_utilization'
-      WHERE c.name = 'rorqual'
-        AND j.end_time >= '2026-09-24 17:16:04+00'
-        AND jsonb_array_length(j.nodes) = 1
-        AND s.max <> 'NaN'::float8
-      GROUP BY 1
-    )
-    SELECT node, jobs_after_last_x100, first_proof_end
-    FROM per_node
-    WHERE first_proof_end IS NULL OR first_proof_end > '2026-10-10'
-    ORDER BY first_proof_end NULLS FIRST;
-
-    20 rows: rg12901 and rg12803 with 0 jobs after the last x100 and no
-    first_proof_end; 18 nodes with 47 to 219 jobs after it and a
-    first_proof_end from 2026-10-10 15:03:50+00 to 2026-11-02 06:12:19+00.
+though rorqual kept storing gpu_utilization after that date. A rorqual node's
+first job whose max lies strictly between 0 and 1.0 (a raw value 0.5.0 cannot
+send) came as late as 2026-11-02, but every such late node had run dozens of
+jobs since without one x100: on 0.5.0, those before that first job would all
+have peaked at 1 % or less. Nodes with no single-node job since, such as
+rg12901 and rg12803, have an unproven version.
 
 X100_UNTIL takes the midnight after rorqual's last x100.
 """
