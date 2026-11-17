@@ -740,11 +740,11 @@ wheels = [
 
 [[package]]
 name = "flatten-dict"
-version = "0.5.0"
+version = "0.6.0"
 source = { registry = "https://pypi.org/simple" }
-sdist = { url = "https://files.pythonhosted.org/packages/0b/d0/34bf1bafa4d54e4ec20ca40856e991ffe7fdfd53831a2a36a7eb356508c8/flatten_dict-0.5.0.tar.gz", hash = "sha256:ca89664d0bc9552d525ee756726b5a755c17f65b5bf23d0a1f07841f181428b7", size = 9476, upload-time = "2026-04-28T14:23:44.979Z" }
+sdist = { url = "https://files.pythonhosted.org/packages/36/bb/1dab1988fa889cde948013e8866edd01e30b08f4a008ac5568714140d514/flatten_dict-0.6.0.tar.gz", hash = "sha256:e7a9cdf79ff30ccf2ee5c9f583c02d140a802e90496898a2ca46b4ed12006a16", size = 10751, upload-time = "2026-11-14T13:30:28.523Z" }
 wheels = [
-    { url = "https://files.pythonhosted.org/packages/72/9f/485516087cd8c44183aaf9ab850247a28e2e4a42a4d62eab77c21f673450/flatten_dict-0.5.0-py3-none-any.whl", hash = "sha256:c4bd2010052e4d33241433720d054322403fa7ad914fdc5cb1b31a713d4c561e", size = 9869, upload-time = "2026-04-28T14:23:45.695Z" },
+    { url = "https://files.pythonhosted.org/packages/af/87/553fe1f645a1b013708d8cd1682008c58e34e940c8ceb97e929ab58cf0f6/flatten_dict-0.6.0-py3-none-any.whl", hash = "sha256:6553bcd3028c5c91a4605e33ee0df2366a5d878ccebc7877b55a35a9db6f6f29", size = 11285, upload-time = "2026-11-14T13:30:29.302Z" },
 ]
 
 [[package]]
@@ -2498,7 +2498,7 @@ requires-dist = [
     { name = "fabric", specifier = ">=3.0.0,<4" },
     { name = "fastapi", extras = ["standard-no-fastapi-cloud-cli"], specifier = ">=0.162,<0.163" },
     { name = "filelock", specifier = ">=3.18.0" },
-    { name = "flatten-dict", specifier = ">=0.5,<0.6" },
+    { name = "flatten-dict", specifier = ">=0.6,<0.7" },
     { name = "gifnoc", specifier = ">=0.6,<0.7" },
     { name = "google-auth", specifier = ">=2.40.2,<3" },
     { name = "httpx2", specifier = ">=2.15.1,<3" },
