@@ -783,13 +783,20 @@
     // Thick enough to read over the bars, in both views.
     const TREND_LINE = { width: 3 };
 
-    // Right-hand axis shared by both RGU-usage views. Autoscaled from zero:
-    // the means sit in the low tens of %, and a pinned [0, 1] range left the
-    // curve flat against the bottom of the frame.
-    const TREND_YAXIS = {
-      overlaying: 'y', side: 'right', rangemode: 'tozero', tickformat: '.0%',
-      showgrid: false, fixedrange: true,
-    };
+    // Right-hand axis shared by both RGU-usage views. Its top is twice the
+    // plotted max, rounded up to the next 5 %, floored at 5 % and capped at
+    // 100 %; with nothing plotted, the range stays 0–100 %. Plotly only takes
+    // a fixed range, so the top is computed here. A range [0, 0] would make
+    // Plotly substitute [-1, 1], hence the floor.
+    function trendYAxis(ys) {
+      const max = Math.max(...ys.filter(v => v != null));
+      const top = Number.isFinite(max)
+        ? Math.max(0.05, Math.min(1, Math.ceil(max * 40) / 20)) : 1;
+      return {
+        overlaying: 'y', side: 'right', range: [0, top], tickformat: '.0%',
+        showgrid: false, fixedrange: true,
+      };
+    }
     // Names the right axis above its top tick. An annotation, not yaxis2.title:
     // Plotly only centres axis titles sideways, which would cost ~20px of width
     // (and the same on rgu_by_cluster, to keep both plot areas aligned).
@@ -1722,7 +1729,7 @@
           barmode: 'stack', bargap: 0.7,
           xaxis: { type: 'category' },
           yaxis: { title: { text: 'Total ' + unit.label } },
-          yaxis2: TREND_YAXIS,
+          yaxis2: trendYAxis(trendLevels.map(t => t.y[0])),
           shapes: trendRules,
           annotations: [TREND_YAXIS_TITLE],
           ...rguLegends(),
@@ -1773,7 +1780,7 @@
         barmode: 'stack',
         xaxis: { title: { text: 'Period start' }, type: 'category', tickangle: -45 },
         yaxis: { title: { text: 'Total ' + unit.label } },
-        yaxis2: TREND_YAXIS,
+        yaxis2: trendYAxis(trendLines.flatMap(t => t.y)),
         annotations: [TREND_YAXIS_TITLE],
         ...rguLegends(),
         margin: { l: 60, r: 60, t: 78, b: 100 },
