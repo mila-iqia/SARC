@@ -333,7 +333,7 @@ def valid_merge[T, U](
     if map is None:
 
         def mapf(v: T) -> U:
-            return v  # ty:ignore[invalid-return-type]
+            return v  # ty:ignore[invalid-explicit-return]
 
         map = mapf
 

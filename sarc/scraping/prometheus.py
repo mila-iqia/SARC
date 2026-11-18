@@ -208,7 +208,7 @@ def _parse_prometheus_batch(
             )
             .options(joinedload(SlurmJobDB.statistics))  # ty:ignore[invalid-argument-type]
         )
-        .unique()  # ty:ignore[unresolved-attribute]
+        .unique()  # ty:ignore[missing-attribute]
         .all()
     )
 

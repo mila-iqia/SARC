@@ -80,7 +80,7 @@ JOB_SERIES_EXCLUDED_JOB_COLS = frozenset(
 )
 COPIED_JOB_COLUMNS = [
     c.name
-    for c in SlurmJobDB.__table__.columns  # ty:ignore[unresolved-attribute]
+    for c in SlurmJobDB.__table__.columns  # ty:ignore[missing-attribute]
     if c.name not in JOB_SERIES_EXCLUDED_JOB_COLS
 ]
 # Copied from users (all columns but id) and clusters.
@@ -618,8 +618,8 @@ class JobSeriesDB(SQLModel, table=True):
     __tablename__ = "job_series_view"  # This is filtered out in table creation
     __sql_view__ = select(
         *[
-            col(JobSeriesTable.__table__.c[c.name])  # ty:ignore[unresolved-attribute]
-            for c in JobSeriesTable.__table__.columns  # ty:ignore[unresolved-attribute]
+            col(JobSeriesTable.__table__.c[c.name])  # ty:ignore[missing-attribute]
+            for c in JobSeriesTable.__table__.columns  # ty:ignore[missing-attribute]
         ],
         col(JobSeriesTable.gpu_sm_occupancy_mean).label("usage_metric"),
         member_type_subq,
