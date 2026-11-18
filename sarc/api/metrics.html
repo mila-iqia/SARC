@@ -783,10 +783,11 @@
     // Thick enough to read over the bars, in both views.
     const TREND_LINE = { width: 3 };
 
-    // Right-hand axis shared by both RGU-usage views. The range is pinned to
-    // [0, 1]: autoscaled, an 8 % mean would fill the frame and read as a good score.
+    // Right-hand axis shared by both RGU-usage views. Autoscaled from zero:
+    // the means sit in the low tens of %, and a pinned [0, 1] range left the
+    // curve flat against the bottom of the frame.
     const TREND_YAXIS = {
-      overlaying: 'y', side: 'right', range: [0, 1], tickformat: '.0%',
+      overlaying: 'y', side: 'right', rangemode: 'tozero', tickformat: '.0%',
       showgrid: false, fixedrange: true,
     };
     // Names the right axis above its top tick. An annotation, not yaxis2.title:
