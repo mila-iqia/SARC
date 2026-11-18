@@ -71,8 +71,8 @@ def register(
     name_or_fn: str | Callable[..., None], fn: Callable[..., None] | None = None
 ) -> Callable[[Callable[..., None]], Callable[..., None]] | Callable[..., None] | None:
     if callable(name_or_fn):
-        system.register(name_or_fn.__name__, name_or_fn)  # ty:ignore[unresolved-attribute]
-        return name_or_fn  # ty:ignore[invalid-return-type]
+        system.register(name_or_fn.__name__, name_or_fn)  # ty:ignore[missing-attribute]
+        return name_or_fn  # ty:ignore[invalid-explicit-return]
     elif fn is not None:
         system.register(name_or_fn, fn)
         return fn

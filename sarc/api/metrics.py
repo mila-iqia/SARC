@@ -498,7 +498,7 @@ def _resolve_user_ids(sess: Session, email: str | None) -> list[int] | None:
     if email is None:
         return None
     # The actual DB can never return None for UserDB.id
-    return list(sess.exec(select(col(UserDB.id)).where(UserDB.email == email)).all())  # ty: ignore[invalid-return-type]
+    return list(sess.exec(select(col(UserDB.id)).where(UserDB.email == email)).all())  # ty: ignore[invalid-explicit-return]
 
 
 def _apply_job_filters(
