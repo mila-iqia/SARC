@@ -149,6 +149,23 @@ def test_dm_user_success():
     assert result.status == SendStatus.OK
 
 
+def test_dm_user_returns_ts_and_identity():
+    """Delivery tracking (SARC-802) needs the posted message's ts, the
+    resolved Slack user id and the DM channel on the OK result."""
+    web = MagicMock()
+    web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}
+    web.conversations_open.return_value = {"channel": {"id": "C99999"}}
+    web.chat_postMessage.return_value = {"ts": "111.222"}
+    client = _make_client(web)
+
+    result = client.dm_user("alice@example.com", "hi alice")
+
+    assert result.status == SendStatus.OK
+    assert result.ts == "111.222"
+    assert result.slack_user_id == "U12345"
+    assert result.channel == "C99999"
+
+
 def test_dm_user_replaces_mention_token():
     web = MagicMock()
     web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}

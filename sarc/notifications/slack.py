@@ -34,6 +34,11 @@ class SendResult:
     status: SendStatus
     detail: str = ""
     ts: str | None = None
+    slack_user_id: str | None = None
+    """Set on DM sends: the Slack user id the email resolved to."""
+    channel: str | None = None
+    """Set on DM sends: the DM channel id the message was posted to. With ts,
+    identifies the message for chat.update (acknowledgement tracking)."""
 
 
 class SlackClient:
@@ -150,10 +155,12 @@ class SlackClient:
         try:
             conv = self._client.conversations_open(users=[user_id])
             channel_id = conv["channel"]["id"]
-            self._client.chat_postMessage(
+            resp = self._client.chat_postMessage(
                 **self._message_kwargs(channel_id, text, preformatted=preformatted)
             )
-            return SendResult(SendStatus.OK)
+            return SendResult(
+                SendStatus.OK, ts=resp["ts"], slack_user_id=user_id, channel=channel_id
+            )
         except Exception as exc:
             logger.error("Slack DM failed for %s (%s): %s", email, user_id, exc)
             return SendResult(SendStatus.FAILED, str(exc))

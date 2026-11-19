@@ -9,12 +9,13 @@ import simple_parsing
 
 from sarc.config import config
 from sarc.notifications.csv_export import build_recurring_distilled_csv
+from sarc.notifications.delivery import NotificationKind, record_notification_send
 from sarc.notifications.messages import (
     build_admin_digest,
     build_usage_report,
     build_user_dm,
 )
-from sarc.notifications.slack import SendStatus, SlackClient
+from sarc.notifications.slack import SendResult, SendStatus, SlackClient
 from sarc.notifications.usage import (
     get_cycle_dates,
     get_recurring_underusers,
@@ -60,14 +61,65 @@ def _build_delivery_footer(
     return "\n".join(lines)
 
 
+def _record_delivery(
+    row, slack_res: SendResult, *, kind: NotificationKind, window_end: datetime
+) -> None:
+    """Persist a successfully delivered DM into notification_messages (SARC-802).
+
+    Tracking must never break a delivery run, so failures are logged at ERROR
+    (rapporteur surfaces them) and swallowed. An OK SendResult missing its
+    ts/slack identity has nothing to record (degraded or mocked client) — log
+    and skip rather than write a NULL-riddled row.
+    """
+    if not (slack_res.ts and slack_res.slack_user_id and slack_res.channel):
+        logger.error(
+            "Not recording %s notification for %s: OK send without message id "
+            "(ts=%r, slack_user_id=%r, channel=%r)",
+            kind,
+            row.email,
+            slack_res.ts,
+            slack_res.slack_user_id,
+            slack_res.channel,
+        )
+        return
+    try:
+        record_notification_send(
+            user_id=row.user_id,
+            kind=kind,
+            window_end=window_end,
+            channel=slack_res.channel,
+            message_ts=slack_res.ts,
+            slack_user_id=slack_res.slack_user_id,
+            sent_at=_now_utc(),
+        )
+    except Exception:
+        logger.error(
+            "Failed to record %s notification delivery for %s",
+            kind,
+            row.email,
+            exc_info=True,
+        )
+
+
 def _deliver(
-    rows: list, build_fn: Callable, *, slack: SlackClient, send_to: str | None = None
+    rows: list,
+    build_fn: Callable,
+    *,
+    slack: SlackClient,
+    send_to: str | None = None,
+    kind: NotificationKind,
+    window_end: datetime,
 ) -> list[_DeliveryResult]:
     results: list[_DeliveryResult] = []
     for row in rows:
         text = build_fn(row)
         slack_res = slack.dm_user(send_to or row.email, text)
         if slack_res.status == SendStatus.OK:
+            # A --send-to redirect is a debug preview: the DM went to the
+            # developer, not the flagged user — recording it would poison the
+            # acknowledgement denominator, so only direct deliveries are kept.
+            if send_to is None:
+                _record_delivery(row, slack_res, kind=kind, window_end=window_end)
             results.append(_DeliveryResult(row.email, row.display_name, "dm_sent"))
         else:
             results.append(
@@ -434,6 +486,8 @@ class UsageNotifyCommand:
                 ),
                 slack=slack_underusage_client,
                 send_to=self.send_to,
+                kind="underusage",
+                window_end=end,
             )
         elif underusage_report_eligible and underusage_rows:
             reason = "no_dms_flag" if self.no_dms else "send_underusage_report_disabled"
@@ -453,6 +507,8 @@ class UsageNotifyCommand:
                 ),
                 slack=slack_usage_client,
                 send_to=self.send_to,
+                kind="usage",
+                window_end=end,
             )
         elif usage_report_eligible and usage_rows:
             reason = "no_dms_flag" if self.no_dms else "send_usage_report_disabled"
