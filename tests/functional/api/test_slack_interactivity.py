@@ -15,8 +15,8 @@ from sqlmodel import select
 
 from sarc.db.notifications import NotificationFeedback, NotificationMessage
 from sarc.db.users import UserDB
-from sarc.notifications.ack import ACK_ACTION_ID, ack_value
-from sarc.notifications.delivery import record_notification_send
+from sarc.notifications.ack import ACK_ACTION_ID, HELP_ACTION_ID, ack_value
+from sarc.notifications.delivery import ack_stats_for_cycle, record_notification_send
 from sarc.notifications.slack import SendResult, SendStatus
 from tests.unittests.notifications.test_cli import _NOTIFY_CFG
 
@@ -27,6 +27,11 @@ _BUTTON_BLOCK = {
     "type": "actions",
     "block_id": ACK_ACTION_ID,
     "elements": [{"type": "button", "action_id": ACK_ACTION_ID, "value": ""}],
+}
+_HELP_BUTTON_BLOCK = {
+    "type": "actions",
+    "block_id": HELP_ACTION_ID,
+    "elements": [{"type": "button", "action_id": HELP_ACTION_ID, "value": ""}],
 }
 
 
@@ -56,20 +61,24 @@ def _post_click(client, payload, *, secret=_SECRET, ts=None):
     )
 
 
-def _click_payload(*, user="U0ABC", value=None, action_id=ACK_ACTION_ID):
+def _click_payload(*, user="U0ABC", value=None, action_id=ACK_ACTION_ID, blocks=None):
+    actions = [
+        {
+            "action_id": action_id,
+            "value": ack_value("underusage", _WINDOW_END) if value is None else value,
+        }
+    ]
     return {
         "type": "block_actions",
         "user": {"id": user},
         "channel": {"id": "D0XYZ"},
-        "message": {"ts": "111.222", "blocks": [_BODY_BLOCK, _BUTTON_BLOCK]},
-        "actions": [
-            {
-                "action_id": action_id,
-                "value": ack_value("underusage", _WINDOW_END)
-                if value is None
-                else value,
-            }
-        ],
+        "message": {
+            "ts": "111.222",
+            "blocks": blocks
+            if blocks is not None
+            else [_BODY_BLOCK, _BUTTON_BLOCK, _HELP_BUTTON_BLOCK],
+        },
+        "actions": actions,
     }
 
 
@@ -215,7 +224,7 @@ def test_malformed_value_ignored(anon_client, read_write_db, mock_updater):
     mock_updater.update_message.assert_not_called()
 
 
-def test_update_failure_still_acks(anon_client, read_write_db, mock_updater):
+def test_update_failure_still_records_click(anon_client, read_write_db, mock_updater):
     mock_updater.update_message.return_value = SendResult(
         SendStatus.FAILED, "message_not_found"
     )
@@ -223,3 +232,79 @@ def test_update_failure_still_acks(anon_client, read_write_db, mock_updater):
         resp = _post_click(anon_client, _click_payload())
     assert resp.status_code == 200
     assert len(_feedback_rows(read_write_db)) == 1
+
+
+# ── help button ─────────────────────────────────────────────────────────────
+
+
+def test_help_click_recorded_and_help_button_confirmed(
+    anon_client, read_write_db, mock_updater
+):
+    _seed_delivery(read_write_db)
+    with gifnoc.overlay({"sarc.notifications": _cfg()}):
+        resp = _post_click(anon_client, _click_payload(action_id=HELP_ACTION_ID))
+    assert resp.status_code == 200
+
+    (row,) = _feedback_rows(read_write_db)
+    assert row.action_id == HELP_ACTION_ID
+
+    args, kwargs = mock_updater.update_message.call_args
+    assert args == ("D0XYZ", "111.222")
+    blocks = kwargs["blocks"]
+    # The help button became its confirmation; the read button stays live,
+    # and the preview text advertises the help request.
+    assert blocks[0] == _BODY_BLOCK
+    assert blocks[1] == _BUTTON_BLOCK
+    assert "Help requested on" in blocks[2]["text"]["text"]
+    assert kwargs["text"].startswith("🙋")
+
+
+def test_read_then_help_both_recorded_without_hiding_each_other(
+    anon_client, read_write_db, mock_updater
+):
+    """A help click after a read click is a distinct feedback row — and the
+    second chat.update keeps the read confirmation while turning the help
+    button into its own."""
+    _seed_delivery(read_write_db)
+    ack_confirmation = {
+        "type": "section",
+        "text": {"type": "mrkdwn", "text": "✅ Confirmed on 2024-06-17 — thanks!"},
+    }
+    with gifnoc.overlay({"sarc.notifications": _cfg()}):
+        assert _post_click(anon_client, _click_payload()).status_code == 200
+        # Slack echoes the CURRENT (updated) message: the ack button is
+        # already its confirmation line when help is clicked next.
+        assert (
+            _post_click(
+                anon_client,
+                _click_payload(
+                    action_id=HELP_ACTION_ID,
+                    blocks=[_BODY_BLOCK, ack_confirmation, _HELP_BUTTON_BLOCK],
+                ),
+            ).status_code
+            == 200
+        )
+
+    rows = _feedback_rows(read_write_db)
+    assert {r.action_id for r in rows} == {ACK_ACTION_ID, HELP_ACTION_ID}
+    # The read ack still counts once toward the acknowledgement rate.
+    stats = ack_stats_for_cycle("underusage", _WINDOW_END)
+    assert (stats.sent, stats.acknowledged) == (1, 1)
+
+    _, kwargs = mock_updater.update_message.call_args
+    blocks = kwargs["blocks"]
+    assert blocks[1] == ack_confirmation  # kept from the first click
+    assert "Help requested on" in blocks[2]["text"]["text"]
+
+
+def test_help_request_alone_is_not_an_acknowledgement(
+    anon_client, read_write_db, mock_updater
+):
+    _seed_delivery(read_write_db)
+    with gifnoc.overlay({"sarc.notifications": _cfg()}):
+        assert (
+            _post_click(anon_client, _click_payload(action_id=HELP_ACTION_ID))
+        ).status_code == 200
+
+    stats = ack_stats_for_cycle("underusage", _WINDOW_END)
+    assert (stats.sent, stats.acknowledged) == (1, 0)

@@ -261,9 +261,12 @@ Templates are plain Python `str.format` strings loaded from
 `SlackClient` wraps `slack_sdk.WebClient` with automatic retry on HTTP 429 (rate
 limits).
 
-- `dm_user(email, text)` — resolves the user via `users_lookupByEmail`, opens a
-  DM conversation, and posts. Returns a `SendStatus` of `OK`, `USER_NOT_FOUND`,
-  or `FAILED`.
+- `dm_user(email, text, extra_blocks=…)` — resolves the user via
+  `users_lookupByEmail`, opens a DM conversation, and posts. Passing
+  `extra_blocks` renders the message as blocks (body + extras, e.g. the ack
+  and help buttons). Returns a `SendStatus` of `OK`, `USER_NOT_FOUND`, or
+  `FAILED`, and — on OK — the posted `ts`, Slack user id and DM channel that
+  delivery tracking stores.
 - `post_channel(channel, text, thread_ts=…)` — posts to the digest channel and
   returns the message timestamp so follow-ups can thread under it.
 
@@ -272,6 +275,56 @@ sent/skipped/failed, plus the emails of any failures) as **threaded replies
 under the digest** — giving those numbers a durable home in the channel. If the
 digest post itself failed, the summaries fall back to standalone channel
 messages.
+
+## Read receipts and help buttons (SARC-802)
+
+Every **underusage DM** ends with two Block Kit buttons — ✅ *I've read this
+message* (`action_id sarc_notification_ack`) and 🙋 *I would like some help*
+(`sarc_notification_help`). The neutral usage report stays buttonless. Both
+buttons' `value` encodes `(kind, window_end)`; the interactivity endpoint
+(`POST /slack/interactivity`, public but verified with Slack's v0 request
+signing — `slack_underusage.signing_secret`) records each click in
+`notification_feedback` and `chat.update`s the message so a clicked button
+becomes its confirmation line while the other stays live.
+
+Tracking tables (one row grain each):
+
+- **`notification_messages`** — one row per delivered DM, keyed
+  `(user_id, kind, window_end)`; the denominator. Re-runs of a cycle upsert
+  (last send wins); failed sends and `--send-to` debug redirects are not
+  recorded.
+- **`notification_feedback`** — one row per *(user, kind, window_end,
+  action_id)*; first click per button wins, re-clicks are dropped. A read
+  click and a help click on the same message are both kept.
+
+Only the read button feeds the acknowledgement rate (`acknowledged` counts
+`sarc_notification_ack` feedback rows), exposed by `sarc usage ack-stats` and
+by the previous-cycle line in the admin delivery-summary footer.
+
+Who clicked what — e.g. through the `sarc-sql` skill:
+
+```sql
+SELECT
+    (f.window_end AT TIME ZONE 'UTC')::date AS campagne,
+    f.kind,
+    COALESCE(u.email, f.slack_user_id)      AS qui,
+    CASE f.action_id
+        WHEN 'sarc_notification_ack'  THEN 'read'
+        WHEN 'sarc_notification_help' THEN 'help'
+        ELSE f.action_id
+    END                                     AS clic,
+    f.clicked_at                            AS quand
+FROM notification_feedback f
+LEFT JOIN notification_messages m
+       ON m.slack_user_id = f.slack_user_id
+      AND m.kind          = f.kind
+      AND m.window_end    = f.window_end
+LEFT JOIN users u ON u.id = m.user_id
+ORDER BY f.window_end DESC, f.clicked_at;
+```
+
+(`qui` falls back to the raw Slack id when no tracked delivery matches the
+click — e.g. a message sent before tracking existed.)
 
 ## Pointers
 

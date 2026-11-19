@@ -16,7 +16,7 @@ from sqlmodel import select
 
 from sarc.db.notifications import NotificationMessage
 from sarc.db.users import UserDB
-from sarc.notifications.ack import ACK_ACTION_ID
+from sarc.notifications.ack import ACK_ACTION_ID, HELP_ACTION_ID
 from sarc.notifications.slack import SendResult, SendStatus
 from tests.unittests.notifications.test_cli import (  # noqa: F401
     _CYCLE_WEEK,
@@ -95,11 +95,11 @@ def test_underusage_dms_record_one_row_each(notify_db, cli_main, monkeypatch):
         assert row.sent_at is not None and row.sent_at.tzinfo is not None
 
 
-def test_underusage_dms_carry_the_ack_button(  # noqa: F811
+def test_underusage_dms_carry_the_ack_and_help_buttons(  # noqa: F811
     notify_db, cli_main, monkeypatch
 ):
-    """Every underusage DM gets the ack actions block, its value encoding
-    (underusage, this run's window end)."""
+    """Every underusage DM gets both action blocks (read + help), their
+    values encoding (underusage, this run's window end)."""
     slack_cls, slack_inst = _mock_slack_delivered()
     _patch_senders(monkeypatch, slack_cls)
     with gifnoc.overlay({"sarc.notifications": _underusage_only()}):
@@ -110,10 +110,10 @@ def test_underusage_dms_carry_the_ack_button(  # noqa: F811
     for call in slack_inst.dm_user.call_args_list:
         blocks = call.kwargs["extra_blocks"]
         assert blocks is not None
-        (block,) = blocks
-        (button,) = block["elements"]
-        assert button["action_id"] == ACK_ACTION_ID
-        assert button["value"] == expected_value
+        assert [b["block_id"] for b in blocks] == [ACK_ACTION_ID, HELP_ACTION_ID]
+        for block in blocks:
+            (button,) = block["elements"]
+            assert button["value"] == expected_value
 
 
 # ── usage-report DMs ───────────────────────────────────────────────────────

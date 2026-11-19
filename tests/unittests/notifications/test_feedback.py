@@ -116,7 +116,7 @@ def test_repeat_click_dropped_first_click_wins(jobless_read_write_db):
         )
         is True
     )
-    # Second click on the same cycle's button (e.g. after a failed
+    # Second click on the same cycle's SAME button (e.g. after a failed
     # chat.update): dropped — the numerator counts people, not clicks.
     assert (
         record_notification_feedback(
@@ -133,6 +133,40 @@ def test_repeat_click_dropped_first_click_wins(jobless_read_write_db):
     rows = jobless_read_write_db.exec(select(NotificationFeedback)).all()
     assert len(rows) == 1
     assert rows[0].clicked_at == _CLICKED_AT
+
+
+def test_read_then_help_keeps_both_clicks(jobless_read_write_db):
+    """The other button of the same message is NOT swallowed by the dedup: a
+    help request must survive an earlier read click (and vice versa)."""
+    assert (
+        record_notification_feedback(
+            slack_user_id="U0ABC",
+            kind="underusage",
+            window_end=_WINDOW_END,
+            action_id="sarc_notification_ack",
+            channel="D0XYZ",
+            message_ts="111.222",
+            clicked_at=_CLICKED_AT,
+        )
+        is True
+    )
+    assert (
+        record_notification_feedback(
+            slack_user_id="U0ABC",
+            kind="underusage",
+            window_end=_WINDOW_END,
+            action_id="sarc_notification_help",
+            channel="D0XYZ",
+            message_ts="111.222",
+            clicked_at=_CLICKED_AT.replace(hour=10),
+        )
+        is True
+    )
+    rows = jobless_read_write_db.exec(select(NotificationFeedback)).all()
+    assert {r.action_id for r in rows} == {
+        "sarc_notification_ack",
+        "sarc_notification_help",
+    }
 
 
 def test_click_without_tracked_delivery_is_still_recorded(jobless_read_write_db):

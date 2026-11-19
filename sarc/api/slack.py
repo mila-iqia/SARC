@@ -1,12 +1,12 @@
-"""Slack interactivity endpoint for notification ack buttons (SARC-802).
+"""Slack interactivity endpoint for notification buttons (SARC-802).
 
 A public route (no OAuth gate, like /upload-report): trust comes not from
 who calls it but from Slack's request signing — every request must carry an
 ``X-Slack-Signature`` HMAC of the raw body keyed by the app's signing secret.
 Receives the URL-verification challenge and ``block_actions`` payloads for
-the ack buttons built in ``sarc.notifications.ack``: records the click in
-notification_feedback and chat.update's the message so the button turns into
-its confirmation state.
+the read/help buttons built in ``sarc.notifications.ack``: records the click
+in notification_feedback and chat.update's the message so clicked buttons
+turn into their confirmation lines.
 """
 
 import hashlib
@@ -23,7 +23,9 @@ from sarc.config import config
 from sarc.notifications.ack import (
     ACK_ACTION_ID,
     ACKED_FALLBACK_TEXT,
-    acked_blocks,
+    HELP_ACTION_ID,
+    HELPED_FALLBACK_TEXT,
+    clicked_blocks,
     parse_ack_value,
 )
 from sarc.notifications.delivery import (
@@ -105,11 +107,12 @@ def _decode_payload(body: bytes, content_type: str) -> dict:
 async def slack_interactivity(request: Request) -> dict:
     """Handle a Slack interactivity request (signature-verified).
 
-    Responds to the URL-verification challenge, and for ack button clicks:
-    records one deduplicated notification_feedback row per clicked button,
-    then best-effort chat.update's the message into its acked state. Always
+    Responds to the URL-verification challenge, and for button clicks (read
+    / help): records one deduplicated notification_feedback row per clicked
+    button, then best-effort chat.update's the message so each clicked button
+    turns into its confirmation line while the other stays live. Always
     answers 200 to a genuine click (even a duplicate or an unresolvable one)
-    so Slack does not surface an error to the clicker; the ack is recorded
+    so Slack does not surface an error to the clicker; the click is recorded
     even when the message update fails — a re-click then stays deduped.
     """
     body = await request.body()
@@ -146,18 +149,19 @@ async def slack_interactivity(request: Request) -> dict:
     )
     clicked_at = datetime.now(UTC)
 
-    acked = False
+    clicked_action_ids: list[str] = []
     for action in payload.get("actions", []):
-        if action.get("action_id") != ACK_ACTION_ID:
+        action_id = action.get("action_id")
+        if action_id not in (ACK_ACTION_ID, HELP_ACTION_ID):
             continue
         if not user:
-            logger.warning("Ack action without a user in payload — ignored")
+            logger.warning("Button action without a user in payload — ignored")
             continue
         try:
             kind, window_end = parse_ack_value(action.get("value", ""))
         except ValueError:
             logger.warning(
-                "Ignoring unparseable ack value %r from user %s",
+                "Ignoring unparseable button value %r from user %s",
                 action.get("value"),
                 user,
             )
@@ -169,37 +173,50 @@ async def slack_interactivity(request: Request) -> dict:
             slack_user_id=user,
             kind=kind,
             window_end=window_end,
-            action_id=ACK_ACTION_ID,
+            action_id=action_id,
             channel=channel,
             message_ts=message_ts,
             clicked_at=clicked_at,
             message_id=message_id,
         )
-        acked = True
+        if action_id not in clicked_action_ids:
+            clicked_action_ids.append(action_id)
 
-    if acked and channel and message_ts:
-        _confirm_message(channel, message_ts, message.get("blocks"), clicked_at)
+    if clicked_action_ids and channel and message_ts:
+        _confirm_message(
+            channel, message_ts, message.get("blocks"), clicked_action_ids, clicked_at
+        )
     return {}
 
 
 def _confirm_message(
-    channel: str, message_ts: str, blocks: list[dict] | None, confirmed_at: datetime
+    channel: str,
+    message_ts: str,
+    blocks: list[dict] | None,
+    clicked_action_ids: list[str],
+    confirmed_at: datetime,
 ) -> None:
-    """Best-effort chat.update turning the button into its confirmation.
-    Failures are logged only: the click is already recorded, and a re-click
-    is deduped rather than double-counted."""
+    """Best-effort chat.update turning the clicked buttons into their
+    confirmations. Failures are logged only: the clicks are already recorded,
+    and re-clicks are deduped rather than double-counted."""
     ncfg = config.notifications
     assert ncfg is not None  # guarded by _signing_secret()'s 503 earlier
+    # A help request is the state worth previewing in the notification text.
+    fallback = (
+        HELPED_FALLBACK_TEXT
+        if HELP_ACTION_ID in clicked_action_ids
+        else ACKED_FALLBACK_TEXT
+    )
     client = SlackClient(ncfg.slack_underusage.token)
     result = client.update_message(
         channel,
         message_ts,
-        blocks=acked_blocks(blocks, confirmed_at),
-        text=ACKED_FALLBACK_TEXT,
+        blocks=clicked_blocks(blocks, clicked_action_ids, confirmed_at),
+        text=fallback,
     )
     if result.status != SendStatus.OK:
         logger.error(
-            "Ack recorded but chat.update failed for %s/%s: %s",
+            "Click recorded but chat.update failed for %s/%s: %s",
             channel,
             message_ts,
             result.detail,

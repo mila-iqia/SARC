@@ -35,16 +35,28 @@ class NotificationMessage(SQLModel, table=True):
 class NotificationFeedback(SQLModel, table=True):
     """One row per acknowledgement click on a notification's button (SARC-802).
 
-    Grain: one row per (slack_user_id, kind, window_end) — re-clicks of the
-    same cycle's button (e.g. after a failed chat.update) are dropped, so each
-    message contributes at most one click to the acknowledgement-rate
-    numerator. The clicker is identified by Slack id because that is what the
-    interactivity payload carries; ``message_id`` links back to the tracked
-    delivery row when one matches.
+    Grain: one row per (slack_user_id, kind, window_end, action_id) — re-clicks
+    of the same cycle's SAME button (e.g. after a failed chat.update) are
+    dropped, so each message contributes at most one click per button: the
+    acknowledgement-rate numerator counts people, not clicks, while a read
+    click and a help click on the same message are both kept. The clicker is
+    identified by Slack id because that is what the interactivity payload
+    carries; ``message_id`` links back to the tracked delivery row when one
+    matches.
     """
 
     __tablename__ = "notification_feedback"
-    __table_args__ = (UniqueConstraint("slack_user_id", "kind", "window_end"),)
+    __table_args__ = (
+        # Explicit name: the Postgres default (table + all columns + _key)
+        # would exceed the 63-character identifier limit.
+        UniqueConstraint(
+            "slack_user_id",
+            "kind",
+            "window_end",
+            "action_id",
+            name="uq_notification_feedback_user_kind_window_action",
+        ),
+    )
 
     id: int | None = Field(default=None, primary_key=True)
     message_id: int | None = Field(
@@ -56,10 +68,10 @@ class NotificationFeedback(SQLModel, table=True):
     kind: str
     """Mirrors the parent message's kind: "underusage" | "usage"."""
     window_end: datetime_utc = datetime_utc_field(index=True)
-    """Mirrors the parent message's window end — with slack_user_id and kind,
-    the unique key the button's ``value`` resolves against."""
+    """Mirrors the parent message's window end — with slack_user_id, kind and
+    action_id, the unique key the button's ``value`` resolves against."""
     action_id: str
-    """Slack action_id of the clicked element."""
+    """Slack action_id of the clicked element (which button: read vs help)."""
     channel: str
     """Slack channel id of the message that carried the clicked button."""
     message_ts: str

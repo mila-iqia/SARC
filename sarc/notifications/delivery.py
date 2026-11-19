@@ -18,6 +18,13 @@ from sarc.db.notifications import NotificationFeedback, NotificationMessage
 
 NotificationKind = Literal["underusage", "usage"]
 
+ACK_ACTION_ID = "sarc_notification_ack"
+HELP_ACTION_ID = "sarc_notification_help"
+"""action_ids of the two underusage-DM buttons (see sarc.notifications.ack).
+Defined here because the feedback tables and the acknowledgement-rate query
+key on them; a help click is NOT an acknowledgement, so the rate query counts
+only ACK_ACTION_ID feedback rows."""
+
 
 def record_notification_send(
     *,
@@ -91,11 +98,13 @@ def record_notification_feedback(
     clicked_at: datetime,
     message_id: int | None = None,
 ) -> bool:
-    """Record an acknowledgement click; True when newly recorded.
+    """Record a button click; True when newly recorded.
 
-    Re-clicks of the same cycle's button are dropped (ON CONFLICT DO NOTHING
-    on the unique (slack_user_id, kind, window_end) key) so the numerator of
-    the acknowledgement rate counts people, not clicks — the first click wins.
+    Re-clicks of the same cycle's SAME button are dropped (ON CONFLICT DO
+    NOTHING on the unique (slack_user_id, kind, window_end, action_id) key):
+    the acknowledgement rate counts people, not clicks — first click wins —
+    while a read click followed by a help click (or vice versa) keeps BOTH,
+    so a request for help is never swallowed by an earlier ack.
     """
     with config.db.session() as session:
         insert_stmt = pg_insert(NotificationFeedback).values(
@@ -110,7 +119,7 @@ def record_notification_feedback(
         )
         result = session.exec(
             insert_stmt.on_conflict_do_nothing(
-                index_elements=["slack_user_id", "kind", "window_end"]
+                index_elements=["slack_user_id", "kind", "window_end", "action_id"]
             )
         )
         session.commit()
@@ -135,10 +144,12 @@ def _ack_stats_stmt():
     """Per (kind, window_end) sent/acknowledged counts.
 
     Clicks join back on the (slack_user_id, kind, window_end) triple rather
-    than on message_id — the triple is feedback's own unique key and stays
-    exact even for clicks whose delivery row could not be resolved (a NULL
-    message link still acknowledges its recipient's message). Feedback's
-    uniqueness means one click can never inflate a message count.
+    than on message_id — the triple stays exact even for clicks whose delivery
+    row could not be resolved (a NULL message link still acknowledges its
+    recipient's message). The join is narrowed to the ACK button's feedback:
+    a help click is not an acknowledgement, and the narrowed join also keeps
+    `sent` from counting a message twice for a user who clicked both buttons.
+    Per-(button) uniqueness then means one click can never inflate a count.
     """
     return (
         select(
@@ -155,6 +166,7 @@ def _ack_stats_stmt():
                 col(NotificationFeedback.kind) == col(NotificationMessage.kind),
                 col(NotificationFeedback.window_end)
                 == col(NotificationMessage.window_end),
+                col(NotificationFeedback.action_id) == ACK_ACTION_ID,
             ),
         )
         .group_by(col(NotificationMessage.kind), col(NotificationMessage.window_end))

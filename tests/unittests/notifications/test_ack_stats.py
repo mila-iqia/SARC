@@ -110,6 +110,26 @@ def test_repeat_click_does_not_inflate_ack_count(jobless_read_write_db):
     assert (stats.sent, stats.acknowledged) == (2, 1)
 
 
+def test_help_click_is_not_an_acknowledgement(jobless_read_write_db):
+    """Only the read button feeds the acknowledgement rate: a cycle where
+    everyone asked for help would otherwise read as fully acknowledged."""
+    _seed_cycle(
+        jobless_read_write_db, kind="underusage", window_end=_W2, sent=2, acked=0
+    )
+    for i in range(2):
+        record_notification_feedback(
+            slack_user_id=f"U{i}",
+            kind="underusage",
+            window_end=_W2,
+            action_id="sarc_notification_help",
+            channel="D0XYZ",
+            message_ts=f"111.{i}",
+            clicked_at=_CLICKED_AT,
+        )
+    stats = ack_stats_for_cycle("underusage", _W2)
+    assert (stats.sent, stats.acknowledged) == (2, 0)
+
+
 def test_ack_rate_by_cycle_ordering_and_filters(jobless_read_write_db):
     _seed_cycle(
         jobless_read_write_db, kind="underusage", window_end=_W1, sent=2, acked=2
