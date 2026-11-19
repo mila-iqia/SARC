@@ -38,6 +38,8 @@ class SlurmAllocationMembersScraper(UserScraper[SlurmAllocationMembersConfig]):
     """
 
     config_type = SlurmAllocationMembersConfig
+    # Names and emails from the allocation lists only fill in missing values.
+    provides_reference_identity = False
 
     def get_user_data(self, config: SlurmAllocationMembersConfig) -> bytes:
         return json.dumps({"csv": config.csv, "domain": config.domain}).encode("utf-8")
