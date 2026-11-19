@@ -33,9 +33,7 @@ class ParseJobs:
         if self.since is not None:
             _since = datetime.fromisoformat(self.since).astimezone(UTC)
         parse_jobs(clusters_cfg, _since, self.update_parsed_date)
-        # Reapply the manual corrections the cache contradicts (see
-        # config/cloud/patches): after the parse, so a cache reparse cannot
-        # leave a fixed job stuck in RUNNING again.
+        # Reapply the manual corrections the cache contradicts
         with config.db.session() as sess:
             patch_jobs(sess)
             sess.commit()
