@@ -5,9 +5,11 @@ acknowledgement rate has a denominator; the acknowledgement side (block-kit
 buttons + the interactivity endpoint) matches clicks against these rows.
 """
 
+from dataclasses import dataclass
 from datetime import datetime
 from typing import Literal
 
+from sqlalchemy import and_, desc, func
 from sqlalchemy.dialects.postgresql import insert as pg_insert
 from sqlmodel import col, select
 
@@ -113,3 +115,87 @@ def record_notification_feedback(
         )
         session.commit()
         return result.rowcount == 1
+
+
+@dataclass(frozen=True)
+class AckCycleStats:
+    """Acknowledgement rate of one notification cycle."""
+
+    kind: str
+    window_end: datetime
+    sent: int
+    acknowledged: int
+
+    @property
+    def rate(self) -> float:
+        return self.acknowledged / self.sent if self.sent else 0.0
+
+
+def _ack_stats_stmt():
+    """Per (kind, window_end) sent/acknowledged counts.
+
+    Clicks join back on the (slack_user_id, kind, window_end) triple rather
+    than on message_id — the triple is feedback's own unique key and stays
+    exact even for clicks whose delivery row could not be resolved (a NULL
+    message link still acknowledges its recipient's message). Feedback's
+    uniqueness means one click can never inflate a message count.
+    """
+    return (
+        select(
+            col(NotificationMessage.kind).label("kind"),
+            col(NotificationMessage.window_end).label("window_end"),
+            func.count().label("sent"),
+            func.count(col(NotificationFeedback.id)).label("acknowledged"),
+        )
+        .outerjoin(
+            NotificationFeedback,
+            and_(
+                col(NotificationFeedback.slack_user_id)
+                == col(NotificationMessage.slack_user_id),
+                col(NotificationFeedback.kind) == col(NotificationMessage.kind),
+                col(NotificationFeedback.window_end)
+                == col(NotificationMessage.window_end),
+            ),
+        )
+        .group_by(col(NotificationMessage.kind), col(NotificationMessage.window_end))
+    )
+
+
+def _stats(row) -> AckCycleStats:
+    return AckCycleStats(
+        kind=row.kind,
+        window_end=row.window_end,
+        sent=row.sent,
+        acknowledged=row.acknowledged,
+    )
+
+
+def ack_stats_for_cycle(
+    kind: NotificationKind, window_end: datetime
+) -> AckCycleStats | None:
+    """Sent/acknowledged counts of one cycle, or None when it has no tracked
+    delivery (nothing sent through this tracker — e.g. a pre-SARC-802 cycle)."""
+    stmt = _ack_stats_stmt().where(
+        col(NotificationMessage.kind) == kind,
+        col(NotificationMessage.window_end) == window_end,
+    )
+    with config.db.session() as session:
+        row = session.exec(stmt).first()
+    return _stats(row) if row is not None else None
+
+
+def ack_rate_by_cycle(
+    *, kind: NotificationKind | None = None, limit: int | None = None
+) -> list[AckCycleStats]:
+    """Per-cycle ack counts, most recent cycle first; all kinds unless
+    filtered. ``limit`` caps the number of (kind, cycle) rows returned."""
+    stmt = _ack_stats_stmt()
+    if kind is not None:
+        stmt = stmt.where(col(NotificationMessage.kind) == kind)
+    stmt = stmt.order_by(
+        desc(col(NotificationMessage.window_end)), col(NotificationMessage.kind)
+    )
+    if limit is not None:
+        stmt = stmt.limit(limit)
+    with config.db.session() as session:
+        return [_stats(row) for row in session.exec(stmt).all()]

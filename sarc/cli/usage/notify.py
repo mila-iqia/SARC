@@ -10,7 +10,11 @@ import simple_parsing
 from sarc.config import config
 from sarc.notifications.ack import build_ack_blocks
 from sarc.notifications.csv_export import build_recurring_distilled_csv
-from sarc.notifications.delivery import NotificationKind, record_notification_send
+from sarc.notifications.delivery import (
+    NotificationKind,
+    ack_stats_for_cycle,
+    record_notification_send,
+)
 from sarc.notifications.messages import (
     build_admin_digest,
     build_usage_report,
@@ -100,6 +104,35 @@ def _record_delivery(
             row.email,
             exc_info=True,
         )
+
+
+def _previous_ack_line(
+    kind: NotificationKind, window_end: datetime, cycle_weeks: int
+) -> str | None:
+    """Acknowledgement-rate line for the previous cycle, appended to the
+    admin delivery footer (SARC-802). The current cycle's rate would always
+    be 0 (its messages just went out), so the footer reports the cycle whose
+    messages have had a full cycle to be read. None when that cycle has no
+    tracked deliveries (pre-SARC-802) or the query failed — a stats hiccup
+    must not break the run.
+    """
+    previous_end = window_end - timedelta(weeks=cycle_weeks)
+    try:
+        stats = ack_stats_for_cycle(kind, previous_end)
+    except Exception:
+        logger.error(
+            "Failed to compute acknowledgement rate for %s/%s",
+            kind,
+            previous_end,
+            exc_info=True,
+        )
+        return None
+    if stats is None or stats.sent == 0:
+        return None
+    return (
+        f"acknowledged for {previous_end:%Y-%m-%d}: "
+        f"{stats.acknowledged}/{stats.sent} ({stats.rate:.0%})"
+    )
 
 
 def _deliver(
@@ -531,6 +564,11 @@ class UsageNotifyCommand:
                 count_label="flagged",
                 count=len(underusage_rows),
             )
+            ack_line = _previous_ack_line(
+                "underusage", end, ncfg.usage_cycle_length_weeks
+            )
+            if ack_line:
+                underusage_report_footer += f"\n{ack_line}"
 
         if usage_report_eligible:
             usage_report_footer = _build_delivery_footer(
