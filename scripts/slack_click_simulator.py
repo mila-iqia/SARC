@@ -19,9 +19,13 @@ Notes:
 - --window-end must match the campaign's window end (the button's encoded
   value) for the click to resolve to its notification_messages row; any
   click is recorded either way.
-- --channel/--message-ts are only stored on the feedback row (and used for
-  the chat.update the endpoint attempts — expected to fail against a
-  non-Slack ts, which is logged, not fatal).
+- --message-ts uses Slack's dotted form (1763578293.524512). A message link
+  shows it WITHOUT the dot (…/p1763578293524512): re-insert it before the
+  last 6 digits, or chat.update answers message_not_found.
+- The echoed message blocks come from build_ack_blocks() itself, so the
+  endpoint's chat.update receives exactly the blocks the app posted (Slack
+  rejects a chat.update whose blocks omit e.g. a button's text, and stub
+  blocks would fail against a real message).
 """
 
 import argparse
@@ -35,7 +39,10 @@ import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
 
-ACTIONS = {"ack": "sarc_notification_ack", "help": "sarc_notification_help"}
+from sarc.notifications.ack import ack_value, build_ack_blocks
+from sarc.notifications.delivery import ACK_ACTION_ID, HELP_ACTION_ID
+
+ACTIONS = {"ack": ACK_ACTION_ID, "help": HELP_ACTION_ID}
 
 
 def build_args() -> argparse.Namespace:
@@ -62,6 +69,7 @@ def main() -> int:
     window_end = datetime.fromisoformat(args.window_end).replace(tzinfo=UTC)
     action_id = ACTIONS[args.action]
 
+    value = ack_value(args.kind, window_end)
     payload = {
         "type": "block_actions",
         "user": {"id": args.slack_user},
@@ -70,25 +78,11 @@ def main() -> int:
             "ts": args.message_ts,
             "blocks": [
                 {"type": "section", "text": {"type": "mrkdwn", "text": "(body)"}},
-                {
-                    "type": "actions",
-                    "block_id": ACTIONS["ack"],
-                    "elements": [
-                        {"type": "button", "action_id": ACTIONS["ack"], "value": ""}
-                    ],
-                },
-                {
-                    "type": "actions",
-                    "block_id": ACTIONS["help"],
-                    "elements": [
-                        {"type": "button", "action_id": ACTIONS["help"], "value": ""}
-                    ],
-                },
+                # usage reports carry no buttons (mirrors the real message):
+                *(build_ack_blocks(args.kind, window_end) or []),
             ],
         },
-        "actions": [
-            {"action_id": action_id, "value": f"{args.kind}:{window_end.isoformat()}"}
-        ],
+        "actions": [{"action_id": action_id, "value": value}],
     }
     body = urllib.parse.urlencode({"payload": json.dumps(payload)}).encode()
     stamp = str(int(time.time()))
