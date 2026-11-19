@@ -9,9 +9,10 @@ from datetime import datetime
 from typing import Literal
 
 from sqlalchemy.dialects.postgresql import insert as pg_insert
+from sqlmodel import col, select
 
 from sarc.config import config
-from sarc.db.notifications import NotificationMessage
+from sarc.db.notifications import NotificationFeedback, NotificationMessage
 
 NotificationKind = Literal["underusage", "usage"]
 
@@ -54,3 +55,61 @@ def record_notification_send(
         )
         session.exec(upsert_stmt)
         session.commit()
+
+
+def find_notification_message_id(
+    *, slack_user_id: str, kind: NotificationKind, window_end: datetime
+) -> int | None:
+    """The tracked delivery row a click resolves to, or None.
+
+    Matches on the (user, kind, window_end) unique key — see the module
+    docstring of `sarc.notifications.ack` for why the click carries no id.
+    """
+    with config.db.session() as session:
+        stmt = (
+            select(NotificationMessage.id)
+            .where(
+                col(NotificationMessage.slack_user_id) == slack_user_id,
+                col(NotificationMessage.kind) == kind,
+                col(NotificationMessage.window_end) == window_end,
+            )
+            .limit(1)
+        )
+        return session.exec(stmt).first()
+
+
+def record_notification_feedback(
+    *,
+    slack_user_id: str,
+    kind: NotificationKind,
+    window_end: datetime,
+    action_id: str,
+    channel: str,
+    message_ts: str,
+    clicked_at: datetime,
+    message_id: int | None = None,
+) -> bool:
+    """Record an acknowledgement click; True when newly recorded.
+
+    Re-clicks of the same cycle's button are dropped (ON CONFLICT DO NOTHING
+    on the unique (slack_user_id, kind, window_end) key) so the numerator of
+    the acknowledgement rate counts people, not clicks — the first click wins.
+    """
+    with config.db.session() as session:
+        insert_stmt = pg_insert(NotificationFeedback).values(
+            message_id=message_id,
+            slack_user_id=slack_user_id,
+            kind=kind,
+            window_end=window_end,
+            action_id=action_id,
+            channel=channel,
+            message_ts=message_ts,
+            clicked_at=clicked_at,
+        )
+        result = session.exec(
+            insert_stmt.on_conflict_do_nothing(
+                index_elements=["slack_user_id", "kind", "window_end"]
+            )
+        )
+        session.commit()
+        return result.rowcount == 1

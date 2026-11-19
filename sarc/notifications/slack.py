@@ -66,6 +66,10 @@ class SlackClient:
             }
         ]
 
+    @staticmethod
+    def _mrkdwn_section(text: str) -> dict:
+        return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
+
     def _message_kwargs(self, channel: str, text: str, *, preformatted: bool) -> dict:
         kwargs: dict = {"channel": channel, "text": text}
         if preformatted:
@@ -124,9 +128,21 @@ class SlackClient:
             return SendResult(SendStatus.FAILED, str(exc))
 
     def dm_user(
-        self, email: str, text: str, *, preformatted: bool = False
+        self,
+        email: str,
+        text: str,
+        *,
+        preformatted: bool = False,
+        extra_blocks: list[dict] | None = None,
     ) -> SendResult:
-        """Send a DM to a user identified by their Slack-registered email."""
+        """Send a DM to a user identified by their Slack-registered email.
+
+        extra_blocks are Block Kit blocks appended after the message body
+        (e.g. the acknowledgement button). Passing them renders the whole
+        message as blocks: the preformatted body when preformatted=True,
+        otherwise the body as a single mrkdwn section — with blocks set,
+        Slack renders only blocks and demotes text to the fallback preview.
+        """
         try:
             lookup = self._client.users_lookupByEmail(email=email)
         except Exception as exc:
@@ -155,9 +171,13 @@ class SlackClient:
         try:
             conv = self._client.conversations_open(users=[user_id])
             channel_id = conv["channel"]["id"]
-            resp = self._client.chat_postMessage(
-                **self._message_kwargs(channel_id, text, preformatted=preformatted)
-            )
+            kwargs = self._message_kwargs(channel_id, text, preformatted=preformatted)
+            if extra_blocks:
+                body_blocks = list(kwargs.get("blocks") or []) or [
+                    self._mrkdwn_section(text)
+                ]
+                kwargs["blocks"] = [*body_blocks, *extra_blocks]
+            resp = self._client.chat_postMessage(**kwargs)
             return SendResult(
                 SendStatus.OK, ts=resp["ts"], slack_user_id=user_id, channel=channel_id
             )

@@ -16,6 +16,7 @@ from sqlmodel import select
 
 from sarc.db.notifications import NotificationMessage
 from sarc.db.users import UserDB
+from sarc.notifications.ack import ACK_ACTION_ID
 from sarc.notifications.slack import SendResult, SendStatus
 from tests.unittests.notifications.test_cli import (  # noqa: F401
     _CYCLE_WEEK,
@@ -94,6 +95,27 @@ def test_underusage_dms_record_one_row_each(notify_db, cli_main, monkeypatch):
         assert row.sent_at is not None and row.sent_at.tzinfo is not None
 
 
+def test_underusage_dms_carry_the_ack_button(  # noqa: F811
+    notify_db, cli_main, monkeypatch
+):
+    """Every underusage DM gets the ack actions block, its value encoding
+    (underusage, this run's window end)."""
+    slack_cls, slack_inst = _mock_slack_delivered()
+    _patch_senders(monkeypatch, slack_cls)
+    with gifnoc.overlay({"sarc.notifications": _underusage_only()}):
+        assert cli_main(["usage", "notify", "--as-of", _CYCLE_WEEK, "--send"]) == 0
+
+    expected_value = f"underusage:{_WINDOW_END_CYCLE_WEEK.isoformat()}"
+    assert slack_inst.dm_user.call_count > 0
+    for call in slack_inst.dm_user.call_args_list:
+        blocks = call.kwargs["extra_blocks"]
+        assert blocks is not None
+        (block,) = blocks
+        (button,) = block["elements"]
+        assert button["action_id"] == ACK_ACTION_ID
+        assert button["value"] == expected_value
+
+
 # ── usage-report DMs ───────────────────────────────────────────────────────
 
 
@@ -117,6 +139,27 @@ def test_usage_and_underusage_kinds_are_tracked_apart(
         ids["beaubonhomme@mila.quebec"]: "usage",
     }
     assert all(r.window_end == _WINDOW_END_USAGE_WEEK for r in rows)
+
+
+def test_usage_report_dms_carry_no_button(  # noqa: F811
+    usage_report_db, cli_main, monkeypatch
+):
+    """The neutral usage report DM stays buttonless; only the underusage DM
+    of the same run carries the ack block."""
+    slack_cls, slack_inst = _mock_slack_delivered()
+    _patch_senders(monkeypatch, slack_cls)
+    cfg = {**_NOTIFY_CFG, "send_underusage_report": True, "send_usage_report": True}
+    with gifnoc.overlay({"sarc.notifications": cfg}):
+        assert (
+            cli_main(["usage", "notify", "--as-of", _USAGE_REPORT_WEEK, "--send"]) == 0
+        )
+
+    by_email = {
+        c.args[0]: c.kwargs.get("extra_blocks")
+        for c in slack_inst.dm_user.call_args_list
+    }
+    assert by_email["petitbonhomme@mila.quebec"] is not None
+    assert by_email["beaubonhomme@mila.quebec"] is None
 
 
 # ── nothing recorded that should not be ────────────────────────────────────

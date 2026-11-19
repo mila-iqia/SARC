@@ -166,6 +166,58 @@ def test_dm_user_returns_ts_and_identity():
     assert result.channel == "C99999"
 
 
+def test_dm_user_extra_blocks_wrap_plain_body_in_mrkdwn_section():
+    """A default (un-preformatted) DM has no blocks; passing extra_blocks
+    renders body + extras as blocks, the body as a single mrkdwn section."""
+    web = MagicMock()
+    web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}
+    web.conversations_open.return_value = {"channel": {"id": "C99999"}}
+    web.chat_postMessage.return_value = {"ts": "111.222"}
+    client = _make_client(web)
+    extra = [{"type": "actions", "block_id": "ack", "elements": []}]
+
+    result = client.dm_user("alice@example.com", "hi *alice*", extra_blocks=extra)
+
+    assert result.status == SendStatus.OK
+    kwargs = web.chat_postMessage.call_args.kwargs
+    assert kwargs["text"] == "hi *alice*"
+    assert kwargs["blocks"] == [
+        {"type": "section", "text": {"type": "mrkdwn", "text": "hi *alice*"}},
+        extra[0],
+    ]
+
+
+def test_dm_user_extra_blocks_append_to_preformatted_body():
+    web = MagicMock()
+    web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}
+    web.conversations_open.return_value = {"channel": {"id": "C99999"}}
+    web.chat_postMessage.return_value = {"ts": "111.222"}
+    client = _make_client(web)
+    extra = [{"type": "actions", "block_id": "ack", "elements": []}]
+
+    client.dm_user(
+        "alice@example.com", "hi alice", preformatted=True, extra_blocks=extra
+    )
+
+    blocks = web.chat_postMessage.call_args.kwargs["blocks"]
+    assert blocks[0] == SlackClient._preformatted_blocks("hi alice")[0]
+    assert blocks[1] == extra[0]
+
+
+def test_dm_user_without_extra_blocks_sends_no_blocks():
+    """Regression: the default DM stays a plain-text message (no blocks),
+    exactly as before acknowledgement tracking."""
+    web = MagicMock()
+    web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}
+    web.conversations_open.return_value = {"channel": {"id": "C99999"}}
+    web.chat_postMessage.return_value = {"ts": "111.222"}
+    client = _make_client(web)
+
+    client.dm_user("alice@example.com", "hi alice")
+
+    assert "blocks" not in web.chat_postMessage.call_args.kwargs
+
+
 def test_dm_user_replaces_mention_token():
     web = MagicMock()
     web.users_lookupByEmail.return_value = {"user": {"id": "U12345"}}

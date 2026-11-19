@@ -8,6 +8,7 @@ import gifnoc
 import simple_parsing
 
 from sarc.config import config
+from sarc.notifications.ack import build_ack_blocks
 from sarc.notifications.csv_export import build_recurring_distilled_csv
 from sarc.notifications.delivery import NotificationKind, record_notification_send
 from sarc.notifications.messages import (
@@ -111,9 +112,12 @@ def _deliver(
     window_end: datetime,
 ) -> list[_DeliveryResult]:
     results: list[_DeliveryResult] = []
+    # One ack-button block set per delivery kind (None where the notification
+    # carries no button) — identical for every row of this run.
+    ack_blocks = build_ack_blocks(kind, window_end)
     for row in rows:
         text = build_fn(row)
-        slack_res = slack.dm_user(send_to or row.email, text)
+        slack_res = slack.dm_user(send_to or row.email, text, extra_blocks=ack_blocks)
         if slack_res.status == SendStatus.OK:
             # A --send-to redirect is a debug preview: the DM went to the
             # developer, not the flagged user — recording it would poison the
