@@ -46,7 +46,7 @@ def test_build_ack_blocks_underusage_shape():
     assert [b["block_id"] for b in blocks] == [ACK_ACTION_ID, HELP_ACTION_ID]
     expected = [
         (ACK_ACTION_ID, ACK_BUTTON_LABEL, "primary"),
-        (HELP_ACTION_ID, HELP_BUTTON_LABEL, "default"),
+        (HELP_ACTION_ID, HELP_BUTTON_LABEL, None),
     ]
     expected_value = ack_value("underusage", _WINDOW_END)
     for block, (action_id, label, style) in zip(blocks, expected, strict=True):
@@ -54,7 +54,9 @@ def test_build_ack_blocks_underusage_shape():
         (button,) = block["elements"]
         assert button["type"] == "button"
         assert button["action_id"] == action_id
-        assert button["style"] == style
+        # Slack rejects an explicit "default" style: the plain look is the
+        # key's ABSENCE (invalid_blocks otherwise, caught against the real API).
+        assert button.get("style") == style
         assert button["text"] == {"type": "plain_text", "text": label, "emoji": True}
         # Both buttons carry the same (kind, window_end) target value.
         assert button["value"] == expected_value

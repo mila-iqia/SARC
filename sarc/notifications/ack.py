@@ -50,20 +50,18 @@ def parse_ack_value(value: str) -> tuple[NotificationKind, datetime]:
     return kind, datetime.fromisoformat(stamp)
 
 
-def _button_block(action_id: str, label: str, value: str, style: str) -> dict:
-    return {
-        "type": "actions",
-        "block_id": action_id,
-        "elements": [
-            {
-                "type": "button",
-                "action_id": action_id,
-                "style": style,
-                "text": {"type": "plain_text", "text": label, "emoji": True},
-                "value": value,
-            }
-        ],
+def _button_block(action_id: str, label: str, value: str, style: str | None) -> dict:
+    button = {
+        "type": "button",
+        "action_id": action_id,
+        "text": {"type": "plain_text", "text": label, "emoji": True},
+        "value": value,
     }
+    # Slack's button `style` enum is primary|danger|warning only — the
+    # default look is the ABSENCE of the key, not a "default" value.
+    if style is not None:
+        button["style"] = style
+    return {"type": "actions", "block_id": action_id, "elements": [button]}
 
 
 def build_ack_blocks(kind: NotificationKind, window_end: datetime) -> list[dict] | None:
@@ -77,7 +75,7 @@ def build_ack_blocks(kind: NotificationKind, window_end: datetime) -> list[dict]
     value = ack_value(kind, window_end)
     return [
         _button_block(ACK_ACTION_ID, ACK_BUTTON_LABEL, value, "primary"),
-        _button_block(HELP_ACTION_ID, HELP_BUTTON_LABEL, value, "default"),
+        _button_block(HELP_ACTION_ID, HELP_BUTTON_LABEL, value, None),
     ]
 
 
