@@ -28,7 +28,9 @@ import argparse
 import hashlib
 import hmac
 import json
+import sys
 import time
+import urllib.error
 import urllib.parse
 import urllib.request
 from datetime import UTC, datetime
@@ -105,12 +107,20 @@ def main() -> int:
             "X-Slack-Signature": signature,
         },
     )
-    with urllib.request.urlopen(request) as response:
+    label = f"{args.action} click by {args.slack_user} on {args.kind}/{args.window_end}"
+    try:
+        with urllib.request.urlopen(request) as response:
+            print(f"HTTP {response.status} for {label}: {response.read().decode()!r}")
+        return 0
+    except urllib.error.HTTPError as error:
+        # FastAPI error bodies carry the why ({"detail": …}) — far more useful
+        # than a traceback (e.g. 503 = signing_secret missing from config,
+        # 401 = --secret does not match the server's).
         print(
-            f"HTTP {response.status} for {args.action} click by {args.slack_user} "
-            f"on {args.kind}/{args.window_end}: {response.read().decode()!r}"
+            f"HTTP {error.code} {error.reason} for {label}: {error.read().decode()}",
+            file=sys.stderr,
         )
-    return 0
+        return 1
 
 
 if __name__ == "__main__":
