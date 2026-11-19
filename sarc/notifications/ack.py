@@ -19,6 +19,9 @@ on it."""
 
 ACK_BUTTON_LABEL = "✅ I've read this message"
 
+ACKED_FALLBACK_TEXT = "✅ Acknowledged — thanks!"
+"""chat.update fallback text (notification preview) once acked."""
+
 _ACK_VALUE_SEPARATOR = ":"
 
 
@@ -61,4 +64,28 @@ def build_ack_blocks(kind: NotificationKind, window_end: datetime) -> list[dict]
                 }
             ],
         }
+    ]
+
+
+def acked_blocks(blocks: list[dict] | None, confirmed_at: datetime) -> list[dict]:
+    """The message's blocks after acknowledgement: the ack actions block is
+    replaced by a confirmation line (the Confluence doc's «Confirmé le …»
+    behavior) so the button cannot be clicked again.
+
+    ``blocks`` is the message's block list as echoed back in the interactivity
+    payload; when it is missing (payload variants that omit the message),
+    degrade to a single confirmation line — the click is recorded either way.
+    """
+    confirmation = {
+        "type": "section",
+        "text": {
+            "type": "mrkdwn",
+            "text": f"✅ Confirmed on {confirmed_at:%Y-%m-%d} — thanks!",
+        },
+    }
+    if not blocks:
+        return [confirmation]
+    return [
+        confirmation if block.get("block_id") == ACK_ACTION_ID else block
+        for block in blocks
     ]

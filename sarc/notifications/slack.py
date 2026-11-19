@@ -99,6 +99,22 @@ class SlackClient:
             logger.error("Slack channel post failed: %s", exc)
             return SendResult(SendStatus.FAILED, str(exc))
 
+    def update_message(
+        self, channel: str, ts: str, *, blocks: list[dict], text: str
+    ) -> SendResult:
+        """chat.update — replace a previously posted message's content.
+
+        Used to turn an ack button into its confirmation state once the click
+        has been recorded (SARC-802); a failure means the click is stored but
+        the button stays live, which is recoverable (re-clicks are deduped).
+        """
+        try:
+            self._client.chat_update(channel=channel, ts=ts, blocks=blocks, text=text)
+            return SendResult(SendStatus.OK)
+        except Exception as exc:
+            logger.error("Slack message update failed for %s/%s: %s", channel, ts, exc)
+            return SendResult(SendStatus.FAILED, str(exc))
+
     def upload_files(
         self,
         channel: str,

@@ -287,6 +287,10 @@ class SlackConfig:
     description: str
     token: Secret[str]
     channel: str
+    signing_secret: Secret[str] | None = None
+    """The Slack app's signing secret, required to verify interactivity
+    requests (ack buttons, SARC-802). Only apps whose messages carry
+    interactive elements need it."""
 
 
 @dataclass
