@@ -51,7 +51,7 @@ class SarcClient:
         if config_file is None:
             from . import default_client
 
-            return default_client._obj()  # ty:ignore[unresolved-attribute]
+            return default_client._obj()  # ty:ignore[missing-attribute]
         else:
             if isinstance(config_file, str):
                 config_file = deserialize(FileSource, config_file)

@@ -614,12 +614,12 @@ def job_series(
     # Determine the set of columns to select
     names = {
         c.name
-        for c in JobSeriesDB.__table__.columns  # ty:ignore[unresolved-attribute]
+        for c in JobSeriesDB.__table__.columns  # ty:ignore[missing-attribute]
         if c.name not in _SERIES_OPTIONAL_COLS
     }
     for extra in extra_fields_set:
         names |= _EXTRA_FIELDS[extra]
-    cols = [JobSeriesDB.__table__.c[name] for name in names]  # ty:ignore[unresolved-attribute]
+    cols = [JobSeriesDB.__table__.c[name] for name in names]  # ty:ignore[missing-attribute]
 
     query = select(*cols)
     query = query_opt.apply_filters(query)

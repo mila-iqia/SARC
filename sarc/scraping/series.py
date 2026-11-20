@@ -238,8 +238,8 @@ def get_job_time_series_batched(
                 series_values = series_data.get("values", [])
                 for idx in job_map[job_id]:
                     job = jobs[idx]
-                    start_ts = job.start_time.timestamp()  # ty:ignore[unresolved-attribute]
-                    end_ts = job.end_time.timestamp()  # ty:ignore[unresolved-attribute]
+                    start_ts = job.start_time.timestamp()  # ty:ignore[missing-union-attribute]
+                    end_ts = job.end_time.timestamp()  # ty:ignore[missing-union-attribute]
 
                     # Filter points belonging strictly to this job run
                     filtered_values = [
