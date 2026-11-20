@@ -15,6 +15,7 @@ def get_meta():
         healthcheck,
         job,
         job_series,
+        notifications,
         runstate,
         support,
         target_share,

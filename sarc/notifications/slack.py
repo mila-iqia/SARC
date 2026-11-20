@@ -34,6 +34,11 @@ class SendResult:
     status: SendStatus
     detail: str = ""
     ts: str | None = None
+    slack_user_id: str | None = None
+    """Set on DM sends: the Slack user id the email resolved to."""
+    channel: str | None = None
+    """Set on DM sends: the DM channel id the message was posted to. With ts,
+    identifies the message for chat.update (acknowledgement tracking)."""
 
 
 class SlackClient:
@@ -60,6 +65,10 @@ class SlackClient:
                 ],
             }
         ]
+
+    @staticmethod
+    def _mrkdwn_section(text: str) -> dict:
+        return {"type": "section", "text": {"type": "mrkdwn", "text": text}}
 
     def _message_kwargs(self, channel: str, text: str, *, preformatted: bool) -> dict:
         kwargs: dict = {"channel": channel, "text": text}
@@ -88,6 +97,22 @@ class SlackClient:
             return SendResult(SendStatus.OK, ts=resp["ts"])
         except Exception as exc:
             logger.error("Slack channel post failed: %s", exc)
+            return SendResult(SendStatus.FAILED, str(exc))
+
+    def update_message(
+        self, channel: str, ts: str, *, blocks: list[dict], text: str
+    ) -> SendResult:
+        """chat.update — replace a previously posted message's content.
+
+        Used to turn an ack button into its confirmation state once the click
+        has been recorded (SARC-802); a failure means the click is stored but
+        the button stays live, which is recoverable (re-clicks are deduped).
+        """
+        try:
+            self._client.chat_update(channel=channel, ts=ts, blocks=blocks, text=text)
+            return SendResult(SendStatus.OK)
+        except Exception as exc:
+            logger.error("Slack message update failed for %s/%s: %s", channel, ts, exc)
             return SendResult(SendStatus.FAILED, str(exc))
 
     def upload_files(
@@ -119,9 +144,21 @@ class SlackClient:
             return SendResult(SendStatus.FAILED, str(exc))
 
     def dm_user(
-        self, email: str, text: str, *, preformatted: bool = False
+        self,
+        email: str,
+        text: str,
+        *,
+        preformatted: bool = False,
+        extra_blocks: list[dict] | None = None,
     ) -> SendResult:
-        """Send a DM to a user identified by their Slack-registered email."""
+        """Send a DM to a user identified by their Slack-registered email.
+
+        extra_blocks are Block Kit blocks appended after the message body
+        (e.g. the acknowledgement button). Passing them renders the whole
+        message as blocks: the preformatted body when preformatted=True,
+        otherwise the body as a single mrkdwn section — with blocks set,
+        Slack renders only blocks and demotes text to the fallback preview.
+        """
         try:
             lookup = self._client.users_lookupByEmail(email=email)
         except Exception as exc:
@@ -150,10 +187,16 @@ class SlackClient:
         try:
             conv = self._client.conversations_open(users=[user_id])
             channel_id = conv["channel"]["id"]
-            self._client.chat_postMessage(
-                **self._message_kwargs(channel_id, text, preformatted=preformatted)
+            kwargs = self._message_kwargs(channel_id, text, preformatted=preformatted)
+            if extra_blocks:
+                body_blocks = list(kwargs.get("blocks") or []) or [
+                    self._mrkdwn_section(text)
+                ]
+                kwargs["blocks"] = [*body_blocks, *extra_blocks]
+            resp = self._client.chat_postMessage(**kwargs)
+            return SendResult(
+                SendStatus.OK, ts=resp["ts"], slack_user_id=user_id, channel=channel_id
             )
-            return SendResult(SendStatus.OK)
         except Exception as exc:
             logger.error("Slack DM failed for %s (%s): %s", email, user_id, exc)
             return SendResult(SendStatus.FAILED, str(exc))

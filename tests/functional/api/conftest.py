@@ -31,6 +31,7 @@ def app(oauth_mock, oauth_port):
     from sarc.api.metrics import router as metrics_router
     from sarc.api.reports import browser_router as reports_browser_router
     from sarc.api.reports import router as reports_router
+    from sarc.api.slack import router as slack_router
     from sarc.api.v0 import router
 
     def client(email=None):
@@ -56,6 +57,9 @@ def app(oauth_mock, oauth_port):
         # test_reports_browser.
         app.include_router(reports_router)
         app.include_router(reports_browser_router)
+        # Signature-verified (not OAuth-gated) Slack interactivity, exercised
+        # by test_slack_interactivity.
+        app.include_router(slack_router)
         server_config = config.server
         assert server_config is not None
         if server_config.auth is not None:
