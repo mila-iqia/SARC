@@ -16,7 +16,7 @@ from sqlmodel import select
 from sarc.db.notifications import NotificationFeedback, NotificationMessage
 from sarc.db.users import UserDB
 from sarc.notifications.ack import ACK_ACTION_ID, HELP_ACTION_ID, ack_value
-from sarc.notifications.delivery import ack_stats_for_cycle, record_notification_send
+from sarc.notifications.delivery import ack_rate_by_cycle, record_notification_send
 from sarc.notifications.slack import SendResult, SendStatus
 from tests.unittests.notifications.test_cli import _NOTIFY_CFG
 
@@ -288,7 +288,7 @@ def test_read_then_help_both_recorded_without_hiding_each_other(
     rows = _feedback_rows(read_write_db)
     assert {r.action_id for r in rows} == {ACK_ACTION_ID, HELP_ACTION_ID}
     # The read ack still counts once toward the acknowledgement rate.
-    stats = ack_stats_for_cycle("underusage", _WINDOW_END)
+    (stats,) = ack_rate_by_cycle(kind="underusage")  # the test seeds one cycle
     assert (stats.sent, stats.acknowledged) == (1, 1)
 
     _, kwargs = mock_updater.update_message.call_args
@@ -306,5 +306,5 @@ def test_help_request_alone_is_not_an_acknowledgement(
             _post_click(anon_client, _click_payload(action_id=HELP_ACTION_ID))
         ).status_code == 200
 
-    stats = ack_stats_for_cycle("underusage", _WINDOW_END)
+    (stats,) = ack_rate_by_cycle(kind="underusage")  # the test seeds one cycle
     assert (stats.sent, stats.acknowledged) == (1, 0)

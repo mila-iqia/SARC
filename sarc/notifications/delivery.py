@@ -182,28 +182,27 @@ def _stats(row) -> AckCycleStats:
     )
 
 
-def ack_stats_for_cycle(
-    kind: NotificationKind, window_end: datetime
-) -> AckCycleStats | None:
-    """Sent/acknowledged counts of one cycle, or None when it has no tracked
-    delivery (nothing sent through this tracker — e.g. a pre-SARC-802 cycle)."""
-    stmt = _ack_stats_stmt().where(
-        col(NotificationMessage.kind) == kind,
-        col(NotificationMessage.window_end) == window_end,
-    )
-    with config.db.session() as session:
-        row = session.exec(stmt).first()
-    return _stats(row) if row is not None else None
-
-
 def ack_rate_by_cycle(
-    *, kind: NotificationKind | None = None, limit: int | None = None
+    *,
+    kind: NotificationKind | None = None,
+    limit: int | None = None,
+    before: datetime | None = None,
 ) -> list[AckCycleStats]:
     """Per-cycle ack counts, most recent cycle first; all kinds unless
-    filtered. ``limit`` caps the number of (kind, cycle) rows returned."""
+    filtered. ``limit`` caps the number of (kind, cycle) rows returned.
+    ``before`` keeps only cycles strictly older than the given instant —
+    combined with ``limit=1`` it asks for "the most recent tracked cycle
+    before this one", robust to any cadence gap (53-week ISO years, skipped
+    or unflagged cycles) where the date arithmetic `window_end - N weeks`
+    would land on a cycle that never sent anything.
+    """
     stmt = _ack_stats_stmt()
     if kind is not None:
         stmt = stmt.where(col(NotificationMessage.kind) == kind)
+    if before is not None:
+        # Strictly before: the current cycle's rows already exist when the
+        # footer is built, and its ack rate would read ~0%.
+        stmt = stmt.where(col(NotificationMessage.window_end) < before)
     stmt = stmt.order_by(
         desc(col(NotificationMessage.window_end)), col(NotificationMessage.kind)
     )

@@ -9,11 +9,11 @@ import gifnoc
 import pytest
 from sqlmodel import select
 
+from sarc.cli.usage.notify import _previous_ack_line
 from sarc.db.users import UserDB
 from sarc.notifications.delivery import (
     AckCycleStats,
     ack_rate_by_cycle,
-    ack_stats_for_cycle,
     record_notification_feedback,
     record_notification_send,
 )
@@ -77,19 +77,28 @@ def _seed_cycle(session, *, kind, window_end, sent, acked):
 # ── stats helpers ───────────────────────────────────────────────────────────
 
 
-def test_ack_stats_for_cycle(jobless_read_write_db):
+def _cycle_stats(kind, window_end) -> AckCycleStats | None:
+    """The ack counts of one (kind, cycle), or None when it has no tracked
+    delivery — the shape `ack_stats_for_cycle` used to expose, now read off
+    the per-cycle list."""
+    return next(
+        (s for s in ack_rate_by_cycle(kind=kind) if s.window_end == window_end), None
+    )
+
+
+def test_cycle_counts(jobless_read_write_db):
     _seed_cycle(
         jobless_read_write_db, kind="underusage", window_end=_W2, sent=3, acked=2
     )
 
-    stats = ack_stats_for_cycle("underusage", _W2)
+    stats = _cycle_stats("underusage", _W2)
     assert stats == AckCycleStats(
         kind="underusage", window_end=_W2, sent=3, acknowledged=2
     )
     assert stats.rate == pytest.approx(2 / 3)
     # Other kinds and unknown cycles have nothing tracked.
-    assert ack_stats_for_cycle("usage", _W2) is None
-    assert ack_stats_for_cycle("underusage", _W1) is None
+    assert _cycle_stats("usage", _W2) is None
+    assert _cycle_stats("underusage", _W1) is None
 
 
 def test_repeat_click_does_not_inflate_ack_count(jobless_read_write_db):
@@ -106,7 +115,7 @@ def test_repeat_click_does_not_inflate_ack_count(jobless_read_write_db):
         message_ts="111.0",
         clicked_at=_CLICKED_AT + timedelta(hours=1),
     )
-    stats = ack_stats_for_cycle("underusage", _W2)
+    stats = _cycle_stats("underusage", _W2)
     assert (stats.sent, stats.acknowledged) == (2, 1)
 
 
@@ -126,7 +135,7 @@ def test_help_click_is_not_an_acknowledgement(jobless_read_write_db):
             message_ts=f"111.{i}",
             clicked_at=_CLICKED_AT,
         )
-    stats = ack_stats_for_cycle("underusage", _W2)
+    stats = _cycle_stats("underusage", _W2)
     assert (stats.sent, stats.acknowledged) == (2, 0)
 
 
@@ -153,6 +162,23 @@ def test_ack_rate_by_cycle_ordering_and_filters(jobless_read_write_db):
     assert [s.window_end for s in only_underusage] == [_W2, _W1]
 
     assert len(ack_rate_by_cycle(limit=1)) == 1
+
+
+def test_ack_rate_by_cycle_before(jobless_read_write_db):
+    """`before` is strict: the current cycle already has rows when the footer
+    is built, and must never select itself (its ack rate reads ~0%)."""
+    _seed_cycle(
+        jobless_read_write_db, kind="underusage", window_end=_W1, sent=2, acked=2
+    )
+    _seed_cycle(
+        jobless_read_write_db, kind="underusage", window_end=_W2, sent=4, acked=0
+    )
+
+    assert [s.window_end for s in ack_rate_by_cycle(before=_W2)] == [_W1]
+    # The newest before each cycle — exactly what the footer asks for:
+    latest = ack_rate_by_cycle(kind="underusage", before=_W2, limit=1)
+    assert [(s.window_end, s.sent, s.acknowledged) for s in latest] == [(_W1, 2, 2)]
+    assert ack_rate_by_cycle(before=_W1) == []
 
 
 # ── usage ack-stats CLI ─────────────────────────────────────────────────────
@@ -189,6 +215,37 @@ def test_ack_stats_cli_no_data_yet(jobless_read_write_db, cli_main, capsys):
 
 
 # ── previous-cycle line in the notify footer ────────────────────────────────
+
+
+def test_previous_ack_line(jobless_read_write_db):
+    _seed_cycle(
+        jobless_read_write_db, kind="underusage", window_end=_W1, sent=3, acked=2
+    )
+    assert (
+        _previous_ack_line("underusage", _W2)
+        == "acknowledged for 2024-06-02: 2/3 (67%)"
+    )
+    # Nothing before the earliest cycle, and other kinds have nothing.
+    assert _previous_ack_line("underusage", _W1) is None
+    assert _previous_ack_line("usage", _W2) is None
+
+
+def test_previous_ack_line_survives_53_week_iso_year(jobless_read_write_db):
+    """2026 is a 53-week ISO year: with 2-week cycles, sends on ISO weeks 53
+    and 1 are skipped, so 2027-01-11 (week 2) follows 2026-12-21 (week 52)
+    after a 3-week gap. The DB lookup finds the real last campaign; the
+    date-arithmetic version looked for 2026-12-28 and dropped the line."""
+    week52 = datetime(2026, 12, 21, tzinfo=UTC)
+    week2 = datetime(2027, 1, 11, tzinfo=UTC)
+    assert (week52.isocalendar().week, week2.isocalendar().week) == (52, 2)
+
+    _seed_cycle(
+        jobless_read_write_db, kind="underusage", window_end=week52, sent=3, acked=2
+    )
+    assert (
+        _previous_ack_line("underusage", week2)
+        == "acknowledged for 2026-12-21: 2/3 (67%)"
+    )
 
 
 def test_notify_footer_shows_previous_cycle_ack_rate(

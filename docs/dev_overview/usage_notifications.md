@@ -299,7 +299,10 @@ Tracking tables (one row grain each):
 
 Only the read button feeds the acknowledgement rate (`acknowledged` counts
 `sarc_notification_ack` feedback rows), exposed by `sarc usage ack-stats` and
-by the previous-cycle line in the admin delivery-summary footer.
+by the admin delivery-summary footer line — which reports the most recent
+*tracked* cycle before the current one (looked up in the DB, not computed as
+`window_end − N weeks`: 53-week ISO years make consecutive sends 3 weeks
+apart, and unflagged cycles leave no rows to find).
 
 Who clicked what — e.g. through the `sarc-sql` skill:
 
