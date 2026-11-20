@@ -2,6 +2,7 @@
 
 import hashlib
 import hmac
+import inspect
 import json
 import time
 import urllib.parse
@@ -114,6 +115,23 @@ def _seed_delivery(session, *, kind="underusage", window_end=_WINDOW_END):
         slack_user_id="U0ABC",
         sent_at=window_end,
     )
+
+
+# ── execution model ─────────────────────────────────────────────────────────
+
+
+def test_route_is_sync_so_click_handling_runs_off_the_event_loop():
+    """FastAPI runs `async def` routes ON the event loop: this route's
+    synchronous work (two pg8000 sessions, the slack_sdk chat.update whose
+    retry handler can sleep for seconds on a 429) would then freeze every
+    other request for the duration of a click. A plain `def` runs in a
+    threadpool; only the body read stays async, via its own dependency.
+    Structural lock — a refactor that "modernises" the route to async def
+    would silently reintroduce the stall."""
+    from sarc.api.slack import _raw_body, slack_interactivity
+
+    assert not inspect.iscoroutinefunction(slack_interactivity)
+    assert inspect.iscoroutinefunction(_raw_body)
 
 
 # ── signature gate ──────────────────────────────────────────────────────────

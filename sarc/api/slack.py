@@ -17,7 +17,7 @@ import time
 import urllib.parse
 from datetime import UTC, datetime
 
-from fastapi import APIRouter, HTTPException, Request, status
+from fastapi import APIRouter, Depends, HTTPException, Request, status
 
 from sarc.config import config
 from sarc.notifications.ack import (
@@ -103,8 +103,21 @@ def _decode_payload(body: bytes, content_type: str) -> dict:
     return payload
 
 
+async def _raw_body(request: Request) -> bytes:
+    """The request body, awaited off the event loop.
+
+    Reading the body is the one part of handling that must be async; the
+    route itself is a plain ``def`` so FastAPI runs its blocking work (two
+    synchronous pg8000 sessions and the synchronous slack_sdk ``chat.update``,
+    whose retry handler can sleep for seconds on a 429) in a threadpool
+    instead of freezing the whole app for every click. FastAPI evaluates
+    async dependencies on the loop even for sync routes.
+    """
+    return await request.body()
+
+
 @router.post("/slack/interactivity")
-async def slack_interactivity(request: Request) -> dict:
+def slack_interactivity(request: Request, body: bytes = Depends(_raw_body)) -> dict:
     """Handle a Slack interactivity request (signature-verified).
 
     Responds to the URL-verification challenge, and for button clicks (read
@@ -114,8 +127,9 @@ async def slack_interactivity(request: Request) -> dict:
     answers 200 to a genuine click (even a duplicate or an unresolvable one)
     so Slack does not surface an error to the clicker; the click is recorded
     even when the message update fails — a re-click then stays deduped.
+
+    A plain ``def`` on purpose (see _raw_body); keep it so.
     """
-    body = await request.body()
     if not verify_request_signature(
         _signing_secret(),
         body,
