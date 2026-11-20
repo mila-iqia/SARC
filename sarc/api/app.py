@@ -4,6 +4,7 @@ from ..config import config
 from .metrics import router as metrics_router
 from .reports import browser_router as reports_browser_router
 from .reports import router as reports_router
+from .slack import router as slack_router
 from .v0 import router as v0_router
 
 
@@ -19,6 +20,7 @@ def create_app(with_auth: bool = True) -> FastAPI:
     app.include_router(metrics_router)
     app.include_router(reports_router)
     app.include_router(reports_browser_router)
+    app.include_router(slack_router)
     if with_auth:
         auth_config = config.server.auth
         if auth_config is not None:
