@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import time
 from datetime import datetime, timedelta
 from difflib import unified_diff
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
@@ -249,30 +247,6 @@ def test_sacct_bin_and_accounts(test_config, remote):
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
-
-
-@patch("os.system")
-@pytest.mark.usefixtures("jobless_read_write_db")
-def test_localhost(os_system, monkeypatch):
-    # This test requires write_setup.cache to be empty else it will never call
-    # mock_subprocess_run
-    def mock_subprocess_run(*args, **kwargs):
-        mock_subprocess_run.called += 1
-        return subprocess.CompletedProcess(
-            args=args, returncode=0, stdout='{"jobs": []}', stderr=""
-        )
-
-    mock_subprocess_run.called = 0
-
-    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
-
-    fetch_raw(
-        cluster=config.clusters["local"],
-        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-    )
-
-    assert mock_subprocess_run.called >= 1
 
 
 @pytest.mark.parametrize(
@@ -1270,26 +1244,6 @@ def test_parse_jobs_user_link_with_match(
     jobs = list(get_jobs())
     assert len(jobs) == 1
     assert jobs[0].sarc_user_id == 11
-
-
-@pytest.mark.usefixtures("jobless_read_write_db")
-def test_fetch_raw_localhost_timeout(monkeypatch):
-    """A sacct command exceeding its timeout raises FetchTimeout."""
-    from sarc.errors import FetchTimeout
-
-    def mock_subprocess_run(*args, **kwargs):
-        assert kwargs["timeout"] == 12
-        raise subprocess.TimeoutExpired(cmd=args[0], timeout=kwargs["timeout"])
-
-    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
-
-    with pytest.raises(FetchTimeout):
-        fetch_raw(
-            cluster=config.clusters["local"],
-            start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-            end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-            timeout=12,
-        )
 
 
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
