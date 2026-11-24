@@ -566,7 +566,7 @@ def test_fetch_slurmconfig_timeout(cli_main, test_config, monkeypatch, caplog):
         is_connected = True
 
         def run(self, cmd, hide, timeout):
-            assert 0 < timeout <= self.timeout_expected
+            assert timeout == self.timeout_expected
             if self.cluster_name == "raisin":
                 raise CommandTimedOut(result=None, timeout=timeout)
             return type("Result", (), {"stdout": SLURM_CONF_RAISIN_2020_01_01})()

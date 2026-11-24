@@ -1,5 +1,4 @@
 import logging
-import time
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -72,9 +71,6 @@ def fetch_jobs(
     ):
         assert cluster_name in cluster_configs
         cluster_config = cluster_configs[cluster_name]
-        # The cluster timeout covers the whole fetch for this cluster,
-        # i.e. all the intervals together.
-        deadline = time.monotonic() + cluster_config.timeout.total_seconds()
         # Fetch the jobs for each time interval
         for time_from, time_to in intervals:
             with using_trace(
@@ -91,14 +87,7 @@ def fetch_jobs(
                     )
                     key = f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
 
-                    remaining = deadline - time.monotonic()
-                    if remaining <= 0:
-                        raise FetchTimeout(
-                            f"timeout of {cluster_config.timeout} exceeded"
-                        )
-                    raw_data = fetch_raw(
-                        cluster_config, time_from, time_to, timeout=remaining
-                    )
+                    raw_data = fetch_raw(cluster_config, time_from, time_to)
                     yield (key, raw_data)
 
                     if auto_interval is not None:
@@ -146,7 +135,7 @@ def fetch_jobs(
 
                 except FetchTimeout as e:
                     logger.error(
-                        f"Timeout ({clusters[cluster_name].timeout}) exceeded while fetching jobs on {cluster_name}: {e} ; skipping cluster."
+                        f"Timeout exceeded while fetching jobs on {cluster_name}: {e} ; skipping cluster."
                     )
                 # pylint: disable=broad-exception-caught
                 except Exception as e:

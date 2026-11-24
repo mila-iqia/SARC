@@ -36,6 +36,7 @@ class FakeConnection:
 def cluster(monkeypatch):
     cluster = config.clusters["raisin"]
     monkeypatch.setattr(cluster, "timeout", timedelta(seconds=42))
+    monkeypatch.setattr(cluster, "timeout_ssh", timedelta(seconds=7))
     return cluster
 
 
@@ -44,30 +45,37 @@ def _use(monkeypatch, cluster, conn):
     return conn
 
 
+def test_default_timeouts():
+    cluster = config.clusters["patate"]
+    assert cluster.timeout == timedelta(minutes=10)
+    assert cluster.timeout_ssh == timedelta(seconds=90)
+
+
 def test_ssh_run_sets_connection_timeouts(monkeypatch, cluster):
     conn = _use(monkeypatch, cluster, FakeConnection())
 
     assert cluster.ssh_run("hostname").stdout == "ok"
 
     assert conn.opened == 1
-    assert conn.connect_timeout == 42
+    assert conn.connect_timeout == 7
     assert conn.connect_kwargs == {
         "pkey": "dummy",
-        "banner_timeout": 42,
-        "auth_timeout": 42,
-        "channel_timeout": 42,
+        "banner_timeout": 7,
+        "auth_timeout": 7,
+        "channel_timeout": 7,
     }
-    ((cmd, timeout),) = conn.runs
-    assert cmd == "hostname"
-    # The command gets what remains of the budget after connecting.
-    assert 0 < timeout <= 42
+    assert conn.runs == [("hostname", 42)]
 
 
-def test_ssh_run_explicit_timeout(monkeypatch, cluster):
+def test_ssh_run_each_command_gets_full_timeout(monkeypatch, cluster):
     conn = _use(monkeypatch, cluster, FakeConnection())
-    cluster.ssh_run("hostname", timeout=5)
-    assert conn.connect_timeout == 5
-    assert 0 < conn.runs[0][1] <= 5
+
+    cluster.ssh_run("first")
+    cluster.ssh_run("second")
+
+    # Connection is opened once, and each command gets the whole timeout.
+    assert conn.opened == 1
+    assert conn.runs == [("first", 42), ("second", 42)]
 
 
 def test_ssh_run_already_connected(monkeypatch, cluster):
@@ -90,9 +98,9 @@ def test_ssh_run_already_connected(monkeypatch, cluster):
     ],
 )
 def test_ssh_run_connection_timeout(monkeypatch, cluster, error):
-    # Banner errors don't always say "timeout": pretend the budget is spent.
+    # Banner errors don't always say "timeout": pretend timeout_ssh is spent.
     if "banner" in str(error):
-        monkeypatch.setattr(cluster, "timeout", timedelta(seconds=0))
+        monkeypatch.setattr(cluster, "timeout_ssh", timedelta(seconds=0))
     conn = _use(monkeypatch, cluster, FakeConnection(open_error=error))
     with pytest.raises(FetchTimeout, match="SSH connection"):
         cluster.ssh_run("hostname")

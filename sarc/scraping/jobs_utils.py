@@ -156,13 +156,11 @@ def _date_is_utc(value: datetime) -> bool:
 
 
 @trace_decorator()
-def fetch_raw(
-    cluster: ClusterConfig, start: datetime, end: datetime, timeout: float | None = None
-) -> bytes:
+def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     """Fetch the raw sacct data via SSH.
 
-    If `timeout` (in seconds) is given and the sacct command runs longer,
-    raise FetchTimeout.
+    Raise FetchTimeout if the SSH connection takes longer than the cluster
+    `timeout_ssh`, or the sacct command longer than the cluster `timeout`.
     """
     fmt = "%Y-%m-%dT%H:%M"
     start_str = start.strftime(fmt)
@@ -179,7 +177,7 @@ def fetch_raw(
     logger.debug(f"{cluster.name} $ {cmd}")
     ssh = cluster.ssh
     ssh.config.run.env = {"TZ": "UTC"} if not cluster.ignore_tz_utc else {}
-    results = cluster.ssh_run(cmd, timeout=timeout)
+    results = cluster.ssh_run(cmd)
     logger.debug(results.stdout)
 
     # return stdout as bytes

@@ -86,10 +86,14 @@ class ClusterConfig:
     diskusage: list[DiskUsageConfig] | None = None
     start_date: date = date(2022, 4, 1)
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
-    # Maximum time allowed to fetch data from this cluster (sacct jobs,
-    # slurm.conf). When exceeded, the cluster is skipped with an error.
+    # Maximum time allowed for each command run on this cluster to fetch
+    # data (each sacct call for jobs, slurm.conf download).
+    # When exceeded, the cluster is skipped with an error.
     # Format: e.g. "10m", "1h30m", "90s".
     timeout: timedelta = timedelta(minutes=10)
+    # Maximum time allowed to establish the SSH connection to this cluster.
+    # When exceeded, the cluster is skipped with an error.
+    timeout_ssh: timedelta = timedelta(seconds=90)
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
     billing_is_gpu: bool = False
@@ -191,30 +195,30 @@ class ClusterConfig:
             },
         )
 
-    def ssh_run(self, cmd: str, timeout: float | None = None) -> Result:
-        """Run `cmd` on the cluster through SSH, with a time limit.
+    def ssh_run(self, cmd: str) -> Result:
+        """Run `cmd` on the cluster through SSH, with time limits.
 
-        The time limit (in seconds, defaults to the cluster `timeout`) covers
-        both opening the SSH connection, if not already open, and running the
-        command. Raise FetchTimeout if it is exceeded.
+        Opening the SSH connection, if not already open, is limited by
+        `timeout_ssh`, and running the command by `timeout`.
+        Raise FetchTimeout if either is exceeded.
         """
         from invoke.exceptions import CommandTimedOut
 
-        budget = self.timeout.total_seconds() if timeout is None else timeout
-        deadline = time.monotonic() + budget
         ssh = self.ssh
 
         if not ssh.is_connected:
+            timeout_ssh = self.timeout_ssh.total_seconds()
             # `timeout` bounds TCP connect, SSH banner and key exchange;
-            # the others bound the following steps, which paramiko
-            # measures separately.
-            ssh.connect_timeout = budget
+            # the others bound authentication and session channel opening,
+            # which paramiko measures separately.
+            ssh.connect_timeout = timeout_ssh
             ssh.connect_kwargs = {
                 **(ssh.connect_kwargs or {}),
-                "banner_timeout": budget,
-                "auth_timeout": budget,
-                "channel_timeout": budget,
+                "banner_timeout": timeout_ssh,
+                "auth_timeout": timeout_ssh,
+                "channel_timeout": timeout_ssh,
             }
+            start = time.monotonic()
             try:
                 ssh.open()
             except Exception as e:
@@ -224,23 +228,18 @@ class ClusterConfig:
                     isinstance(e, TimeoutError)
                     or "timeout" in str(e).lower()
                     or "timed out" in str(e).lower()
-                    or time.monotonic() >= deadline
+                    or time.monotonic() - start >= timeout_ssh
                 ):
                     raise FetchTimeout(
-                        f"SSH connection to {self.host} timed out after {budget:.0f}s"
+                        f"SSH connection to {self.host} timed out after {self.timeout_ssh}"
                     ) from e
                 raise
 
-        remaining = deadline - time.monotonic()
-        if remaining <= 0:
-            raise FetchTimeout(
-                f"SSH connection to {self.host} took longer than {budget:.0f}s"
-            )
         try:
-            return ssh.run(cmd, hide=True, timeout=remaining)
+            return ssh.run(cmd, hide=True, timeout=self.timeout.total_seconds())
         except CommandTimedOut as e:
             raise FetchTimeout(
-                f"`{cmd}` on {self.name} timed out after {budget:.0f}s"
+                f"`{cmd}` on {self.name} timed out after {self.timeout}"
             ) from e
 
     @cached_property

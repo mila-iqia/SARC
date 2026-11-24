@@ -1248,14 +1248,14 @@ def test_parse_jobs_user_link_with_match(
 
 @pytest.mark.usefixtures("read_write_db", "enabled_cache")
 def test_fetch_jobs_timeout_skips_cluster(cli_main, monkeypatch, caplog):
-    """A cluster that times out is skipped with a warning; next clusters are fetched."""
+    """A cluster that times out is skipped with an error; next clusters are fetched."""
     import sarc.scraping.jobs
     from sarc.errors import FetchTimeout
 
     calls = []
 
-    def mock_fetch_raw(cluster, start, end, timeout=None):
-        calls.append((cluster.name, timeout))
+    def mock_fetch_raw(cluster, start, end):
+        calls.append(cluster.name)
         if cluster.name == "raisin":
             raise FetchTimeout("sacct on raisin timed out")
         return b'{"jobs": []}'
@@ -1279,9 +1279,7 @@ def test_fetch_jobs_timeout_skips_cluster(cli_main, monkeypatch, caplog):
     )
 
     # raisin stops at its first interval, patate fetches both.
-    assert [name for name, _ in calls] == ["raisin", "patate", "patate"]
-    # Remaining time of the default 10 minutes timeout is given to sacct.
-    assert all(0 < t <= 600 for _, t in calls)
+    assert calls == ["raisin", "patate", "patate"]
     assert any(
         r.levelname == "ERROR"
         and "Timeout" in r.message
@@ -1291,51 +1289,15 @@ def test_fetch_jobs_timeout_skips_cluster(cli_main, monkeypatch, caplog):
     )
 
 
-@pytest.mark.usefixtures("read_write_db", "enabled_cache")
-def test_fetch_jobs_timeout_across_intervals(cli_main, monkeypatch, caplog):
-    """The cluster timeout covers all intervals together."""
-    import sarc.scraping.jobs
-
-    calls = []
-
-    def mock_fetch_raw(cluster, start, end, timeout=None):
-        calls.append(cluster.name)
-        time.sleep(0.2)
-        return b'{"jobs": []}'
-
-    monkeypatch.setattr(sarc.scraping.jobs, "fetch_raw", mock_fetch_raw)
-    monkeypatch.setattr(config.clusters["raisin"], "timeout", timedelta(seconds=0.1))
-
-    assert (
-        cli_main(
-            [
-                "fetch",
-                "jobs",
-                "--cluster_names",
-                "raisin",
-                "patate",
-                "--intervals",
-                "2023-02-14T00:00-2023-02-15T00:00",
-                "2023-02-15T00:00-2023-02-16T00:00",
-            ]
-        )
-        == 0
-    )
-
-    # raisin's budget is exhausted after its first interval.
-    assert calls == ["raisin", "patate", "patate"]
-    assert any(
-        r.levelname == "ERROR" and "raisin" in r.message and "Timeout" in r.message
-        for r in caplog.records
-    )
-
-
 @pytest.mark.usefixtures("no_pkey")
 @pytest.mark.parametrize(
     "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
 )
-def test_fetch_raw_ssh_connect_timeouts(test_config, remote):
-    """The cluster timeout is given to paramiko when opening the SSH connection."""
+def test_fetch_raw_ssh_connect_timeouts(test_config, remote, monkeypatch):
+    """The cluster timeout_ssh is given to paramiko when opening the SSH connection."""
+    monkeypatch.setattr(
+        test_config.clusters["patate"], "timeout_ssh", timedelta(seconds=30)
+    )
     remote.expect(
         host="patate",
         cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json --duplicates",
@@ -1345,7 +1307,6 @@ def test_fetch_raw_ssh_connect_timeouts(test_config, remote):
         cluster=config.clusters["patate"],
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-        timeout=30,
     )
     kwargs = remote.sessions[0].client.connect.call_args.kwargs
     for key in ("timeout", "banner_timeout", "auth_timeout", "channel_timeout"):
