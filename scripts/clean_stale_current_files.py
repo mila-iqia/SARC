@@ -8,7 +8,7 @@ the survivors, so they pile up and the `temporary_cache_file` health check
 reports every fossil of every past incident forever.
 
 A `.current` is abandoned once no run can still be writing it: older than
-the longest job timeout (`sarc-daily`, 2 h) plus margin — default 48 h.
+any job's timeout plus margin — default 48 h.
 
 Dry run by default. Apply with:
 
@@ -23,13 +23,20 @@ from pathlib import Path
 DEFAULT_MAX_AGE_HOURS = 48.0
 
 
-def stale_current_files(root: Path, max_age_seconds: float) -> list[tuple[Path, float]]:
+def stale_current_files(
+    root: Path, max_age_seconds: float
+) -> list[tuple[Path, float, int]]:
     now = time.time()
     stale = []
     for path in sorted(root.rglob("*.current")):
-        age = now - path.stat().st_mtime
+        try:
+            stat = path.stat()
+        except FileNotFoundError:
+            # Renamed by a run that finished after the listing.
+            continue
+        age = now - stat.st_mtime
         if age > max_age_seconds:
-            stale.append((path, age))
+            stale.append((path, age, stat.st_size))
     return stale
 
 
@@ -40,7 +47,7 @@ def main() -> int:
         type=float,
         default=DEFAULT_MAX_AGE_HOURS,
         help="Only delete .current files untouched for longer than this. "
-        "Keep it above the longest job timeout (sarc-daily: 2 h).",
+        "Keep it above any job's timeout.",
     )
     parser.add_argument(
         "--cache-dir",
@@ -64,13 +71,13 @@ def main() -> int:
             return 1
 
     stale = stale_current_files(cache_dir, args.max_age_hours * 3600)
-    for path, age in stale:
+    for path, age, size in stale:
         print(
             f"{'would delete' if args.dry_run else 'deleting'} {path} "
-            f"(age {age / 3600:.0f} h, {path.stat().st_size} B)"
+            f"(age {age / 3600:.0f} h, {size} B)"
         )
         if not args.dry_run:
-            path.unlink()
+            path.unlink(missing_ok=True)
     print(
         f"{'would delete' if args.dry_run else 'deleted'} {len(stale)} "
         f"stale .current file(s) in {cache_dir}"
