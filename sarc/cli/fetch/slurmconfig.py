@@ -6,6 +6,7 @@ from simple_parsing import field
 
 from sarc.cache import Cache
 from sarc.config import UTC, ClusterConfig, config
+from sarc.errors import FetchTimeout
 
 logger = logging.getLogger(__name__)
 
@@ -27,6 +28,12 @@ class FetchSlurmConfig:
                         config.clusters[cluster_name]
                     )
                     ce.add_value(cluster_name, file_content.encode("utf-8"))
+                except FetchTimeout as e:
+                    logger.warning(
+                        "Timeout exceeded while fetching slurm.conf on %s: %s ; skipping cluster.",
+                        cluster_name,
+                        e,
+                    )
                 except Exception as e:
                     logger.exception("Skipping cluster %s", cluster_name, exc_info=e)
 
@@ -36,5 +43,4 @@ class FetchSlurmConfig:
 def _download_slurm_conf_file(cluster: ClusterConfig) -> str:
     """Download slurm.conf file for given cluster."""
     cmd = f"cat {cluster.slurm_conf_host_path}"
-    result = cluster.ssh.run(cmd, hide=True)
-    return result.stdout
+    return cluster.ssh_run(cmd).stdout

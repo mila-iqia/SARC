@@ -44,6 +44,8 @@ sarc:
       # (PD,R,S,CD,CA,F,TO,NF,PR,BF,DL,OOM,RQ,RS,RV) to sacct with -s/--states. slurm filters
       # per state internally instead of with its default window query, which returns more jobs.
       # Off by default.
+      timeout: 10m # Max time to fetch jobs (sacct, all intervals together) or slurm.conf from this cluster.
+      # When exceeded, a warning is logged and the cluster is skipped. Format: 90s, 10m, 1h30m... Default: 10m
       prometheus_url:
         http://prometheus01.server.mila.quebec:9090/ # Prometheus server with data from https://github.com/guilbaults/slurm-job-exporter,
         # can be ommited if there is no data

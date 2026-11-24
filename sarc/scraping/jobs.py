@@ -1,4 +1,5 @@
 import logging
+import time
 from collections.abc import Sequence
 from datetime import datetime
 
@@ -11,6 +12,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB, job_exists
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
+from sarc.errors import FetchTimeout
 from sarc.scraping.gpu_fixes import fix_gpu_types
 from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
@@ -70,6 +72,9 @@ def fetch_jobs(
     ):
         assert cluster_name in cluster_configs
         cluster_config = cluster_configs[cluster_name]
+        # The cluster timeout covers the whole fetch for this cluster,
+        # i.e. all the intervals together.
+        deadline = time.monotonic() + cluster_config.timeout.total_seconds()
         # Fetch the jobs for each time interval
         for time_from, time_to in intervals:
             with using_trace(
@@ -86,12 +91,21 @@ def fetch_jobs(
                     )
                     key = f"{cluster_name}_{time_from.strftime(DATE_FORMAT_HOUR)}_{time_to.strftime(DATE_FORMAT_HOUR)}"
 
-                    raw_data = fetch_raw(cluster_config, time_from, time_to)
+                    remaining = deadline - time.monotonic()
+                    if remaining <= 0:
+                        raise FetchTimeout(
+                            f"timeout of {cluster_config.timeout} exceeded"
+                        )
+                    raw_data = fetch_raw(
+                        cluster_config, time_from, time_to, timeout=remaining
+                    )
                     yield (key, raw_data)
 
                     if auto_interval is not None:
                         cluster_endtime[cluster_name] = time_to
 
+                except FetchTimeout:
+                    raise
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     logger.error(
@@ -130,6 +144,10 @@ def fetch_jobs(
                             value=raw_data,  # sortie stdout de sacct : bytes
                         )
 
+                except FetchTimeout as e:
+                    logger.warning(
+                        f"Timeout ({clusters[cluster_name].timeout}) exceeded while fetching jobs on {cluster_name}: {e} ; skipping cluster."
+                    )
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     logger.error(

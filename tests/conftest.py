@@ -6,12 +6,13 @@ from contextlib import contextmanager
 from dataclasses import dataclass
 from pathlib import Path
 from typing import Any
-from unittest.mock import MagicMock
+from unittest.mock import MagicMock, call
 from uuid import uuid4
 
 import gifnoc
 import pytest
 from alembic.config import Config
+from fabric.testing.base import MockRemote
 from opentelemetry.sdk.trace import TracerProvider
 from opentelemetry.sdk.trace.export import SimpleSpanProcessor
 from opentelemetry.sdk.trace.export.in_memory_span_exporter import InMemorySpanExporter
@@ -34,6 +35,33 @@ del _tracer_provider
 sys.path.append(os.path.join(os.path.dirname(__file__), "common"))
 
 pytest_plugins = "fabric.testing.fixtures"
+
+# Timeouts that ClusterConfig.ssh_run passes to paramiko's SSHClient.connect.
+SSH_TIMEOUT_KWARGS = ("timeout", "banner_timeout", "auth_timeout", "channel_timeout")
+
+
+@pytest.fixture
+def remote():
+    """Override fabric's `remote` fixture to tolerate SSH timeout kwargs.
+
+    fabric's safety check expects `SSHClient.connect` to be called with
+    exactly username, hostname and port. Strip the timeout kwargs before
+    running it.
+    """
+    remote = MockRemote()
+    yield remote
+    for session in remote.sessions:
+        connect = session.client.connect
+        if connect.call_args is not None:
+            connect.call_args = call(
+                **{
+                    k: v
+                    for k, v in connect.call_args.kwargs.items()
+                    if k not in SSH_TIMEOUT_KWARGS
+                }
+            )
+    remote.safety()
+    remote.stop()
 
 
 @pytest.fixture(scope="session")

@@ -13,7 +13,7 @@ from sqlmodel import col, update
 from sarc.config import UTC, ClusterConfig, config
 from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB
-from sarc.errors import ClusterNotFound
+from sarc.errors import ClusterNotFound, FetchTimeout
 from sarc.traces import trace_decorator
 from sarc.utils import ensure_utc
 from sarc.validators import UTCOFFSET
@@ -158,8 +158,14 @@ def _date_is_utc(value: datetime) -> bool:
 
 
 @trace_decorator()
-def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
-    """Fetch the raw sacct data as a dict via SSH, or run sacct locally."""
+def fetch_raw(
+    cluster: ClusterConfig, start: datetime, end: datetime, timeout: float | None = None
+) -> bytes:
+    """Fetch the raw sacct data as a dict via SSH, or run sacct locally.
+
+    If `timeout` (in seconds) is given and the sacct command runs longer,
+    raise FetchTimeout.
+    """
     fmt = "%Y-%m-%dT%H:%M"
     start_str = start.strftime(fmt)
     end_str = end.strftime(fmt)
@@ -174,18 +180,24 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
     )
     logger.debug(f"{cluster.name} $ {cmd}")
     if cluster.host == "localhost":
-        results: subprocess.CompletedProcess[str] | Result = subprocess.run(
-            cmd,
-            shell=True,
-            text=True,
-            capture_output=True,
-            check=False,
-            env={"TZ": "UTC"} if not cluster.ignore_tz_utc else {},
-        )
+        try:
+            results: subprocess.CompletedProcess[str] | Result = subprocess.run(
+                cmd,
+                shell=True,
+                text=True,
+                capture_output=True,
+                check=False,
+                env={"TZ": "UTC"} if not cluster.ignore_tz_utc else {},
+                timeout=timeout,
+            )
+        except subprocess.TimeoutExpired as e:
+            raise FetchTimeout(
+                f"sacct on {cluster.name} timed out after {timeout:.0f}s"
+            ) from e
     else:
         ssh = cluster.ssh
         ssh.config.run.env = {"TZ": "UTC"} if not cluster.ignore_tz_utc else {}
-        results = ssh.run(cmd, hide=True)
+        results = cluster.ssh_run(cmd, timeout=timeout)
         logger.debug(results.stdout)
 
     # return stdout as bytes
