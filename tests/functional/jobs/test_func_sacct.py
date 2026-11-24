@@ -1,12 +1,10 @@
 from __future__ import annotations
 
 import json
-import subprocess
 import time
 from datetime import datetime, timedelta
 from difflib import unified_diff
 from pathlib import Path
-from unittest.mock import patch
 
 import pytest
 from fabric.testing.base import Command, Session
@@ -249,30 +247,6 @@ def test_sacct_bin_and_accounts(test_config, remote):
         start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
         end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
     )
-
-
-@patch("os.system")
-@pytest.mark.usefixtures("jobless_read_write_db")
-def test_localhost(os_system, monkeypatch):
-    # This test requires write_setup.cache to be empty else it will never call
-    # mock_subprocess_run
-    def mock_subprocess_run(*args, **kwargs):
-        mock_subprocess_run.called += 1
-        return subprocess.CompletedProcess(
-            args=args, returncode=0, stdout='{"jobs": []}', stderr=""
-        )
-
-    mock_subprocess_run.called = 0
-
-    monkeypatch.setattr(subprocess, "run", mock_subprocess_run)
-
-    fetch_raw(
-        cluster=config.clusters["local"],
-        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
-        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
-    )
-
-    assert mock_subprocess_run.called >= 1
 
 
 @pytest.mark.parametrize(
@@ -1270,3 +1244,70 @@ def test_parse_jobs_user_link_with_match(
     jobs = list(get_jobs())
     assert len(jobs) == 1
     assert jobs[0].sarc_user_id == 11
+
+
+@pytest.mark.usefixtures("read_write_db", "enabled_cache")
+def test_fetch_jobs_timeout_skips_cluster(cli_main, monkeypatch, caplog):
+    """A cluster that times out is skipped with an error; next clusters are fetched."""
+    import sarc.scraping.jobs
+    from sarc.errors import FetchTimeout
+
+    calls = []
+
+    def mock_fetch_raw(cluster, start, end):
+        calls.append(cluster.name)
+        if cluster.name == "raisin":
+            raise FetchTimeout("sacct on raisin timed out")
+        return b'{"jobs": []}'
+
+    monkeypatch.setattr(sarc.scraping.jobs, "fetch_raw", mock_fetch_raw)
+
+    assert (
+        cli_main(
+            [
+                "fetch",
+                "jobs",
+                "--cluster_names",
+                "raisin",
+                "patate",
+                "--intervals",
+                "2023-02-14T00:00-2023-02-15T00:00",
+                "2023-02-15T00:00-2023-02-16T00:00",
+            ]
+        )
+        == 0
+    )
+
+    # raisin stops at its first interval, patate fetches both.
+    assert calls == ["raisin", "patate", "patate"]
+    assert any(
+        r.levelname == "ERROR"
+        and "Timeout" in r.message
+        and "raisin" in r.message
+        and "skipping cluster" in r.message
+        for r in caplog.records
+    )
+
+
+@pytest.mark.usefixtures("no_pkey")
+@pytest.mark.parametrize(
+    "test_config", [{"clusters": {"patate": {"host": "patate"}}}], indirect=True
+)
+def test_fetch_raw_ssh_connect_timeouts(test_config, remote, monkeypatch):
+    """The cluster timeout_ssh is given to paramiko when opening the SSH connection."""
+    monkeypatch.setattr(
+        test_config.clusters["patate"], "timeout_ssh", timedelta(seconds=30)
+    )
+    remote.expect(
+        host="patate",
+        cmd=f"export TZ=UTC && /opt/software/slurm/bin/sacct -A rrg-bonhomme-ad_gpu,rrg-bonhomme-ad_cpu,def-bonhomme_gpu,def-bonhomme_cpu -X -S {_dtfmt(2023, 2, 14)} -E {_dtfmt(2023, 2, 15)} --allusers --json --duplicates",
+        out=b'{"jobs": []}',
+    )
+    fetch_raw(
+        cluster=config.clusters["patate"],
+        start=datetime(2023, 2, 14, tzinfo=MTL).astimezone(UTC),
+        end=datetime(2023, 2, 15, tzinfo=MTL).astimezone(UTC),
+    )
+    kwargs = remote.sessions[0].client.connect.call_args.kwargs
+    for key in ("timeout", "banner_timeout", "auth_timeout", "channel_timeout"):
+        assert kwargs[key] == 30

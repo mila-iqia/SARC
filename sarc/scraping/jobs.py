@@ -11,6 +11,7 @@ from sarc.db.cluster import SlurmClusterDB
 from sarc.db.job import SlurmJobDB, job_exists
 from sarc.db.runstate import get_parsed_date, set_parsed_date
 from sarc.db.users import get_user_id_for_cluster_user
+from sarc.errors import FetchTimeout
 from sarc.scraping.gpu_fixes import fix_gpu_types
 from sarc.scraping.jobs_utils import (
     DATE_FORMAT_HOUR,
@@ -92,6 +93,8 @@ def fetch_jobs(
                     if auto_interval is not None:
                         cluster_endtime[cluster_name] = time_to
 
+                except FetchTimeout:
+                    raise
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     logger.error(
@@ -130,6 +133,10 @@ def fetch_jobs(
                             value=raw_data,  # sortie stdout de sacct : bytes
                         )
 
+                except FetchTimeout as e:
+                    logger.error(
+                        f"Timeout exceeded while fetching jobs on {cluster_name}: {e} ; skipping cluster."
+                    )
                 # pylint: disable=broad-exception-caught
                 except Exception as e:
                     logger.error(
