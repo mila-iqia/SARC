@@ -268,6 +268,11 @@ class DbConfiguration:
         with custom_db_config(template_name):
             self.executive(f'DROP DATABASE IF EXISTS "{template_name}" WITH (FORCE)')
             self.executive(f'CREATE DATABASE "{template_name}"')
+            # The grant-rights migration (fd67673fd295) targets the deploy API's
+            # DB user from SARC_API_DB_USER. There is no separate API user in
+            # tests: point it at the user we connect as (the template's owner,
+            # which the GRANT to is a harmless no-op for).
+            os.environ.setdefault("SARC_API_DB_USER", get_db_user())
             command.upgrade(Config(toml_file="pyproject.toml"), "head")
             config.db.engine.dispose()
             init_insert()
