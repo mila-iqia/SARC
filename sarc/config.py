@@ -1,8 +1,9 @@
 import os
 import re
+import time
 import zoneinfo
 from dataclasses import dataclass, field
-from datetime import date
+from datetime import date, timedelta
 from functools import cached_property
 from pathlib import Path
 from typing import TYPE_CHECKING, cast
@@ -15,6 +16,7 @@ from serieux.features.encrypt import Secret
 from sqlmodel import Session
 
 from .alerts.common import HealthMonitorConfig
+from .errors import FetchTimeout
 
 # Imported for its side effect: registers the serieux deserializer that keeps
 # `datetime_utc` config fields in UTC. Must happen before any config is read.
@@ -24,6 +26,7 @@ type JSON = list[JSON] | dict[str, JSON] | int | str | float | bool | None
 
 if TYPE_CHECKING:
     from fabric import Connection
+    from invoke.runners import Result
     from prometheus_api_client.prometheus_connect import PrometheusConnect
     from sqlalchemy import Engine
 
@@ -83,6 +86,14 @@ class ClusterConfig:
     diskusage: list[DiskUsageConfig] | None = None
     start_date: date = date(2022, 4, 1)
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
+    # Maximum time allowed for each command run on this cluster to fetch
+    # data (each sacct call for jobs, slurm.conf download).
+    # When exceeded, the cluster is skipped with an error.
+    # Format: e.g. "10m", "1h30m", "90s".
+    timeout: timedelta = timedelta(minutes=10)
+    # Maximum time allowed to establish the SSH connection to this cluster.
+    # When exceeded, the cluster is skipped with an error.
+    timeout_ssh: timedelta = timedelta(seconds=90)
 
     # Tell if billing (in job's requested|allocated field) is number of GPUs (True) or RGU (False)
     billing_is_gpu: bool = False
@@ -183,6 +194,53 @@ class ClusterConfig:
                 **extra_args,
             },
         )
+
+    def ssh_run(self, cmd: str) -> Result:
+        """Run `cmd` on the cluster through SSH, with time limits.
+
+        Opening the SSH connection, if not already open, is limited by
+        `timeout_ssh`, and running the command by `timeout`.
+        Raise FetchTimeout if either is exceeded.
+        """
+        from invoke.exceptions import CommandTimedOut
+
+        ssh = self.ssh
+
+        if not ssh.is_connected:
+            timeout_ssh = self.timeout_ssh.total_seconds()
+            # `timeout` bounds TCP connect, SSH banner and key exchange;
+            # the others bound authentication and session channel opening,
+            # which paramiko measures separately.
+            ssh.connect_timeout = timeout_ssh
+            ssh.connect_kwargs = {
+                **(ssh.connect_kwargs or {}),
+                "banner_timeout": timeout_ssh,
+                "auth_timeout": timeout_ssh,
+                "channel_timeout": timeout_ssh,
+            }
+            start = time.monotonic()
+            try:
+                ssh.open()
+            except Exception as e:
+                # paramiko reports timeouts with various exception types
+                # (TimeoutError, SSHException, AuthenticationException...).
+                if (
+                    isinstance(e, TimeoutError)
+                    or "timeout" in str(e).lower()
+                    or "timed out" in str(e).lower()
+                    or time.monotonic() - start >= timeout_ssh
+                ):
+                    raise FetchTimeout(
+                        f"SSH connection to {self.host} timed out after {self.timeout_ssh}"
+                    ) from e
+                raise
+
+        try:
+            return ssh.run(cmd, hide=True, timeout=self.timeout.total_seconds())
+        except CommandTimedOut as e:
+            raise FetchTimeout(
+                f"`{cmd}` on {self.name} timed out after {self.timeout}"
+            ) from e
 
     @cached_property
     def prometheus(self) -> PrometheusConnect:

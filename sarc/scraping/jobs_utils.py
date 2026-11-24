@@ -2,12 +2,10 @@ import io
 import json
 import logging
 import re
-import subprocess
 from datetime import datetime, timedelta
 from typing import Iterator
 
 from hostlist import expand_hostlist
-from invoke.runners import Result
 from sqlmodel import col, update
 
 from sarc.config import UTC, ClusterConfig, config
@@ -159,7 +157,11 @@ def _date_is_utc(value: datetime) -> bool:
 
 @trace_decorator()
 def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
-    """Fetch the raw sacct data as a dict via SSH, or run sacct locally."""
+    """Fetch the raw sacct data via SSH.
+
+    Raise FetchTimeout if the SSH connection takes longer than the cluster
+    `timeout_ssh`, or the sacct command longer than the cluster `timeout`.
+    """
     fmt = "%Y-%m-%dT%H:%M"
     start_str = start.strftime(fmt)
     end_str = end.strftime(fmt)
@@ -173,20 +175,10 @@ def fetch_raw(cluster: ClusterConfig, start: datetime, end: datetime) -> bytes:
         f"-X -S {start_str} -E {end_str} --allusers --json --duplicates"
     )
     logger.debug(f"{cluster.name} $ {cmd}")
-    if cluster.host == "localhost":
-        results: subprocess.CompletedProcess[str] | Result = subprocess.run(
-            cmd,
-            shell=True,
-            text=True,
-            capture_output=True,
-            check=False,
-            env={"TZ": "UTC"} if not cluster.ignore_tz_utc else {},
-        )
-    else:
-        ssh = cluster.ssh
-        ssh.config.run.env = {"TZ": "UTC"} if not cluster.ignore_tz_utc else {}
-        results = ssh.run(cmd, hide=True)
-        logger.debug(results.stdout)
+    ssh = cluster.ssh
+    ssh.config.run.env = {"TZ": "UTC"} if not cluster.ignore_tz_utc else {}
+    results = cluster.ssh_run(cmd)
+    logger.debug(results.stdout)
 
     # return stdout as bytes
     return results.stdout.encode("utf-8")

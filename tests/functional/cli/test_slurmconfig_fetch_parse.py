@@ -551,3 +551,41 @@ line 18
         (17, "line 17"),
         (18, "line 18"),
     ]
+
+
+@pytest.mark.usefixtures("read_only_db", "enabled_cache", "no_pkey")
+def test_fetch_slurmconfig_timeout(cli_main, test_config, monkeypatch, caplog):
+    """A cluster timing out is skipped with a warning; next clusters are fetched."""
+    from invoke.exceptions import CommandTimedOut
+
+    class FakeSSH:
+        def __init__(self, cluster_name, timeout_expected):
+            self.cluster_name = cluster_name
+            self.timeout_expected = timeout_expected
+
+        is_connected = True
+
+        def run(self, cmd, hide, timeout):
+            assert timeout == self.timeout_expected
+            if self.cluster_name == "raisin":
+                raise CommandTimedOut(result=None, timeout=timeout)
+            return type("Result", (), {"stdout": SLURM_CONF_RAISIN_2020_01_01})()
+
+    for name in ("raisin", "patate"):
+        cluster = test_config.clusters[name]
+        monkeypatch.setitem(
+            cluster.__dict__, "ssh", FakeSSH(name, cluster.timeout.total_seconds())
+        )
+
+    assert cli_main(["fetch", "slurmconfig", "-c", "raisin", "patate"]) == 0
+
+    assert any(
+        r.levelname == "ERROR"
+        and "raisin" in r.message
+        and "skipping cluster" in r.message
+        for r in caplog.records
+    )
+    ((entry,),) = [
+        list(Cache(subdirectory="slurm_conf").read_from(DATE_2020_01_01_MTL))
+    ]
+    assert [key for key, _ in entry.items()] == ["patate"]
