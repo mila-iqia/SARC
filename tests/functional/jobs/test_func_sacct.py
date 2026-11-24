@@ -1329,7 +1329,7 @@ def test_fetch_jobs_timeout_skips_cluster(cli_main, monkeypatch, caplog):
     # Remaining time of the default 10 minutes timeout is given to sacct.
     assert all(0 < t <= 600 for _, t in calls)
     assert any(
-        r.levelname == "WARNING"
+        r.levelname == "ERROR"
         and "Timeout" in r.message
         and "raisin" in r.message
         and "skipping cluster" in r.message
@@ -1371,7 +1371,7 @@ def test_fetch_jobs_timeout_across_intervals(cli_main, monkeypatch, caplog):
     # raisin's budget is exhausted after its first interval.
     assert calls == ["raisin", "patate", "patate"]
     assert any(
-        r.levelname == "WARNING" and "raisin" in r.message and "Timeout" in r.message
+        r.levelname == "ERROR" and "raisin" in r.message and "Timeout" in r.message
         for r in caplog.records
     )
 

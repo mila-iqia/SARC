@@ -87,7 +87,7 @@ class ClusterConfig:
     start_date: date = date(2022, 4, 1)
     slurm_conf_host_path: Path = Path("/etc/slurm/slurm.conf")
     # Maximum time allowed to fetch data from this cluster (sacct jobs,
-    # slurm.conf). When exceeded, the cluster is skipped with a warning.
+    # slurm.conf). When exceeded, the cluster is skipped with an error.
     # Format: e.g. "10m", "1h30m", "90s".
     timeout: timedelta = timedelta(minutes=10)
 

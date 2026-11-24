@@ -145,7 +145,7 @@ def fetch_jobs(
                         )
 
                 except FetchTimeout as e:
-                    logger.warning(
+                    logger.error(
                         f"Timeout ({clusters[cluster_name].timeout}) exceeded while fetching jobs on {cluster_name}: {e} ; skipping cluster."
                     )
                 # pylint: disable=broad-exception-caught

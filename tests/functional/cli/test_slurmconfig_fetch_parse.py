@@ -580,7 +580,7 @@ def test_fetch_slurmconfig_timeout(cli_main, test_config, monkeypatch, caplog):
     assert cli_main(["fetch", "slurmconfig", "-c", "raisin", "patate"]) == 0
 
     assert any(
-        r.levelname == "WARNING"
+        r.levelname == "ERROR"
         and "raisin" in r.message
         and "skipping cluster" in r.message
         for r in caplog.records

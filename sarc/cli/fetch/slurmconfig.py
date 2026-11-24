@@ -29,7 +29,7 @@ class FetchSlurmConfig:
                     )
                     ce.add_value(cluster_name, file_content.encode("utf-8"))
                 except FetchTimeout as e:
-                    logger.warning(
+                    logger.error(
                         "Timeout exceeded while fetching slurm.conf on %s: %s ; skipping cluster.",
                         cluster_name,
                         e,
