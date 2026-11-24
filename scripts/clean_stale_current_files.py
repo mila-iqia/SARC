@@ -1,22 +1,22 @@
-"""Delete abandoned cache entries left in their `.current` write state.
+"""Clean up abandoned cache entries left in their `.current` write state.
 
-`Cache.create_entry` writes each run's fetch to `<time>.current` and renames
-it into a readable entry in its `finally`. A `.current` survives when the
-writer was killed by a signal before that `finally` ran (e.g. a Cloud Run job
-past its timeout), or when the close or the rename failed. Nothing removes the
-survivors, so the `temporary_cache_file` health check keeps reporting every
-past incident.
+`Cache.create_entry` writes to `<time>.current` and renames it on exit.
+Nothing removes a file that misses that rename, so the
+`temporary_cache_file` health check reports it forever. Only files
+untouched for longer than any job's timeout are considered, so no run
+can still be writing them.
 
-A `.current` is abandoned once no run can still be writing it: older than
-any job's timeout plus margin — default 48 h. Dropping one left by a kill
-loses nothing: a killed fetch records no progress, so a later run fetches the
-same data again.
+Invalid zips are deleted: the writer was killed before close wrote the
+zip index (e.g. a Cloud Run job past its timeout), or the close failed.
+A killed fetch records no progress, so later runs fetch that data again.
+After a failed close, an `--auto_interval` fetch still records its
+intervals as fetched. That run's logs show the close error and the
+intervals it fetched: refetch them with `sarc fetch jobs --intervals`.
 
-A kill mid-write leaves an invalid zip, since the zip index is written on
-close. A valid zip means only the rename failed, and the fetch may already
-have recorded its progress (`fetch_jobs` does): its data exists nowhere else.
-Those are kept; restore one by dropping its `.current` suffix, then re-parse
-with `--since` if parsing already went past its date.
+Valid zips are kept: only their rename failed, and `fetch_jobs` may have
+recorded their progress, so their data exists nowhere else. Restore one
+by dropping its `.current` suffix, then re-parse with `--since` if
+parsing already went past its date.
 
 Dry run by default. Apply with:
 
@@ -53,7 +53,7 @@ def stale_current_files(
 
 def main() -> int:
     parser = argparse.ArgumentParser(
-        description="Delete abandoned cache entries left in their `.current` write state."
+        description="Clean up abandoned cache entries left in their `.current` write state."
     )
     parser.add_argument(
         "--max-age-hours",
