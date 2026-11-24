@@ -1,34 +1,32 @@
 #!/usr/bin/env python3
-"""Pré-génère un fichier de user-matching pour scripts/usermatch/main.py.
+"""Pre-generate a user-matching file for scripts/usermatch/main.py.
 
-Les deux pools sont ceux de l'interface « Match DRAC » :
-  - les utilisateurs qui ont un compte DRAC (username) mais pas de compte Mila LDAP ;
-  - les utilisateurs Mila LDAP qui n'ont pas de compte DRAC.
+The two pools are those of the "Match DRAC" interface:
+  - users who have a DRAC account (username) but no Mila LDAP account;
+  - Mila LDAP users who have no DRAC account.
 
-Critère de rapprochement : le **nom** de la personne, recoupé avec le groupe
-auquel elle appartient :
+Matching criterion: the person's **name**, cross-checked with the group
+they belong to:
 
-  - le nom des profs (PI) des allocations tamia ``aip-*`` dont le compte DRAC est
-    membre — récupéré en direct sur tamia (``sacctmgr`` pour les allocations et
-    les membres, ``getent passwd`` pour le nom complet du titulaire) ;
-  - les superviseurs SARC du compte LDAP (tables ``user_supervisors`` /
-    ``supervisorshelper``, alimentées par MyMila).
+  - the name of the professors (PIs) of the tamia ``aip-*`` allocations the DRAC
+    account is a member of — fetched live from tamia (``sacctmgr`` for the
+    allocations and members, ``getent passwd`` for the owner's full name);
+  - the SARC supervisors of the LDAP account (``user_supervisors`` /
+    ``supervisorshelper`` tables, fed by MyMila).
 
-Le recoupement « prof du groupe » <-> « superviseur » se fait d'abord au niveau
-des ids SARC (le username du titulaire est retrouvé dans ``credentialsdb``), à
-défaut au niveau des noms. Un compte DRAC titulaire de sa propre allocation
-(``aip-<username>``) est donc apparié avec le compte LDAP sans superviseur qui
-porte le même nom.
+The "group professor" <-> "supervisor" cross-check is first done on SARC ids
+(the owner's username is looked up in ``credentialsdb``), and otherwise on
+names. A DRAC account that owns its own allocation (``aip-<username>``) is
+thus matched with the LDAP account without supervisor that has the same name.
 
-Un premier passage apparie les comptes qui partagent le même email.
+A first pass matches accounts sharing the same email.
 
-Seules les paires **non ambiguës** (meilleure candidature dans les deux sens)
-sont écrites dans le fichier. Le reste (ex-aequo, candidats non réciproques,
-indices isolés) est réservé au rapport ``--report``, à trancher à la main dans
-l'interface.
+Only **unambiguous** pairs (best candidate in both directions) are written to
+the file. The rest (ties, non-reciprocal candidates, single clues) is left for
+the ``--report`` report, to be decided by hand in the interface.
 
-Le format de sortie est exactement celui que télécharge ``scripts/usermatch/main.py``
-(fichier ``usermatches.json``) ; il se recharge avec le bouton « Load from file… » :
+The output format is exactly the one downloaded by ``scripts/usermatch/main.py``
+(``usermatches.json`` file); it can be reloaded with the "Load from file…" button:
 
     [
       {
@@ -37,7 +35,7 @@ Le format de sortie est exactement celui que télécharge ``scripts/usermatch/ma
       }
     ]
 
-Usage :
+Usage:
     SARC_CONFIG=cloudsql_db.yaml uv run python scripts/usermatch/prematch.py \\
         --out usermatches_prematch.json --report prematch.md
 """
@@ -61,25 +59,25 @@ from sarc.db.users import CredentialsDB, SupervisorsDB, SupervisorsHelper, UserD
 
 AIP_PREFIX = "aip-"
 
-# scores de similarite de nom
-NAME_EXACT = 3  # noms normalises identiques
-NAME_SUBSET = 2  # tous les mots du nom le plus court retrouves
-NAME_LOOSE = 1  # un mot non apparie, mais une simple initiale
+# name similarity scores
+NAME_EXACT = 3  # identical normalized names
+NAME_SUBSET = 2  # all words of the shorter name found
+NAME_LOOSE = 1  # one unmatched word, but only an initial
 
-# scores de recoupement groupe (prof de l'allocation aip-* / superviseur SARC)
-GROUP_ID = 3  # le prof et le superviseur sont la meme ligne de la table users
-GROUP_PI_SELF = 3  # compte DRAC titulaire de son allocation, LDAP sans superviseur
-GROUP_NAME = 2  # nom du prof == nom d'un superviseur, sans correspondance en base
-EMAIL_SCORE = 10  # appariement direct, sans condition de groupe
+# group cross-check scores (aip-* allocation professor / SARC supervisor)
+GROUP_ID = 3  # the professor and the supervisor are the same row of the users table
+GROUP_PI_SELF = 3  # DRAC account owns its allocation, LDAP has no supervisor
+GROUP_NAME = 2  # professor name == a supervisor name, without a match in the db
+EMAIL_SCORE = 10  # direct match, without group condition
 
 
 # ---------------------------------------------------------------------------
-# noms : normalisation et similarite
+# names: normalization and similarity
 # ---------------------------------------------------------------------------
 
 
 def norm(s: str) -> str:
-    """minuscules, sans accents, ponctuation -> espaces"""
+    """lowercase, no accents, punctuation -> spaces"""
     s = unicodedata.normalize("NFKD", s or "").encode("ascii", "ignore").decode()
     return re.sub(r"[^a-z0-9]+", " ", s.lower()).strip()
 
@@ -90,7 +88,7 @@ def tokens(name: str) -> tuple[str, ...]:
 
 
 def edit_distance(a: str, b: str) -> int:
-    """Distance de Levenshtein (les noms sont courts, un DP suffit)."""
+    """Levenshtein distance (names are short, a DP is enough)."""
     previous = list(range(len(b) + 1))
     for i, ca in enumerate(a, start=1):
         current = [i]
@@ -104,22 +102,22 @@ def edit_distance(a: str, b: str) -> int:
 
 @cache
 def token_similar(a: str, b: str) -> bool:
-    """Deux mots de nom equivalents : identiques, initiale, ou legere faute."""
+    """Two equivalent name words: identical, initial, or small typo."""
     if a == b:
         return True
     if len(a) <= 1 or len(b) <= 1:
         return (len(a) == 1 and b.startswith(a)) or (len(b) == 1 and a.startswith(b))
     shortest = min(len(a), len(b))
-    # une faute toleree des 4 lettres, deux pour les noms longs ; les mots courts
-    # (initiales, particules) doivent eux correspondre exactement
+    # one typo allowed from 4 letters, two for long names; short words
+    # (initials, particles) must match exactly
     allowed = 2 if shortest >= 7 else 1 if shortest >= 4 else 0
     return edit_distance(a, b) <= allowed
 
 
 def match_words(short: tuple[str, ...], long: tuple[str, ...]) -> set[int]:
-    """Indices dans `short` des mots retrouvables, chacun sur un mot different de
-    `long` : les equivalences exactes d'abord, pour ne pas griller les candidats
-    du flou."""
+    """Indices in `short` of the words that can be found, each on a different word
+    of `long`: exact equivalences first, so as not to use up candidates for
+    fuzzy matching."""
     used: set[int] = set()
     matched: set[int] = set()
     for exact_round in (True, False):
@@ -137,7 +135,7 @@ def match_words(short: tuple[str, ...], long: tuple[str, ...]) -> set[int]:
 
 
 def shares_surname(a: str, b: str) -> bool:
-    """Le nom de famille (dernier mot) se retrouve des deux cotes."""
+    """The surname (last word) is found on both sides."""
     ta, tb = tokens(a), tokens(b)
     if not ta or not tb:
         return False
@@ -150,10 +148,10 @@ def shares_surname(a: str, b: str) -> bool:
 
 
 def name_score(drac_name: str, ldap_name: str) -> int | None:
-    """Score de similarite (NAME_*), ou None si les noms ne correspondent pas.
+    """Similarity score (NAME_*), or None if the names don't match.
 
-    Le nom de famille doit etre commun ET au moins un prenom aussi : le seul nom
-    de famille commun ne suffit jamais, les groupes comptent beaucoup d'homonymes.
+    The surname must be shared AND at least one first name too: a shared surname
+    alone is never enough, groups have many namesakes.
     """
     ta, tb = tokens(drac_name), tokens(ldap_name)
     if ta and ta == tb:
@@ -162,32 +160,32 @@ def name_score(drac_name: str, ldap_name: str) -> int | None:
         return None
     short, long = (ta, tb) if len(ta) <= len(tb) else (tb, ta)
     hit = match_words(short, long)
-    if len(hit) < 2 or (len(short) - 1) not in hit:  # nom de famille + un prenom
+    if len(hit) < 2 or (len(short) - 1) not in hit:  # surname + one first name
         return None
     unmatched = [word for i, word in enumerate(short) if i not in hit]
     if not unmatched:
         return NAME_SUBSET
-    if len(unmatched) == 1 and len(unmatched[0]) <= 2:  # un second prenom/une initiale
+    if len(unmatched) == 1 and len(unmatched[0]) <= 2:  # a middle name/an initial
         return NAME_LOOSE
     return None
 
 
 def same_person(a: str, b: str) -> bool:
-    """Deux noms designent-ils la meme personne (nom de famille + un prenom) ?
+    """Do two names refer to the same person (surname + one first name)?
 
-    Exige le niveau strict : sert a verifier qu'un prof d'allocation aip-* et un
-    superviseur SARC sont la meme personne, pas a apparier deux comptes.
+    Requires the strict level: used to check that an aip-* allocation professor
+    and a SARC supervisor are the same person, not to match two accounts.
     """
     score = name_score(a, b)
     return score is not None and score >= NAME_SUBSET
 
 
 # ---------------------------------------------------------------------------
-# collecte des allocations aip-* sur tamia
+# collecting aip-* allocations on tamia
 # ---------------------------------------------------------------------------
 
-# Un seul aller-retour : titulaires des aip-*, membres de ces allocations, puis
-# le nom complet (gecos) de tous les usernames rencontres.
+# A single round trip: aip-* owners, members of these allocations, then
+# the full name (gecos) of all the usernames encountered.
 REMOTE_DUMP = """
 accts=$(sacctmgr -nP list account Format=Account | sed -n "s/^aip-//p")
 for u in $accts; do
@@ -197,7 +195,7 @@ f=/tmp/aip_assoc.$$
 sacctmgr -nP list assoc Format=Account,User 2>/dev/null \\
   | awk -F"|" 'NR>1 && $1 ~ /^aip-/ && $2 != "" && $2 != "None" {print "ASSOC|"$1"|"$2}' > "$f"
 if [ ! -s "$f" ]; then
-  # requete globale indisponible : une requete par allocation
+  # global query unavailable: one query per allocation
   for u in $accts; do
     a="aip-$u"
     sacctmgr -nP list assoc Where Account=$a Format=User 2>/dev/null | tail -n +2 \\
@@ -214,15 +212,15 @@ rm -f "$f"
 
 @dataclass
 class Tamia:
-    """Allocations aip-*, leurs titulaires et leurs membres."""
+    """aip-* allocations, their owners and their members."""
 
-    pis: dict[str, str] = field(default_factory=dict)  # username PI -> gecos
-    gecos: dict[str, str] = field(default_factory=dict)  # username -> nom complet
+    pis: dict[str, str] = field(default_factory=dict)  # PI username -> gecos
+    gecos: dict[str, str] = field(default_factory=dict)  # username -> full name
     allocations: dict[str, set[str]] = field(default_factory=dict)  # username -> aip-*
 
 
 def ssh(socket: str, host: str, script: str) -> str:
-    """Exécute un script bash sur le cluster via le control master, renvoie stdout."""
+    """Run a bash script on the cluster through the control master, return stdout."""
     r = subprocess.run(  # noqa: PLW1510
         ["ssh", "-S", socket, host, "bash -s"],
         input=script.encode(),
@@ -236,8 +234,8 @@ def ssh(socket: str, host: str, script: str) -> str:
 
 
 def ensure_master(socket: str, host: str) -> None:
-    """Réutilise le control master s'il répond, sinon se connecte (une seule
-    invite mot de passe + MFA ; les commandes suivantes réutilisent le canal)."""
+    """Reuse the control master if it responds, otherwise connect (a single
+    password + MFA prompt; following commands reuse the channel)."""
     check = subprocess.run(  # noqa: PLW1510
         ["ssh", "-S", socket, "-O", "check", host], capture_output=True
     )
@@ -258,7 +256,7 @@ def ensure_master(socket: str, host: str) -> None:
 
 
 def fetch_tamia(host: str, socket: str, close_master: bool) -> Tamia:
-    """Allocations aip-*, titulaires et membres, en un seul aller-retour SSH."""
+    """aip-* allocations, owners and members, in a single SSH round trip."""
     socket = str(Path(socket).expanduser())
     ensure_master(socket, host)
     out = ssh(socket, host, REMOTE_DUMP)
@@ -291,13 +289,13 @@ def fetch_tamia(host: str, socket: str, close_master: bool) -> Tamia:
 
 
 def pi_name(tamia: Tamia, pi_username: str) -> str:
-    """Nom complet du titulaire d'une allocation aip-<pi_username>."""
+    """Full name of the owner of an aip-<pi_username> allocation."""
     key = pi_username.lower()
     return tamia.pis.get(key) or tamia.gecos.get(key) or ""
 
 
 # ---------------------------------------------------------------------------
-# pools : comptes DRAC seuls et comptes LDAP seuls (mêmes règles que main.py)
+# pools: DRAC-only accounts and LDAP-only accounts (same rules as main.py)
 # ---------------------------------------------------------------------------
 
 
@@ -309,9 +307,9 @@ class DracAccount:
     username: str
     cci: str | None
     allocations: set[str] = field(default_factory=set)
-    pi_ids: set[int] = field(default_factory=set)  # ids SARC des PI des allocations
-    pis: dict[str, str] = field(default_factory=dict)  # username PI -> nom (gecos)
-    is_pi: bool = False  # titulaire de sa propre allocation aip-<username>
+    pi_ids: set[int] = field(default_factory=set)  # SARC ids of the allocations PIs
+    pis: dict[str, str] = field(default_factory=dict)  # PI username -> name (gecos)
+    is_pi: bool = False  # owns its own aip-<username> allocation
 
     def matching_id(self) -> dict[str, str]:
         return {"name": "drac_username", "mid": self.username}
@@ -326,7 +324,7 @@ class LdapAccount:
     display_name: str
     email: str
     ldap_id: str
-    supervisors: dict[int, str] = field(default_factory=dict)  # id SARC -> nom
+    supervisors: dict[int, str] = field(default_factory=dict)  # SARC id -> name
 
     def label(self) -> str:
         return f"{self.display_name} [{self.ldap_id}]"
@@ -344,7 +342,7 @@ def load_drac_usernames(sess: Session) -> dict[int, str]:
 
 
 def load_current_supervisors(sess: Session) -> dict[int, list[int]]:
-    """{id de l'etudiant: [ids SARC des superviseurs]}, listes valides maintenant."""
+    """{student id: [SARC ids of supervisors]}, lists valid now."""
     rows = sess.exec(
         select(SupervisorsDB.user_id, SupervisorsHelper.supervisor)
         .join(
@@ -360,11 +358,11 @@ def load_current_supervisors(sess: Session) -> dict[int, list[int]]:
 
 
 def load_pools(tamia: Tamia) -> tuple[list[DracAccount], list[LdapAccount], dict]:
-    """Construit les deux pools et y rattache les groupes (allocations, superviseurs)."""
+    """Build the two pools and attach the groups to them (allocations, supervisors)."""
     with config.db.session() as sess:
         drac_usernames = load_drac_usernames(sess)
         supervisors = load_current_supervisors(sess)
-        # matching_ids se charge paresseusement : tout lire avant de fermer la session
+        # matching_ids is lazy-loaded: read everything before closing the session
         users: list[tuple[int, str, str, dict[str, str]]] = []
         for u in tqdm(
             sess.exec(select(UserDB)), desc="Chargement des users", unit="user"
@@ -373,8 +371,8 @@ def load_pools(tamia: Tamia) -> tuple[list[DracAccount], list[LdapAccount], dict
                 continue
             users.append((u.id, u.display_name, u.email or "", dict(u.matching_ids)))
 
-    # username -> ids SARC ; un username rencontre plusieurs fois n'est pas une
-    # identite fiable, on ne s'en sert pas pour le recoupement par id
+    # username -> SARC ids; a username found several times is not a reliable
+    # identity, it is not used for the cross-check by id
     ids_by_username: dict[str, set[int]] = {}
     for user_id, username in drac_usernames.items():
         ids_by_username.setdefault(username.lower(), set()).add(user_id)
@@ -427,7 +425,7 @@ def load_pools(tamia: Tamia) -> tuple[list[DracAccount], list[LdapAccount], dict
 
 
 # ---------------------------------------------------------------------------
-# appariement
+# matching
 # ---------------------------------------------------------------------------
 
 
@@ -437,11 +435,11 @@ class Candidate:
     ldap: LdapAccount
     score: int
     reason: str
-    note: str = ""  # pour les candidats non retenus
+    note: str = ""  # for candidates not kept
 
 
 def group_evidence(drac: DracAccount, ldap: LdapAccount) -> tuple[int, str] | None:
-    """Le prof de l'allocation aip-* du compte DRAC est-il un superviseur du LDAP ?"""
+    """Is the professor of the DRAC account's aip-* allocation a supervisor of the LDAP account?"""
     shared_ids = drac.pi_ids & ldap.supervisors.keys()
     if shared_ids:
         who = ", ".join(
@@ -460,7 +458,7 @@ def group_evidence(drac: DracAccount, ldap: LdapAccount) -> tuple[int, str] | No
 def build_candidates(
     drac_pool: list[DracAccount], ldap_pool: list[LdapAccount]
 ) -> tuple[list[Candidate], list[Candidate]]:
-    """Candidats retenables (nom + groupe), et candidats a un seul indice pour le rapport."""
+    """Eligible candidates (name + group), and single-clue candidates for the report."""
     candidates: list[Candidate] = []
     single_clue: list[Candidate] = []
     for drac in drac_pool:
@@ -502,7 +500,7 @@ def build_candidates(
 def select_unique(
     candidates: list[Candidate],
 ) -> tuple[list[Candidate], list[Candidate]]:
-    """Garde les paires qui sont la meilleure candidature dans les deux sens."""
+    """Keep the pairs that are the best candidate in both directions."""
     by_drac: dict[int, list[Candidate]] = {}
     by_ldap: dict[int, list[Candidate]] = {}
     for c in candidates:
@@ -555,7 +553,7 @@ def select_unique(
 def pair_by_email(
     drac_pool: list[DracAccount], ldap_pool: list[LdapAccount]
 ) -> tuple[list[Candidate], list[DracAccount], list[LdapAccount]]:
-    """Premier passage : emails identiques, quand il n'y a qu'un seul candidat."""
+    """First pass: identical emails, when there is only one candidate."""
     ldap_by_email: dict[str, list[LdapAccount]] = {}
     for ldap in ldap_pool:
         if ldap.email:
@@ -581,12 +579,12 @@ def pair_by_email(
 
 
 # ---------------------------------------------------------------------------
-# sortie
+# output
 # ---------------------------------------------------------------------------
 
 
 def to_json(pairs: list[Candidate]) -> list[dict]:
-    """Format usermatches.json de scripts/usermatch/main.py."""
+    """usermatches.json format of scripts/usermatch/main.py."""
     return [
         {
             "matching_id": c.drac.matching_id(),
